@@ -1,0 +1,13 @@
+[project]
+name = "lab-{{ number }}-{{ topic }}"
+version = "0.1.0"
+description = "Lab {{ number | int }}: {{ title }}"
+requires-python = ">={{ python }}"
+dependencies = []  # Shared dependencies live in the root pyproject.toml.
+
+[build-system]
+requires = ["uv_build>=0.12,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "lab{{ number }}"

@@ -1,0 +1,31 @@
+"""The script runs end to end on a tiny config and writes data and report values."""
+
+{% include "shared/python/_future.jinja" %}
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+LAB_DIR = Path(__file__).resolve().parents[1]
+
+
+def test_run_writes_estimate_and_report_values(tmp_path):
+    result = subprocess.run(
+        [
+            sys.executable,
+            LAB_DIR / "scripts" / "run.py",
+            "samples=1000",
+            f"paths.data_dir={tmp_path / 'data'}",
+            f"paths.report_dir={tmp_path / 'report'}",
+            f"hydra.run.dir={tmp_path / 'outputs'}",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    estimate = json.loads((tmp_path / "data" / "estimate.json").read_text())
+    values = (tmp_path / "report" / "generated" / "values.tex").read_text()
+    assert 2.5 < estimate["pi"] < 3.8
+    assert "\\newcommand{\\piEstimate}" in values

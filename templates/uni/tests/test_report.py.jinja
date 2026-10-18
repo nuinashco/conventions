@@ -1,0 +1,25 @@
+"""Report numbers use a decimal comma and land in letters-only macros."""
+
+{% include "shared/python/_future.jinja" %}
+from {{ core }}.report import macro_name, number, write_values
+
+
+def test_number_rounds_and_uses_a_decimal_comma():
+    assert (number(0.06069, 4), number(-1.5, 1), number(-0.0001, 2)) == (
+        "0{,}0607",
+        "\\ensuremath{-}1{,}5",
+        "0{,}00",
+    )
+
+
+def test_macro_name_spells_digits():
+    assert macro_name("v2", "forecast_mse") == "vTwoForecastMse"
+
+
+def test_write_values_sorts_macros(tmp_path):
+    path = write_values(tmp_path / "gen" / "values.tex", {"b": "2", "a": "1"})
+
+    assert path.read_text().splitlines()[1:] == [
+        "\\newcommand{\\a}{1}",
+        "\\newcommand{\\b}{2}",
+    ]

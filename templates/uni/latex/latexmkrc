@@ -1,0 +1,6 @@
+# XeLaTeX (Unicode fonts, so Cyrillic text copies and searches correctly);
+# auxiliary files go to build/ next to the .tex, only the PDF stays beside it
+$pdf_mode = 5;
+$aux_dir = 'build';
+$emulate_aux = 1;
+$xelatex = 'xelatex -interaction=nonstopmode -halt-on-error -file-line-error %O %S';

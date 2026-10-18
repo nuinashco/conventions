@@ -1,0 +1,16 @@
+"""Discovery of the labs in labs/ and of the config files they generate."""
+
+{% include "shared/python/_future.jinja" %}
+import importlib
+from collections.abc import Iterator
+from pathlib import Path
+
+from {{ core }} import paths
+from {{ core }}.configgen import ConfigFile
+
+
+def config_targets() -> Iterator[tuple[list[ConfigFile], Path]]:
+    """Yield each lab's GENERATED config files with the directory they belong in."""
+    for module_file in sorted(paths.LABS_DIR.glob("*/src/lab*/config.py")):
+        module = importlib.import_module(f"{module_file.parent.name}.config")
+        yield list(module.GENERATED), module_file.parents[2] / "config"

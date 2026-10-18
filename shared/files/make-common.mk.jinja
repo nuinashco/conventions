@@ -1,0 +1,23 @@
+help:  ## show targets
+	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'
+
+setup:  ## create the venv and install the git hooks
+	uv sync
+	uv run pre-commit install --hook-type pre-commit --hook-type commit-msg
+
+lint:  ## ruff lint + format check, no changes
+	uv run ruff check
+	uv run ruff format --check
+
+format:  ## ruff auto-fix + format
+	uv run ruff check --fix
+	uv run ruff format
+
+typecheck:  ## pyright
+	uv run pyright
+
+test:  ## unit tests
+	uv run pytest
+
+test-integration:  ## end-to-end tests behind the integration marker
+	uv run pytest -m integration

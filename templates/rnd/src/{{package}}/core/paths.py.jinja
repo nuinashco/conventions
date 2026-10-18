@@ -1,0 +1,12 @@
+"""Repository paths, resolved from the `.project-root` marker."""
+
+{% include "shared/python/_future.jinja" %}
+from pathlib import Path
+
+import rootutils  # pyright: ignore[reportMissingTypeStubs]
+
+ROOT: Path = rootutils.find_root(search_from=__file__, indicator=".project-root")
+
+CONFIGS_DIR = ROOT / "configs"
+DATA_DIR = ROOT / "data"
+RUNS_DIR = ROOT / "runs"

@@ -1,0 +1,39 @@
+"""Schemas of the entry configs in configs/; `make configs` renders them to YAML."""
+
+{% include "shared/python/_future.jinja" %}
+{% if use_wandb %}
+from typing import Literal
+
+{% endif %}
+from pydantic import Field
+
+from {{ core }}.config import Schema
+from {{ core }}.configgen import ConfigFile
+from {{ core }}.logging import LogFormat, LogLevel
+
+
+class MainConfig(Schema):
+    """Entry config of `{{ cli }}-run` (configs/main.yaml)."""
+
+    run_name: str = Field(
+        default="${now:%Y-%m-%d_%H-%M-%S}", description="directory under runs/"
+    )
+    seed: int = Field(default=42, description="seeds random, numpy and torch")
+    deterministic: bool = Field(
+        default=False, description="force deterministic torch kernels (slower)"
+    )
+    log_level: LogLevel = Field(default="info", description="debug|info|warning|error")
+    log_format: LogFormat = Field(
+        default="auto", description="auto: console in a terminal, JSON otherwise"
+    )
+{% if use_wandb %}
+    tracker: Literal["wandb"] | None = Field(
+        default=None, description="mirror the run to W&B; null: run dir only"
+    )
+    wandb_project: str = Field(default="{{ project_name }}", description="W&B project")
+{% endif %}
+
+
+GENERATED = (
+    ConfigFile("main.yaml", MainConfig, defaults=("hydra: default", "_self_")),
+)

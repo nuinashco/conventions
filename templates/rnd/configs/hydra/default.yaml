@@ -1,0 +1,10 @@
+# Hydra's own settings: Hydra writes nothing; the app creates runs/<run_name>/ itself.
+defaults:
+  - override hydra_logging: disabled
+  - override job_logging: disabled
+
+output_subdir: null
+run:
+  dir: .
+job:
+  chdir: false

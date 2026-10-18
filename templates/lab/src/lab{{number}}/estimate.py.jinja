@@ -1,0 +1,11 @@
+"""Monte Carlo estimate of pi: the pure computation (replace with the real one)."""
+
+{% include "shared/python/_future.jinja" %}
+import numpy as np
+
+
+def estimate_pi(rng: np.random.Generator, *, samples: int) -> float:
+    """Return 4 times the share of random unit-square points inside the circle."""
+    points = rng.random((samples, 2))
+    inside = (points**2).sum(axis=1) <= 1.0
+    return 4.0 * float(inside.mean())

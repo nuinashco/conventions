@@ -1,0 +1,11 @@
+# Hydra's own settings: each run keeps its resolved config in <run dir>/.hydra/.
+defaults:
+  - override hydra_logging: disabled
+  - override job_logging: disabled
+
+run:
+  dir: ${paths.lab_dir}/outputs/${hydra.job.name}/${now:%Y-%m-%d_%H-%M-%S}
+sweep:
+  dir: ${paths.lab_dir}/multirun/${hydra.job.name}/${now:%Y-%m-%d_%H-%M-%S}
+job:
+  chdir: false

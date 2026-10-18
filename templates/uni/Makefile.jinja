@@ -1,0 +1,24 @@
+.DEFAULT_GOAL := help
+.PHONY: help setup lint format typecheck test test-integration configs lab report check
+
+# The template this course came from, and its version: new labs use the same one.
+SRC := $(shell sed -n 's/^_src_path: //p' .copier-answers.yml)
+COMMIT := $(shell sed -n 's/^_commit: //p' .copier-answers.yml)
+
+{% include "shared/files/make-common.mk.jinja" %}
+
+configs:  ## regenerate labs/*/config/ from the lab schemas
+	uv run {{ cli }} configs
+
+lab:  ## scaffold a lab: make lab N=002 TOPIC=spark-graphs
+	@test -n "$(N)" && test -n "$(TOPIC)" || { echo "usage: make lab N=002 TOPIC=spark-graphs"; exit 2; }
+	uvx copier copy --defaults $(if $(COMMIT),--vcs-ref $(COMMIT)) \
+		--data profile=lab --data course={{ course }} --data python={{ python }} \
+		--data "author_name={{ author_name }}" --data number=$(N) --data topic=$(TOPIC) \
+		"$(SRC)" labs/$(N)-$(TOPIC)
+	uv add lab-$(N)-$(TOPIC)
+
+report:  ## build a lab's report PDF in Docker: make report LAB=001
+	uv run {{ cli }} report $(firstword $(wildcard labs/$(LAB)*/report/report.tex))
+
+check: lint typecheck test  ## everything CI runs

@@ -1,0 +1,9 @@
+{% include "shared/files/gitignore.jinja" %}
+
+# Derived lab data: the pipeline regenerates it; only data/raw/ is committed
+labs/*/data/*
+!labs/*/data/raw/
+
+# Report assets and LaTeX aux files are rebuilt on demand; report.pdf is committed
+labs/*/report/generated/
+labs/*/report/build/

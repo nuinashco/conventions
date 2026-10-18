@@ -1,0 +1,48 @@
+"""Build LaTeX reports in the course's TeX Live image (latex/Dockerfile)."""
+
+{% include "shared/python/_future.jinja" %}
+import os
+import subprocess
+from pathlib import Path
+
+from {{ core }} import paths
+from {{ core }}.errors import {{ error_class }}
+
+IMAGE = "{{ project_name }}-latex"
+
+
+def build(tex: Path) -> Path:
+    """Compile `tex` with latexmk inside Docker; return the PDF path."""
+    tex = tex.resolve()
+    workdir = tex.parent.relative_to(paths.ROOT).as_posix()
+    # Host uid/gid so outputs are not root-owned; Windows has no uids.
+    user = ["--user", f"{os.getuid()}:{os.getgid()}"] if hasattr(os, "getuid") else []
+    try:
+        # Cached after the first build, which takes a few minutes.
+        subprocess.run(
+            ["docker", "build", "--quiet", "--tag", IMAGE, str(paths.LATEX_DIR)],
+            check=True,
+            stdout=subprocess.DEVNULL,
+        )
+        result = subprocess.run(
+            [
+                "docker",
+                "run",
+                "--rm",
+                *user,
+                *("--env", "HOME=/tmp", "--env", "TEXINPUTS=/work/latex//:"),
+                *("--volume", f"{paths.ROOT}:/work", "--workdir", f"/work/{workdir}"),
+                *(IMAGE, "latexmk", "-r", "/work/latex/latexmkrc", tex.name),
+            ],
+            capture_output=True,
+            check=False,
+            # TeX wraps its log at a byte width, splitting multi-byte Cyrillic letters.
+            encoding="utf-8",
+            errors="replace",
+        )
+    except FileNotFoundError as e:
+        raise {{ error_class }}("docker not found; install Docker to build reports") from e
+    if result.returncode != 0:
+        log = tex.parent / "build" / f"{tex.stem}.log"
+        raise {{ error_class }}(f"latex build failed; see {log}")
+    return tex.with_suffix(".pdf")

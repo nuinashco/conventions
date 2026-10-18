@@ -1,0 +1,27 @@
+# {{ project_name }}
+
+{{ description }}
+
+How the repository is built and how to add a lab: [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Labs
+
+| lab | topic | report |
+|---|---|---|
+
+## Setup
+
+```bash
+make setup                          # uv sync + git hooks
+make lab N=001 TOPIC=monte-carlo    # scaffold labs/001-monte-carlo from the template
+```
+
+## Running a lab
+
+```bash
+uv run labs/001-monte-carlo/scripts/run.py           # writes data/ and report/generated/
+uv run labs/001-monte-carlo/scripts/run.py seed=1    # Hydra overrides
+make report LAB=001                                  # report/report.pdf, built in Docker (TeX Live)
+```
+
+Each lab's settings are listed, with defaults and comments, in `labs/<lab>/config/main.yaml`.

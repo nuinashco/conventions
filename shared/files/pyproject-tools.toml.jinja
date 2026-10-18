@@ -1,0 +1,54 @@
+[tool.ruff]
+line-length = 88
+src = {{ ruff_src | tojson }}
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "W", "I", "B", "UP", "SIM", "RET", "PTH", "C4", "C90", "RUF", "TID",
+    "FBT", "N", "PERF", "G", "LOG", "BLE", "PL", "D", "NPY", "ERA", "T20",
+    "D401",  # The google convention drops imperative mood; selecting it restores it.
+{% if legacy_python %}
+    "FA",
+{% endif %}
+]
+ignore = [
+    "PLC0415",  # Lazy imports of heavy or optional dependencies are deliberate.
+    "PLR2004",  # Thresholds and shapes read better inline than as constants.
+    "PLR0913",  # Config-heavy constructors take many keyword arguments.
+    "D102", "D103", "D105", "D106", "D107",  # Document methods only when non-obvious.
+]
+
+[tool.ruff.lint.per-file-ignores]
+{% for pattern in print_allowed %}
+"{{ pattern }}" = ["T201"]
+{% endfor %}
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.isort]
+known-first-party = {{ first_party | tojson }}
+{% if legacy_python %}
+required-imports = ["from __future__ import annotations"]
+{% endif %}
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"unittest.mock".msg = "use an in-process fake instead (GUIDE: TST)"
+
+[tool.pyright]
+include = {{ pyright_include | tojson }}
+strict = {{ pyright_strict | tojson }}
+typeCheckingMode = "standard"
+venvPath = "."
+venv = ".venv"
+
+[tool.pytest.ini_options]
+testpaths = {{ testpaths | tojson }}
+addopts = ["--import-mode=importlib", "--strict-markers", "-m", "not integration"]
+markers = ["integration: end-to-end runs that need external services or data"]

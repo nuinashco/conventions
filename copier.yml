@@ -1,0 +1,161 @@
+# Project templates for the conventions in GUIDE.md.
+#
+#   copier copy <this repo> my-project                       # asks which profile
+#   copier copy --data profile=rnd <this repo> my-project
+#   make lab N=002 TOPIC=spark                                       # inside a uni repo
+#
+# Each profile lives in templates/<profile>/; files shared by several profiles are
+# Jinja partials in shared/ (included, never copied on their own).
+
+_min_copier_version: "9.4.0"
+_subdirectory: "templates/{{ profile }}"
+_templates_suffix: .jinja
+_envops:
+  trim_blocks: true
+  lstrip_blocks: true
+  keep_trailing_newline: true
+
+profile:
+  type: str
+  help: Which template?
+  choices:
+    "rnd: R&D project (package, Hydra + pydantic configs, families, runs)": rnd
+    "uni: course workspace (shared package, labs, LaTeX reports)": uni
+    "lab: one lab inside a uni workspace (use `make lab` there)": lab
+
+project_name:
+  type: str
+  help: Distribution name (kebab-case, e.g. llm-eval-launcher)
+  when: "{{ profile != 'lab' }}"
+  validator: >-
+    {% if not (project_name | regex_search('^[a-z][a-z0-9-]*$')) %}
+    use lowercase letters, digits and dashes, starting with a letter
+    {% endif %}
+
+package:
+  type: str
+  help: Import name of the package
+  default: "{{ project_name | replace('-', '_') }}"
+  when: "{{ profile == 'rnd' }}"
+  validator: >-
+    {% if not (package | regex_search('^[a-z][a-z0-9_]*$')) %}
+    use a lowercase Python identifier
+    {% endif %}
+
+course:
+  type: str
+  help: Import name of the shared course package
+  default: "{{ (project_name or '') | replace('-', '_') }}"
+  when: "{{ profile in ['uni', 'lab'] }}"
+  validator: >-
+    {% if not (course | regex_search('^[a-z][a-z0-9_]*$')) %}
+    use a lowercase Python identifier
+    {% endif %}
+
+description:
+  type: str
+  help: One-line description
+  default: "{{ project_name }}"
+  when: "{{ profile != 'lab' }}"
+
+course_title:
+  type: str
+  help: Discipline name as printed on report title pages
+  default: "{{ project_name }}"
+  when: "{{ profile == 'uni' }}"
+
+teacher:
+  type: str
+  help: Teacher as printed on report title pages (LaTeX allowed)
+  default: ""
+  when: "{{ profile == 'uni' }}"
+
+student_group:
+  type: str
+  help: Student group as printed on report title pages
+  default: ""
+  when: "{{ profile == 'uni' }}"
+
+number:
+  type: str
+  help: Lab number, three digits
+  default: "001"
+  when: "{{ profile == 'lab' }}"
+  validator: >-
+    {% if not (number | regex_search('^[0-9]{3}$')) %}
+    use three digits, e.g. 002
+    {% endif %}
+
+topic:
+  type: str
+  help: Lab topic slug (kebab-case, e.g. spark-graphs)
+  default: topic
+  when: "{{ profile == 'lab' }}"
+  validator: >-
+    {% if not (topic | regex_search('^[a-z][a-z0-9-]*$')) %}
+    use lowercase letters, digits and dashes, starting with a letter
+    {% endif %}
+
+title:
+  type: str
+  help: Lab title as printed in the report
+  default: "{{ topic }}"
+  when: "{{ profile == 'lab' }}"
+
+author_name:
+  type: str
+  help: Author name
+  default: Ivan Havlytskyi
+
+author_email:
+  type: str
+  help: Author email
+  default: ivan.havlytskyi@gmail.com
+  when: "{{ profile != 'lab' }}"
+
+python:
+  type: str
+  help: Minimum Python version (latest stable unless a dependency needs older)
+  default: "3.14"
+  validator: >-
+    {% if not (python | regex_search('^3[.]1[2-9]$')) %}
+    use 3.12 or newer, e.g. 3.14
+    {% endif %}
+
+use_wandb:
+  type: bool
+  help: Mirror runs to Weights & Biases (opt-in per run with `tracker=wandb`)?
+  default: false
+  when: "{{ profile == 'rnd' }}"
+
+guide_url:
+  type: str
+  default: https://github.com/nuinashco/conventions/blob/main/GUIDE.md
+  when: false
+
+# Derived names, never asked.
+top:
+  type: str
+  default: "{{ package if profile == 'rnd' else course }}"
+  when: false
+
+core:
+  type: str
+  default: "{{ package ~ '.core' if profile == 'rnd' else course }}"
+  when: false
+
+cli:
+  type: str
+  default: "{{ (package if profile == 'rnd' else course) | replace('_', '-') }}"
+  when: false
+
+error_class:
+  type: str
+  default: >-
+    {{ (package if profile == 'rnd' else course).split('_') | map('capitalize') | join }}Error
+  when: false
+
+legacy_python:
+  type: bool
+  default: "{{ python.split('.')[1] | int < 14 }}"
+  when: false

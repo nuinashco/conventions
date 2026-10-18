@@ -1,0 +1,29 @@
+"""`{{ cli }}-configs`: regenerate the YAML files that mirror config schemas.
+
+Usage:
+
+    {{ cli }}-configs            # rewrite stale files in configs/
+
+    {{ cli }}-configs --check    # fail instead, listing the stale files
+"""
+
+{% include "shared/python/_future.jinja" %}
+import click
+
+from {{ package }}.config import GENERATED
+from {{ core }} import configgen, paths, registry
+from {{ core }}.errors import ConfigError, cli_boundary
+
+
+@click.command(help=__doc__)
+@click.option("--check", is_flag=True, help="Fail if any file is stale.")
+@cli_boundary
+def main(*, check: bool) -> None:
+    files = [*GENERATED, *registry.config_files("{{ package }}")]
+    if check:
+        if stale := configgen.stale(files, paths.CONFIGS_DIR):
+            names = ", ".join(str(p.relative_to(paths.ROOT)) for p in stale)
+            raise ConfigError(f"stale configs: {names}; run `make configs`")
+        return
+    for path in configgen.write(files, paths.CONFIGS_DIR):
+        click.echo(f"wrote {path.relative_to(paths.ROOT)}")

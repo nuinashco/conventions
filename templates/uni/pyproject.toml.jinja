@@ -1,0 +1,52 @@
+[project]
+name = "{{ project_name }}"
+version = "0.1.0"
+description = "{{ description }}"
+readme = "README.md"
+authors = [{ name = "{{ author_name }}", email = "{{ author_email }}" }]
+requires-python = ">={{ python }}"
+# Every lab uses these; labs/*/pyproject.toml declare no dependencies of their own.
+dependencies = [
+    "attrs>=26.1",
+    "click>=8.5",
+    "hydra-core>=1.4.0rc1",  # 1.3.x crashes on Python 3.14 (argparse help check).
+    "matplotlib>=3.11",
+    "numpy>=2.5",
+    "pandas>=3.0",
+    "pyarrow>=26.0",
+    "pydantic>=2.14",
+    "rootutils>=1.0.7",
+    "structlog>=26.1",
+]
+
+[project.scripts]
+{{ cli }} = "{{ course }}.cli:main"
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.7",
+    "pyright[nodejs]>=1.1.414",
+    "pytest>=9.1",
+    "ruff>=0.17",
+]
+
+[tool.uv.workspace]
+members = ["labs/*"]
+
+[build-system]
+requires = ["uv_build>=0.12,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "{{ course }}"
+
+{% set ruff_src = ["src", "tests", "labs/*/src", "labs/*/tests"] %}
+{% set first_party = [course, "lab*"] %}
+{% set print_allowed = ["labs/*/scripts/**"] %}
+{% set pyright_include = ["src", "tests", "labs"] %}
+{% set pyright_strict = [] %}
+{% for module in ["config", "configgen", "errors", "labs", "logging", "paths", "report", "seeding"] %}
+{% set _ = pyright_strict.append("src/" ~ course ~ "/" ~ module ~ ".py") %}
+{% endfor %}
+{% set testpaths = ["tests", "labs"] %}
+{% include "shared/files/pyproject-tools.toml.jinja" %}

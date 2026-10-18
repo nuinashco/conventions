@@ -1,0 +1,34 @@
+"""Storage picks the file format from the extension and round-trips data."""
+
+{% include "shared/python/_future.jinja" %}
+import numpy as np
+import pandas as pd
+import pytest
+
+from {{ core }}.errors import DataError
+from {{ core }}.storage import Storage
+
+
+@pytest.mark.parametrize("name", ["t.csv", "t.parquet"])
+def test_tables_round_trip(tmp_path, name):
+    table = pd.DataFrame({"x": [1, 2]})
+    storage = Storage(tmp_path)
+
+    storage.write(table, name, variant="v1")
+
+    pd.testing.assert_frame_equal(storage.read(name, variant="v1"), table)
+
+
+def test_json_and_arrays_round_trip(tmp_path):
+    storage = Storage(tmp_path)
+
+    storage.write({"mse": 0.5, "name": "тест"}, "m.json")
+    storage.write({"w": np.arange(3)}, "a.npz")
+
+    assert storage.read("m.json") == {"mse": 0.5, "name": "тест"}
+    np.testing.assert_array_equal(storage.read("a.npz")["w"], np.arange(3))
+
+
+def test_missing_file_names_the_step_to_run(tmp_path):
+    with pytest.raises(DataError, match="run the step"):
+        Storage(tmp_path).read("absent.parquet")

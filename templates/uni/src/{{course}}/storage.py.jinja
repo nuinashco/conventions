@@ -1,0 +1,61 @@
+"""Lab data on disk; the file format follows the extension."""
+
+{% include "shared/python/_future.jinja" %}
+import json
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import pandas as pd
+from attrs import frozen
+
+from {{ core }}.errors import DataError
+
+FORMATS = ".csv, .parquet, .json or .npz"
+
+
+@frozen
+class Storage:
+    """Files under one data directory, optionally split by variant."""
+
+    data_dir: Path
+
+    def path(self, name: str, variant: str | None = None) -> Path:
+        """Return where `name` lives, under `variant/` when given."""
+        return (self.data_dir / variant if variant else self.data_dir) / name
+
+    def read(self, name: str, variant: str | None = None) -> Any:
+        """Load a .csv/.parquet table, a .json value or the arrays of an .npz file."""
+        file = self.path(name, variant)
+        if not file.is_file():
+            raise DataError(f"missing {file}; run the step that writes it first")
+        match file.suffix:
+            case ".csv":
+                return pd.read_csv(file)
+            case ".parquet":
+                return pd.read_parquet(file)
+            case ".json":
+                return json.loads(file.read_text(encoding="utf-8"))
+            case ".npz":
+                with np.load(file) as arrays:
+                    return dict(arrays)
+            case _:
+                raise DataError(f"unsupported format: {file.name}; use {FORMATS}")
+
+    def write(self, data: Any, name: str, variant: str | None = None) -> Path:
+        """Save `data` in the format its extension names; return the path."""
+        file = self.path(name, variant)
+        file.parent.mkdir(parents=True, exist_ok=True)
+        match file.suffix:
+            case ".csv":
+                data.to_csv(file, index=False)
+            case ".parquet":
+                data.to_parquet(file, index=False)
+            case ".json":
+                text = json.dumps(data, ensure_ascii=False, indent=2)
+                file.write_text(text + "\n", encoding="utf-8")
+            case ".npz":
+                np.savez(file, **data)
+            case _:
+                raise DataError(f"unsupported format: {file.name}; use {FORMATS}")
+        return file

@@ -1,0 +1,101 @@
+# Contributing
+
+How {{ project_name }} is built and how to change it. Using it: [README.md](README.md). Conventions that apply to
+every project, with their reasons: [GUIDE.md]({{ guide_url }}).
+
+## Architecture
+
+```mermaid
+flowchart TD
+    cli["cli/<br/>one module per console script"]:::side
+    config["config.py<br/>entry config schemas"]:::pure
+    subgraph core["core/"]
+        schema["config, configgen, registry"]:::pure
+        effects["runs, logging, seeding, paths"]:::side
+    end
+    cli --> config --> schema
+    cli --> effects
+    classDef pure fill:#d9f2ec,stroke:#1b7f6b,color:#0b3d33
+    classDef side fill:#f8e3d8,stroke:#b4532a,color:#4a1f0c
+```
+
+Teal boxes decide (pure: same input, same output); rust boxes act (files, processes, network). Each seam keeps the two
+apart, so a dry run can execute the pure half for real.
+
+Dependencies point down: `cli` > `config` > `core`. The import-linter contract in `pyproject.toml` enforces the
+order and is exhaustive, so a new subpackage fails `make check` until it is placed in `layers`.
+
+## Repository layout
+
+```text
+configs/                  Hydra YAML; generated files say so in their first line
+  main.yaml               entry config of {{ cli }}-run (generated from MainConfig)
+  hydra/default.yaml      Hydra writes nothing; the app writes runs/
+src/{{ package }}/
+  cli/                    one module per console script: the composition roots
+  config.py               entry config schemas + GENERATED (files `make configs` writes)
+  core/                   building blocks: config, configgen, registry, errors, logging, paths, runs, seeding
+tests/                    mirrors src/ module by module
+  test_invariants.py      configs compose and are fresh, kinds build, import layers hold
+  integration/            end to end, `-m integration`
+notebooks/                exploration only, outputs stripped; reference/ for third-party notebooks
+runs/ data/               gitignored
+```
+
+## Families
+
+A family is a concept with several implementations chosen by a config `kind`:
+
+```text
+src/{{ package }}/<family>/
+  base.py        <Family> (attrs ABC), <Family>Config, <Family>Factory (config_group = "<family>")
+  items/
+    __init__.py  import_submodules(__name__)
+    <kind>.py    @<Family>Factory.register("<kind>") above @define
+```
+
+```python
+class SquareConfig(ShapeConfig):
+    """Square settings."""
+
+    side_m: float = Field(default=1.0, gt=0, description="side length")
+
+
+@ShapeFactory.register("square")  # Outermost: attrs replaces the class.
+@define
+class Square(Shape[SquareConfig]):  # The type argument binds Square.Config.
+    """Axis-aligned square."""
+
+    def area(self) -> float:
+        return self.config.side_m**2
+```
+
+`ShapeFactory.from_config({"kind": "square", "side_m": 2})` validates against `SquareConfig` and builds the item;
+`make configs` writes `configs/shape/kinds/square.yaml`. The family's `__init__.py` imports `items`, so importing
+the family registers its kinds; `make configs` and the invariant tests import the whole package, so they see every
+family even before any code uses it.
+
+## Extending
+
+| to add | create | and |
+|---|---|---|
+| a family | `src/{{ package }}/<family>/base.py` + `items/` | place it in the import-linter `layers`; `make configs` |
+| an item | `src/{{ package }}/<family>/items/<kind>.py` | `make configs` |
+| an entry config | a schema in `config.py`, listed in `GENERATED` | a `cli/<command>.py` and a console script |
+| a setting | a `Field(default=..., description=...)` on the schema | `make configs` |
+
+## Tests
+
+```bash
+make test               # unit tests, a few seconds
+make test-integration   # end to end, behind the integration marker
+```
+
+Fakes, not mocks (`unittest.mock` is banned by ruff). Each case covers a distinct behaviour; child processes and
+servers only for what cannot be measured in process.
+
+## Commits
+
+Conventional Commits with the standard types (`feat fix docs refactor test build ci perf style chore revert`), an
+optional scope, a lowercase imperative subject. Short-lived `<type>/<slug>` branches, squash-merged. The commit-msg
+hook checks the format.

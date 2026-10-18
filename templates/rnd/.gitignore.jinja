@@ -1,0 +1,8 @@
+{% include "shared/files/gitignore.jinja" %}
+
+# Run outputs and local data
+runs/
+data/
+{% if use_wandb %}
+wandb/
+{% endif %}

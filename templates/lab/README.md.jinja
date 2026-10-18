@@ -1,0 +1,17 @@
+# Lab {{ number | int }}: {{ title }}
+
+## Run
+
+```bash
+uv run labs/{{ number }}-{{ topic }}/scripts/run.py              # writes data/ and report/generated/
+make report LAB={{ number }}-{{ topic }}                          # report/report.pdf (Docker)
+```
+
+## Pipeline
+
+| step | script | reads | writes |
+|---|---|---|---|
+| estimate | `scripts/run.py` | `config/main.yaml` | `data/estimate.json`, `report/generated/values.tex` |
+
+Settings live in `src/lab{{ number }}/config.py`; `make configs` (at the repo root) renders them
+to `config/main.yaml`. Only `data/raw/` and `report/report.pdf` are committed.

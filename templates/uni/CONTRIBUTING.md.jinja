@@ -1,0 +1,63 @@
+# Contributing
+
+How the course repository is built and how to change it. Using it: [README.md](README.md). Conventions that apply to
+every project, with their reasons: [GUIDE.md]({{ guide_url }}).
+
+## Layout
+
+```text
+src/{{ course }}/            shared by every lab: config, configgen, errors, labs, latex, logging, paths, report,
+                          seeding, storage, cli ({{ cli }} configs | report)
+labs/NNN-topic/           one uv workspace member per lab, package labNNN, created by `make lab`
+  config/main.yaml        generated from src/labNNN/config.py by `make configs`
+  config/hydra/           Hydra settings: runs keep their resolved config in outputs/<script>/<time>/.hydra/
+  src/labNNN/             the lab's pure computations and its config schemas
+  scripts/                Hydra entry points: load config, call src/, write data/ and report values
+  tests/                  invariant tests plus a subprocess smoke test of each script
+  data/raw/               committed inputs; everything else in data/ is regenerated
+  report/report.tex       \input{generated/values}: numbers come from the pipeline, never typed
+latex/                    TeX Live Dockerfile, latexmkrc, lab-report.cls, course.tex (title page values)
+tests/                    tests of the shared package
+```
+
+## A lab's pipeline
+
+```mermaid
+flowchart LR
+    yaml["config/main.yaml"]:::pure --> script["scripts/run.py"]:::side
+    raw["data/raw/"]:::side --> script
+    script --> compute["src/labNNN/<br/>pure computations"]:::pure
+    script --> data["data/*.json, *.parquet"]:::side
+    script --> values["report/generated/values.tex"]:::side
+    values --> pdf["make report<br/>report.pdf"]:::side
+    classDef pure fill:#d9f2ec,stroke:#1b7f6b,color:#0b3d33
+    classDef side fill:#f8e3d8,stroke:#b4532a,color:#4a1f0c
+```
+
+- Parameters come from the lab's config, never from constants in code. Add a `Field(default=..., description=...)`
+  to the schema in `src/labNNN/config.py`, then run `make configs`.
+- Storage format follows the data's role: CSV raw, parquet derived tables, JSON metrics, NPZ arrays (`Storage`).
+- Report numbers go through `report.number()` and `report.write_values()`; figures go to `report/generated/figures/`.
+- Identifiers, comments and docstrings are English; report text, plot labels and messages for graders may be
+  Ukrainian.
+
+## Adding a lab
+
+```bash
+make lab N=002 TOPIC=spark-graphs     # renders the lab template, adds it to the workspace
+git switch -c lab/002-spark-graphs
+```
+
+## Tests
+
+```bash
+make test     # shared package + every lab
+```
+
+Tests check invariants (shapes, monotonicity, conservation), never values copied from config. Each script has a
+subprocess smoke test on a tiny config in `tmp_path`.
+
+## Commits
+
+Conventional Commits with the standard types and the lab as scope: `feat(lab002): add the GraphFrames motif search`.
+Branches are `lab/NNN-topic` and squash-merge as `feat(labNNN): <title>`.

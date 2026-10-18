@@ -1,0 +1,16 @@
+"""The estimate is repeatable for a seed and close to pi."""
+
+{% include "shared/python/_future.jinja" %}
+import math
+
+import numpy as np
+
+from lab{{ number }}.estimate import estimate_pi
+
+
+def test_same_seed_gives_the_same_estimate_near_pi():
+    first = estimate_pi(np.random.default_rng(0), samples=100_000)
+    second = estimate_pi(np.random.default_rng(0), samples=100_000)
+
+    assert first == second
+    assert math.isclose(first, math.pi, abs_tol=0.02)

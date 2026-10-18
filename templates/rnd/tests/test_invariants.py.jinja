@@ -1,0 +1,41 @@
+"""Repository-wide invariants: configs compose and are fresh, import layers hold."""
+
+{% include "shared/python/_future.jinja" %}
+from typing import Any, cast
+
+import pytest
+from hydra import compose, initialize_config_dir
+from importlinter.cli import lint_imports
+from omegaconf import OmegaConf
+
+from {{ package }}.config import GENERATED
+from {{ core }} import configgen, paths, registry
+
+ENTRY_CONFIGS = [f for f in GENERATED if f.defaults]
+
+
+@pytest.mark.parametrize("file", ENTRY_CONFIGS, ids=lambda f: f.path)
+def test_entry_config_composes_and_validates(file):
+    with initialize_config_dir(str(paths.CONFIGS_DIR)):
+        cfg = compose(config_name=file.path.removesuffix(".yaml"))
+
+    file.schema.from_hydra(cfg)
+
+
+def test_generated_configs_are_fresh():
+    files = [*GENERATED, *registry.config_files("{{ package }}")]
+
+    assert configgen.stale(files, paths.CONFIGS_DIR) == [], "run `make configs`"
+
+
+def test_every_kind_without_required_fields_builds_from_its_generated_yaml():
+    for factory in registry.families("{{ package }}"):
+        for kind in factory.list_registered():
+            yaml = OmegaConf.load(paths.CONFIGS_DIR / registry.kind_path(factory, kind))
+            if not OmegaConf.missing_keys(yaml):
+                data = OmegaConf.to_container(yaml, resolve=True)
+                factory.from_config(cast("dict[str, Any]", data))
+
+
+def test_import_layers_hold():
+    assert lint_imports() == 0

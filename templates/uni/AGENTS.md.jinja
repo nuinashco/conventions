@@ -1,0 +1,30 @@
+# AGENTS.md
+
+{{ description.rstrip('.') }}: a uv workspace of labs sharing the `{{ course }}` package. Layout and lab anatomy:
+[CONTRIBUTING.md](CONTRIBUTING.md). Conventions and their reasons: [GUIDE.md]({{ guide_url }}).
+
+## Commands
+
+```bash
+make setup                        # uv sync + git hooks
+make check                        # ruff, pyright, pytest (shared package and every lab)
+make lab N=002 TOPIC=spark        # new lab, always through the template
+make configs                      # regenerate labs/*/config/ after changing a lab schema
+uv run labs/<lab>/scripts/run.py  # run a lab step; Hydra overrides as key=value
+make report LAB=002               # build the PDF in Docker
+```
+
+## Rules that tools do not check
+
+- Shared helpers go in `src/{{ course }}/`, never copied between labs.
+- A lab's parameters live in its config schema (`Field(default=..., description=...)`), never as constants in code;
+  `config/main.yaml` is generated, never edited by hand.
+- Scripts are thin: load config, call pure functions from `src/labNNN/`, write files. Randomness takes the
+  `np.random.Generator` that `seed_everything` returns.
+- `report.tex` never contains a typed number: use macros from `generated/values.tex`.
+- Only `data/raw/` and `report/report.pdf` are committed; everything else regenerates.
+- Classes are attrs (`@frozen`/`@define`); config schemas are pydantic.
+- Identifiers, comments and docstrings are English; report text may be Ukrainian.
+- Comments say only what the code cannot; one-line imperative docstrings.
+- Tests check invariants, not numbers copied from config; one subprocess smoke test per script.
+- Commits: `feat(labNNN): imperative subject`, standard types only.

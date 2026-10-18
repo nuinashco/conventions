@@ -1,0 +1,46 @@
+"""`{{ cli }}`: course utilities: regenerate lab configs, build lab reports.
+
+Usage:
+
+    {{ cli }} configs            # rewrite stale files in labs/*/config/
+
+    {{ cli }} configs --check    # fail instead, listing the stale files
+
+    {{ cli }} report labs/001-topic/report/report.tex
+"""
+
+{% include "shared/python/_future.jinja" %}
+from pathlib import Path
+
+import click
+
+from {{ core }} import configgen, labs, latex, paths
+from {{ core }}.errors import ConfigError, cli_boundary
+
+
+@click.group(help=__doc__)
+def main() -> None:
+    pass
+
+
+@main.command(help="Regenerate labs/*/config/ from the lab schemas.")
+@click.option("--check", is_flag=True, help="Fail if any file is stale.")
+@cli_boundary
+def configs(*, check: bool) -> None:
+    targets = list(labs.config_targets())
+    if check:
+        stale = [p for files, root in targets for p in configgen.stale(files, root)]
+        if stale:
+            names = ", ".join(str(p.relative_to(paths.ROOT)) for p in stale)
+            raise ConfigError(f"stale configs: {names}; run `make configs`")
+        return
+    for files, root in targets:
+        for path in configgen.write(files, root):
+            click.echo(f"wrote {path.relative_to(paths.ROOT)}")
+
+
+@main.command(help="Build a lab report PDF inside Docker.")
+@click.argument("tex", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@cli_boundary
+def report(tex: Path) -> None:
+    click.echo(latex.build(tex))

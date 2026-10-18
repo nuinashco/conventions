@@ -1,0 +1,12 @@
+.DEFAULT_GOAL := help
+.PHONY: help setup lint format typecheck test test-integration configs lint-imports check
+
+{% include "shared/files/make-common.mk.jinja" %}
+
+configs:  ## regenerate configs/ from the schemas
+	uv run {{ cli }}-configs
+
+lint-imports:  ## import-linter layer contracts
+	uv run lint-imports
+
+check: lint lint-imports typecheck test  ## everything CI runs

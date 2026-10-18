@@ -1,0 +1,34 @@
+# {{ project_name }}
+
+{{ description }}
+
+How the code is built and how to change it: [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Setup
+
+```bash
+make setup          # uv sync + git hooks
+cp .env.example .env
+```
+
+## Daily workflow
+
+1. Run: `{{ cli }}-run` (defaults from `configs/main.yaml`), overriding anything Hydra-style:
+   `{{ cli }}-run seed=1 run_name=baseline`.
+2. Results land in `runs/<run_name>/`: the resolved `config.yaml` (secrets masked), `run.json` (git SHA, dirty flag,
+   argv, start time) and the run's outputs.
+3. Before committing: `make check`.
+
+## Commands
+
+| command | does |
+|---|---|
+| `{{ cli }}-run` | validate the config, seed, start a run directory |
+| `{{ cli }}-configs` | regenerate `configs/` from the config schemas (`--check` only reports) |
+| `make help` | list every make target |
+
+## Configs
+
+`configs/main.yaml` lists every setting with its default and a comment. It is generated from the schema in
+`src/{{ package }}/config.py`: change the schema, then run `make configs`. Secrets go in `.env` and reach configs as
+`${oc.env:NAME,null}`.

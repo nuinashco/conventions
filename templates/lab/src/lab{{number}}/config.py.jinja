@@ -1,0 +1,39 @@
+"""Schemas of this lab's configs; `make configs` renders them to config/."""
+
+{% include "shared/python/_future.jinja" %}
+from pathlib import Path
+
+from pydantic import Field, PositiveInt
+
+from {{ course }}.config import Schema
+from {{ course }}.configgen import ConfigFile
+
+
+class PathsConfig(Schema):
+    """Where the lab reads and writes files."""
+
+    lab_dir: Path = Field(
+        default=Path("${oc.env:PROJECT_ROOT}/labs/{{ number }}-{{ topic }}"),
+        description="this lab",
+    )
+    data_dir: Path = Field(
+        default=Path("${paths.lab_dir}/data"),
+        description="pipeline outputs; only data/raw/ is committed",
+    )
+    report_dir: Path = Field(
+        default=Path("${paths.lab_dir}/report"),
+        description="report.tex and its generated/ assets",
+    )
+
+
+class MainConfig(Schema):
+    """Entry config of scripts/run.py (config/main.yaml)."""
+
+    seed: int = Field(default=42, description="seeds random, numpy and torch")
+    samples: PositiveInt = Field(default=100_000, description="Monte Carlo draws")
+    paths: PathsConfig = Field(default_factory=PathsConfig)
+
+
+GENERATED = (
+    ConfigFile("main.yaml", MainConfig, defaults=("hydra: default", "_self_")),
+)
