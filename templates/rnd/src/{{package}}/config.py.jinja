@@ -7,9 +7,9 @@ from typing import Literal
 {% endif %}
 from pydantic import Field
 
-from {{ core }}.config import Schema
-from {{ core }}.configgen import ConfigFile
-from {{ core }}.logging import LogFormat, LogLevel
+from nuikit.config import Schema
+from nuikit.configgen import ConfigFile
+from nuikit.logging import LogFormat, LogLevel
 
 
 class MainConfig(Schema):

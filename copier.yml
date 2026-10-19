@@ -139,20 +139,9 @@ top:
   default: "{{ package if profile == 'rnd' else course }}"
   when: false
 
-core:
-  type: str
-  default: "{{ package ~ '.core' if profile == 'rnd' else course }}"
-  when: false
-
 cli:
   type: str
   default: "{{ (package if profile == 'rnd' else course) | replace('_', '-') }}"
-  when: false
-
-error_class:
-  type: str
-  default: >-
-    {{ (package if profile == 'rnd' else course).split('_') | map('capitalize') | join }}Error
   when: false
 
 legacy_python:

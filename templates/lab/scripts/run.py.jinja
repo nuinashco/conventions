@@ -12,10 +12,11 @@ import rootutils
 import structlog
 from omegaconf import DictConfig
 
-from {{ course }}.errors import cli_boundary
-from {{ course }}.logging import configure_logging
+from nuikit.errors import cli_boundary
+from nuikit.logging import configure_logging
+from nuikit.seeding import seed_everything
+
 from {{ course }}.report import number, write_values
-from {{ course }}.seeding import seed_everything
 from {{ course }}.storage import Storage
 from lab{{ number }}.config import MainConfig
 from lab{{ number }}.estimate import estimate_pi

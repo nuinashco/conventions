@@ -42,14 +42,14 @@ requires = ["uv_build>=0.12,<0.14"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
-module-name = "{{ course }}"
+module-name = ["{{ course }}", "nuikit"]
 
 {% set ruff_src = ["src", "tests", "labs/*/src", "labs/*/tests"] %}
 {% set first_party = [course, "lab*"] %}
 {% set print_allowed = ["labs/*/scripts/**"] %}
 {% set pyright_include = ["src", "tests", "labs"] %}
-{% set pyright_strict = [] %}
-{% for module in ["config", "configgen", "errors", "labs", "logging", "paths", "report", "seeding"] %}
+{% set pyright_strict = ["src/nuikit"] %}
+{% for module in ["labs", "paths", "report"] %}
 {% set _ = pyright_strict.append("src/" ~ course ~ "/" ~ module ~ ".py") %}
 {% endfor %}
 {% set testpaths = ["tests", "labs"] %}

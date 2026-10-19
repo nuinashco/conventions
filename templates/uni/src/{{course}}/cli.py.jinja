@@ -15,8 +15,10 @@ from pathlib import Path
 import click
 import rootutils
 
-from {{ core }} import configgen, labs, latex, paths
-from {{ core }}.errors import ConfigError, cli_boundary
+from nuikit import configgen
+from nuikit.errors import ConfigError, cli_boundary
+
+from {{ course }} import labs, latex, paths
 
 # Loads .env and sets PROJECT_ROOT, as every entry point does (GUIDE ENV-2).
 rootutils.setup_root(__file__, indicator=".project-root")

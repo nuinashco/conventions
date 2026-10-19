@@ -5,8 +5,9 @@ import os
 import subprocess
 from pathlib import Path
 
-from {{ core }} import paths
-from {{ core }}.errors import {{ error_class }}
+from nuikit.errors import UserError
+
+from {{ course }} import paths
 
 IMAGE = "{{ project_name }}-latex"
 
@@ -41,8 +42,8 @@ def build(tex: Path) -> Path:
             errors="replace",
         )
     except FileNotFoundError as e:
-        raise {{ error_class }}("docker not found; install Docker to build reports") from e
+        raise UserError("docker not found; install Docker to build reports") from e
     if result.returncode != 0:
         log = tex.parent / "build" / f"{tex.stem}.log"
-        raise {{ error_class }}(f"latex build failed; see {log}")
+        raise UserError(f"latex build failed; see {log}")
     return tex.with_suffix(".pdf")

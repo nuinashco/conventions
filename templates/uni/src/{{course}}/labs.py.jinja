@@ -5,8 +5,9 @@ import importlib
 from collections.abc import Iterator
 from pathlib import Path
 
-from {{ core }} import paths
-from {{ core }}.configgen import ConfigFile
+from nuikit.configgen import ConfigFile
+
+from {{ course }} import paths
 
 
 def config_targets() -> Iterator[tuple[list[ConfigFile], Path]]:

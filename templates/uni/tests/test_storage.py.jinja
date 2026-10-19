@@ -5,8 +5,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from {{ core }}.errors import DataError
-from {{ core }}.storage import Storage
+from nuikit.errors import DataError
+
+from {{ course }}.storage import Storage
 
 
 @pytest.mark.parametrize("name", ["t.csv", "t.parquet"])

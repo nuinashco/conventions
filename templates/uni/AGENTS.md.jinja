@@ -21,7 +21,8 @@ make report LAB=002               # build the PDF in Docker
 
 ## Rules that tools do not check
 
-- Shared helpers go in `src/{{ course }}/`, never copied between labs.
+- Shared helpers go in `src/{{ course }}/`, never copied between labs. `src/nuikit/` comes from the template: never
+  edit it here.
 - A lab's parameters live in its config schema (`Field(default=..., description=...)`), never as constants in code;
   `config/main.yaml` is generated, never edited by hand.
 - Scripts are thin: load config, call pure functions from `src/labNNN/`, write files. Randomness takes the

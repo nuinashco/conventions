@@ -1,7 +1,7 @@
 """Report numbers use a decimal comma and land in letters-only macros."""
 
 {% include "shared/python/_future.jinja" %}
-from {{ core }}.report import macro_name, number, write_values
+from {{ course }}.report import macro_name, number, write_values
 
 
 def test_number_rounds_and_uses_a_decimal_comma():

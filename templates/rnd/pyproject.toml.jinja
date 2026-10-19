@@ -40,22 +40,28 @@ requires = ["uv_build>=0.12,<0.14"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
-module-name = "{{ package }}"
+module-name = ["{{ package }}", "nuikit"]
 
 {% set ruff_src = ["src", "tests"] %}
 {% set first_party = [package] %}
 {% set print_allowed = ["src/" ~ package ~ "/cli/**", "scripts/**"] %}
 {% set pyright_include = ["src", "tests", "scripts"] %}
-{% set pyright_strict = ["src/" ~ package ~ "/core"] %}
+{% set pyright_strict = ["src/nuikit"] %}
 {% set testpaths = ["tests"] %}
 {% include "shared/files/pyproject-tools.toml.jinja" %}
 
 [tool.importlinter]
-root_package = "{{ package }}"
+root_packages = ["{{ package }}", "nuikit"]
 
 [[tool.importlinter.contracts]]
-name = "Layers: cli on top, core at the bottom, every module placed"
+name = "Layers: cli on top, paths at the bottom, every module placed"
 type = "layers"
 containers = ["{{ package }}"]
-layers = ["cli", "config", "core"]
+layers = ["cli", "config", "paths"]
 exhaustive = true
+
+[[tool.importlinter.contracts]]
+name = "nuikit never imports the project"
+type = "forbidden"
+source_modules = ["nuikit"]
+forbidden_modules = ["{{ package }}"]

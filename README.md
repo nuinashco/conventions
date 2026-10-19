@@ -64,7 +64,8 @@ Copier merges template changes with local edits and leaves conflicts as `.rej` f
 2. Port the mechanical parts first, by rendering the template into a scratch directory and diffing:
    - pyproject tool blocks (ruff, pyright, pytest, import-linter);
    - `.pre-commit-config.yaml`, the Makefile and CI.
-3. Then port `core/`: config, configgen, registry, errors, logging, paths, runs, seeding.
+3. Then copy `src/nuikit/` and `tests/nuikit/` from the render, move the repo's paths into `<pkg>/paths.py`, and
+   switch imports to `nuikit` one module at a time.
 4. Then refactor rule by rule (attrs classes, generated configs, structlog events), one conventional commit per rule,
    citing its ID.
 

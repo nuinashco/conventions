@@ -8,23 +8,31 @@ refreshes it). The `conventions-reviewer` subagent in `.claude/agents/` checks a
 
 ```mermaid
 flowchart TD
-    cli["cli/<br/>one module per console script"]:::side
-    config["config.py<br/>entry config schemas"]:::pure
-    subgraph core["core/"]
-        schema["config, configgen, registry"]:::pure
-        effects["runs, logging, seeding, paths"]:::side
+    subgraph project["{{ package }}"]
+        cli["cli/<br/>one module per console script"]:::side
+        config["config.py<br/>entry config schemas"]:::pure
+        paths["paths.py<br/>repository paths"]:::side
+        cli --> config --> paths
     end
-    cli --> config --> schema
-    cli --> effects
+    nuikit["nuikit<br/>config, configgen, registry, errors,<br/>logging, runs, seeding"]:::kit
+    project --> nuikit
+    pure["teal: decides, same input same output"]:::pure
+    side["rust: acts on files, processes, network"]:::side
+    kit["grey: copied from the conventions template"]:::kit
     classDef pure fill:#d9f2ec,stroke:#1b7f6b,color:#0b3d33
     classDef side fill:#f8e3d8,stroke:#b4532a,color:#4a1f0c
+    classDef kit fill:#ececec,stroke:#6b6b6b,color:#262626
 ```
 
-Teal boxes decide (pure: same input, same output); rust boxes act (files, processes, network). Each seam keeps the two
-apart, so a dry run can execute the pure half for real.
+`{{ package }}` holds this project's code and nothing else. Each seam keeps the two colours apart, so a dry run can
+execute the pure half for real. Domain packages go between `config` and `paths`.
 
-Dependencies point down: `cli` > `config` > `core`. The import-linter contract in `pyproject.toml` enforces the
-order and is exhaustive, so a new subpackage fails `make check` until it is placed in `layers`.
+`nuikit` is the machinery every project built from the template shares: what schemas and families build on, and
+what an entry point sets up before it runs. Copier writes it; fixes go upstream and arrive with `copier update`.
+
+Dependencies point down: `cli` > `config` > `paths`, and any layer may import `nuikit`. The import-linter contracts
+in `pyproject.toml` enforce the order and keep `nuikit` from importing `{{ package }}`. The layers contract is
+exhaustive, so a new subpackage fails `make check` until it is placed in `layers`.
 
 ## Repository layout
 
@@ -35,8 +43,10 @@ configs/                  Hydra YAML; generated files say so in their first line
 src/{{ package }}/
   cli/                    one module per console script: the composition roots
   config.py               entry config schemas + GENERATED (files `make configs` writes)
-  core/                   building blocks: config, configgen, registry, errors, logging, paths, runs, seeding
-tests/                    mirrors src/ module by module
+  paths.py                repository paths, from the .project-root marker
+src/nuikit/               copied from the conventions template: config, configgen, registry, errors, logging,
+                          runs, seeding
+tests/                    mirrors src/ module by module; tests/nuikit/ comes with the template
   test_invariants.py      configs compose and are fresh, kinds build, import layers hold
   integration/            end to end, `-m integration`
 scripts/                  one-off runnables, never imported; reused or tested ones become cli/ commands

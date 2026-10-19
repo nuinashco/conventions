@@ -8,8 +8,10 @@ from hydra import compose, initialize_config_dir
 from importlinter.cli import lint_imports
 from omegaconf import OmegaConf
 
+from nuikit import configgen, registry
+
+from {{ package }} import paths
 from {{ package }}.config import GENERATED
-from {{ core }} import configgen, paths, registry
 
 ENTRY_CONFIGS = [f for f in GENERATED if f.defaults]
 

@@ -7,8 +7,10 @@ refreshes it). The `conventions-reviewer` subagent in `.claude/agents/` checks a
 ## Layout
 
 ```text
-src/{{ course }}/            shared by every lab: config, configgen, errors, labs, latex, logging, paths, report,
-                          seeding, storage, cli ({{ cli }} configs | report)
+src/{{ course }}/            shared by every lab: labs, latex, paths, report, storage,
+                          cli ({{ cli }} configs | report)
+src/nuikit/               copied from the conventions template: config, configgen, registry, errors, logging,
+                          runs, seeding; change it upstream and `copier update`
 labs/NNN-topic/           one uv workspace member per lab, package labNNN, created by `make lab`
   config/main.yaml        generated from src/labNNN/config.py by `make configs`
   config/hydra/           Hydra settings: runs keep their resolved config in outputs/<script>/<time>/.hydra/
@@ -18,7 +20,7 @@ labs/NNN-topic/           one uv workspace member per lab, package labNNN, creat
   data/raw/               committed inputs; everything else in data/ is regenerated
   report/report.tex       \input{generated/values}: numbers come from the pipeline, never typed
 latex/                    TeX Live Dockerfile, latexmkrc, lab-report.cls, course.tex (title page values)
-tests/                    tests of the shared package
+tests/                    tests of the shared package; tests/nuikit/ comes with the template
 ```
 
 ## A lab's pipeline

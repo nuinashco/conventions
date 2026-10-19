@@ -1,7 +1,9 @@
 """Repository-wide invariants: every lab's generated configs are fresh."""
 
 {% include "shared/python/_future.jinja" %}
-from {{ core }} import configgen, labs
+from nuikit import configgen
+
+from {{ course }} import labs
 
 
 def test_generated_lab_configs_are_fresh():

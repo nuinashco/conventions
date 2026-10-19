@@ -33,9 +33,13 @@ max-complexity = 10
 
 [tool.ruff.lint.isort]
 known-first-party = {{ first_party | tojson }}
+section-order = ["future", "standard-library", "third-party", "nuikit", "first-party", "local-folder"]
 {% if legacy_python %}
 required-imports = ["from __future__ import annotations"]
 {% endif %}
+
+[tool.ruff.lint.isort.sections]
+nuikit = ["nuikit"]  # Vendored machinery reads apart from the project (GUIDE STY-3).
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"

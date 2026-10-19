@@ -5,8 +5,8 @@ from pathlib import Path
 
 from pydantic import Field, PositiveInt
 
-from {{ course }}.config import Schema
-from {{ course }}.configgen import ConfigFile
+from nuikit.config import Schema
+from nuikit.configgen import ConfigFile
 
 
 class PathsConfig(Schema):
