@@ -38,11 +38,11 @@ Version 0.1.0 · last reviewed 2026-10-18 · owner: nuinashco
 | architecture | import-linter contracts, pure/side-effect split, one composition root, capabilities not identities |
 | extension points | family = `base.py` + `items/`, `@Factory.register(kind)` outermost, auto-discovered |
 | config | Hydra composes, `Schema.from_hydra` validates (forbid + frozen), defaults in `Field`, kind YAML generated |
-| paths | rootutils + `.project-root`, `core/paths.py` constants, `setup_root` in entry points |
-| types | annotated everywhere, pyright standard (strict on `core`), attrs for every class, pydantic only for configs |
+| paths | rootutils + `.project-root`, `<pkg>/paths.py` constants, `setup_root` in entry points |
+| types | annotated everywhere, pyright standard (strict on `nuikit`), attrs for every class, pydantic only for configs |
 | style | ruff format at 88, curated ruff rules, absolute imports, keyword-only options, unit suffixes, ASCII in `.py` |
 | comments | one-line module docstring everywhere, one-line docstrings, comments only for what code can't say; checked by `check-comments` and `review-comments` |
-| errors | `<Pkg>Error` with `exit_code`, one `cli_boundary`, `lowercase message; remedy` |
+| errors | `nuikit.errors.UserError` with `exit_code`, one `cli_boundary`, `lowercase message; remedy` |
 | logging | structlog over stdlib, `log.info("snake_case_event", key=value)`, console in a TTY, JSON otherwise |
 | tests | sentence names, unit-first, fakes not mocks, mirror `src/` per module, invariants, `-m integration` |
 | runs | `runs/<name>/` with config, git SHA and outputs; seed once, pass generators; pin revisions |
@@ -56,12 +56,17 @@ Version 0.1.0 · last reviewed 2026-10-18 · owner: nuinashco
 ([Hynek](https://hynek.me/articles/testing-packaging/), [pytest](https://docs.pytest.org/en/stable/explanation/goodpractices.html));
 `uv init` generates this layout by default. *Check:* template.
 
-**LAY-2 MUST [rnd].** A repo builds one distribution with one top-level import package, `src/<pkg>/`. A standalone part
-(a proxy, a client) is a subpackage such as `<pkg>/proxy/`, isolated by an import contract (ARC-1). Shared building blocks
-live in `<pkg>/core/`. Extract a part into its own distribution only when a second repo depends on it.
-*Why:* uv's build backend supports several top-level modules but ["we do not recommend this
-structure"](https://docs.astral.sh/uv/concepts/build-backend/), and generic top-level names like `common` collide in
-site-packages. *Check:* `[tool.uv.build-backend]` has a single `module-name`; `lint-imports`.
+**LAY-2 MUST.** A repo builds one distribution with two top-level import packages: the project's own, `src/<pkg>/`,
+and `src/nuikit/`, the shared machinery the template copies in (config base, YAML generation, registry, errors,
+logging, run directories, seeding) with its tests in `tests/nuikit/`. `nuikit` never imports `<pkg>`, and it is
+changed upstream in the conventions repo and pulled with `copier update`, never edited in place. A standalone part
+of the project (a proxy, a client) is a subpackage such as `<pkg>/proxy/`, isolated by an import contract (ARC-1).
+There is no `core/`, `common/` or `utils/` grab bag. Extract a part into its own distribution only when a second
+repo depends on it. *Why:* project code reads without template plumbing in it, and the seam shows in every import
+block (STY-3 gives `nuikit` its own isort section). uv supports several top-level modules but ["does not recommend
+this structure"](https://docs.astral.sh/uv/concepts/build-backend/) because generic names like `common` collide in
+site-packages; a distinctive name avoids that. *Check:* `module-name = ["<pkg>", "nuikit"]`; `lint-imports` keeps
+`nuikit` from importing `<pkg>` [rnd]; `copier update` shows local edits to `nuikit` as conflicts.
 
 **LAY-3 MUST.** `requires-python` starts at the latest stable CPython when the project is created (3.14 as of
 2026-10). Pin lower only when a dependency or runtime forces it, and say which one in a comment next to the pin.
@@ -100,8 +105,9 @@ comments. The standard targets are `setup lint format typecheck test test-integr
 ## 2. Architecture (ARC)
 
 **ARC-1 MUST [rnd].** Dependencies point one way, and the direction is declared as import-linter contracts in
-`pyproject.toml`: `cli` → app modules → `core`. A standalone subpackage never imports the rest of the package except `core`, and
-an explicit `forbidden` contract says so, whatever layer it sits in. The layers contract is exhaustive, so a new subpackage fails `make check` until it is placed in a layer.
+`pyproject.toml`: `cli` → `config` → app modules → `paths`, and any layer may import `nuikit`, which never imports
+`<pkg>`. A standalone subpackage never imports the rest of the package except `paths`, and an explicit `forbidden`
+contract says so, whatever layer it sits in. The layers contract is exhaustive, so a new subpackage fails `make check` until it is placed in a layer.
 *Why:* a module hides a design decision ([Parnas 1972](https://blog.acolyer.org/2016/09/05/on-the-criteria-to-be-used-in-decomposing-systems-into-modules/)).
 Python has no package-private visibility, so a checked contract is the only way to keep a boundary
 ([Brown](https://simonbrown.je/modular-monolith)). *Check:* `lint-imports` in `make check`.
@@ -152,14 +158,14 @@ sources, collectors, processors.
 ```
 
 **FAM-1 MUST.** A family is `base.py` (abstract base, its config schema, its factory) plus an `items/` folder with one
-module per implementation. `items/__init__.py` calls `core.registry.import_submodules(__name__)`, so adding an item is
+module per implementation. `items/__init__.py` calls `nuikit.registry.import_submodules(__name__)`, so adding an item is
 adding a file. The family's `__init__.py` imports `items`, so importing the family registers its kinds.
-`make configs` and the invariant tests import the whole package (`core.registry.import_tree`), so they see every
+`make configs` and the invariant tests import the whole package (`nuikit.registry.import_tree`), so they see every
 family even before code uses it. *Check:* review.
 
 **FAM-2 MUST.** Items register with `@<Family>Factory.register("<kind>")` as the **outermost** decorator. Kinds are
 snake_case and unique; registering a kind twice raises. *Why:* attrs replaces a slotted class, so a decorator applied
-before `@define` would register the discarded class (TYP-5). *Check:* `core` registry tests; review.
+before `@define` would register the discarded class (TYP-5). *Check:* `nuikit` registry tests; review.
 
 **FAM-3 MUST.** An item binds its config schema through the family's type argument:
 `class Square(Shape[SquareConfig])` sets `Square.Config` and types `self.config` precisely. An explicit
@@ -185,11 +191,11 @@ Python classes (`_target_`). *Why:* configs are parsed at the boundary
 ([King](https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/)); renames can't break YAML.
 *Check:* `tests/test_invariants.py` composes and validates every entry config.
 
-**CFG-2 MUST.** Schemas extend `core.config.Schema` (`extra="forbid"`, `frozen=True`). A typo is an error with one line
+**CFG-2 MUST.** Schemas extend `nuikit.config.Schema` (`extra="forbid"`, `frozen=True`). A typo is an error with one line
 per bad field, and validated configs are read-only. Pydantic's default coercion stays on. *Why:* "it should be
 possible to detect unused or redundant settings"
 ([Sculley et al. 2015](https://papers.nips.cc/paper_files/paper/2015/hash/86df7dcfd896fcaf2674f757a2463eba-Abstract.html)).
-*Check:* `core` config tests.
+*Check:* `nuikit` config tests.
 
 **CFG-3 MUST.** Defaults and documentation live in the schema: `Field(default, description="... (seconds)")`. YAML for
 each kind is generated by `make configs`, with every field, its default (or `???`) and its description as a comment.
@@ -240,7 +246,7 @@ registered ones in its error.
 
 ## 5. Paths and environment (ENV)
 
-**ENV-1 MUST.** The repo root is found with rootutils and the `.project-root` marker. `core/paths.py` defines
+**ENV-1 MUST.** The repo root is found with rootutils and the `.project-root` marker. `<pkg>/paths.py` defines
 `ROOT = rootutils.find_root(search_from=__file__, indicator=".project-root")` and UPPER_SNAKE constants with `_DIR` or
 `_PATH` suffixes. Never `Path(__file__).parents[n]`, never paths relative to the working directory.
 *Why:* scripts, tests, notebooks and Hydra all resolve the same root (the lightning-hydra-template convention).
@@ -249,14 +255,14 @@ registered ones in its error.
 **ENV-2 MUST.** Every entry point calls `rootutils.setup_root(__file__, indicator=".project-root")`, which loads
 `.env` and sets `PROJECT_ROOT`. YAML refers to `${oc.env:PROJECT_ROOT}`. *Check:* template entry points.
 
-**ENV-3 MUST.** Environment variables are read in YAML (`oc.env`) or in `core/paths.py`, never through `os.environ`
+**ENV-3 MUST.** Environment variables are read in YAML (`oc.env`) or in `<pkg>/paths.py`, never through `os.environ`
 scattered in modules. *Check:* review (grep `os.environ`).
 
 ## 6. Types and data (TYP)
 
 **TYP-1 MUST.** Every function signature in `src/` is annotated; test functions and fixtures may skip annotations.
-pyright in standard mode passes on `src/` and `tests/`, and strict mode passes on `<pkg>/core/`. *Why:* the code relies on types (generics, `ClassVar`, `Config` bindings) that
-only a checker verifies. *Check:* `make typecheck`.
+pyright in standard mode passes on `src/` and `tests/`, and strict mode passes on `nuikit/`. *Why:* the code relies on
+types (generics, `ClassVar`, `Config` bindings) that only a checker verifies. *Check:* `make typecheck`.
 
 **TYP-2 MUST.** Use modern syntax: `X | None`, builtin generics, `collections.abc` for abstract containers, PEP 695
 generics and `type` aliases. *Check:* ruff UP.
@@ -300,7 +306,7 @@ class RateLimiter:
 - `__init_subclass__` runs twice for slotted classes, so hooks in it must be idempotent.
 - Slots stop attribute typos only when every base class is slotted, which is why family bases are attrs classes too.
 
-*Check:* `core` registry tests.
+*Check:* `nuikit` registry tests.
 
 **TYP-6 MUST.** Family bases are ABCs: the registry checks subclassing, and items inherit `Config` and helpers. An
 injected collaborator that only needs a shape (a clock, an HTTP client, an uploader) is typed as a `Protocol`, so fakes
@@ -330,7 +336,8 @@ selected explicitly, because the google docstring convention silently drops it. 
 this guide. A `# noqa` names the rule and gives a reason. *Why:* an explicit select keeps upgrades from changing the
 rules silently ([ruff](https://docs.astral.sh/ruff/linter/)). *Check:* `ruff check`.
 
-**STY-3 MUST.** Imports are absolute. *Check:* ruff TID252 with `ban-relative-imports = "all"`.
+**STY-3 MUST.** Imports are absolute, and `nuikit` imports form their own block between third-party and project
+imports. *Check:* ruff TID252 with `ban-relative-imports = "all"`; a `nuikit` isort section.
 
 **STY-4 MUST.** Every optional parameter and every boolean parameter is keyword-only (after `*`). Only the one or two
 obvious subjects of a call are positional. *Check:* ruff FBT for booleans; review for the rest.
@@ -417,11 +424,12 @@ Claude Code `PostToolUse` hook on every edited `.py` file.
 
 ## 9. Errors (ERR)
 
-**ERR-1 MUST.** A problem the user can fix raises the package's base error, `<Pkg>Error`, or one of its subclasses.
+**ERR-1 MUST.** A problem the user can fix raises `nuikit.errors.UserError` or a subclass; a package that needs its own
+family of errors subclasses it (`ProxyError(UserError)`).
 Each carries an `exit_code`: `ConfigError` exits with 2 and `DataError` with 3. Every other exception is a bug and keeps
 its traceback. *Why:* "a bug is a kind of error the programmer didn't expect"; recoverable errors are expected
 ([Duffy](https://joeduffyblog.com/2016/02/07/the-error-model/)). This is the model click's `ClickException` uses.
-*Check:* `core` error tests.
+*Check:* `nuikit` error tests.
 
 **ERR-2 MUST.** Each entry point has one boundary, `@cli_boundary`. It turns package errors, pydantic
 `ValidationError` and OmegaConf errors into `error: <message>` on stderr and the matching exit code. Nothing else
@@ -451,7 +459,7 @@ are not selected.
 ## 10. Logging (LOG)
 
 **LOG-1 MUST.** Logging is structlog over the standard library. Each module that logs has
-`log = structlog.stdlib.get_logger()` at the top (typed, unlike `structlog.get_logger()`). `core.logging.configure_logging()` is called once, by the entry point; no
+`log = structlog.stdlib.get_logger()` at the top (typed, unlike `structlog.get_logger()`). `nuikit.logging.configure_logging()` is called once, by the entry point; no
 other code configures logging. *Why:* one pipeline for our events and for third-party stdlib logs (LiteLLM, httpx,
 Hydra) ([structlog](https://www.structlog.org/en/stable/standard-library.html)). *Check:* template.
 
@@ -517,7 +525,7 @@ module's docstring states the invariant it protects.
 - `run.json`: git SHA, dirty flag, argv and start time;
 - the run's outputs.
 
-Hydra writes nothing else. *Why:* any result can be traced back to its code and config. *Check:* `core` runs tests.
+Hydra writes nothing else. *Why:* any result can be traced back to its code and config. *Check:* `nuikit` runs tests.
 
 **RUN-2 MUST.** Seed once in the entry point with `seed_everything(cfg.seed)`. Code that needs randomness takes an
 explicit `np.random.Generator` or `torch.Generator`. Never call the global `np.random.*` functions.
@@ -624,7 +632,8 @@ author, but feedback during the edit is cheaper than at commit time. *Check:* te
 
 **UNI-1 MUST.** A course repo is a uv workspace:
 
-- The root is the shared course package `src/<course>/` (config, paths, logging, seeding, storage, report macros).
+- The root holds the shared course package `src/<course>/` (paths, labs, storage, report macros, LaTeX) next to
+  `src/nuikit/` (LAY-2).
 - Each lab is a member at `labs/NNN-topic/` with package `labNNN` and `dependencies = []`; shared dependencies live
   at the root.
 - New labs are created only with `make lab`.
@@ -655,7 +664,8 @@ holds.
 |---|---|---|---|
 | line length | 88 | 79 (PEP 8, Google), 100, 120 (earlier repos) | ecosystem default; no primary guide endorses 120 |
 | multi-part repos | one package with subpackages | uv workspace; several top-level modules | simplest, no name clashes; import-linter keeps the boundaries |
-| shared core | vendored by the template | personal library; copying by hand | no runtime dependency on a personal package in employer repos; `copier update` spreads fixes |
+| shared building blocks | vendored by the template | personal library; copying by hand | no runtime dependency on a personal package in employer repos; `copier update` spreads fixes |
+| their layout | second top-level package `nuikit` | `<pkg>/framework/` + `<pkg>/runtime/`; one `core/` folder; `packages/kit/` workspace member | project code reads without template plumbing; one `src/`, one distribution, no workspace |
 | implementation lookup | registry with auto-discovery | explicit imports; lazy map; discriminated union | adding a file is all it takes; costs accepted at this scale (FAM) |
 | config bridge | `Schema.from_hydra` | `_target_` + instantiate; Hydra structured configs | parse at the boundary; YAML never names classes |
 | config defaults | schema is the source, YAML generated | YAML + schema + parity test; YAML only | one source of truth while YAML stays readable |
@@ -663,7 +673,7 @@ holds.
 | entry points | interface commands in `cli/`, one-offs in `scripts/` | `scripts/` for everything; `cli/` only | commands get in-process tests and the layer check; one-offs stay out of the package |
 | data classes | attrs for every class, pydantic for configs | dataclasses; pydantic everywhere | validation at the edge, plain typed state inside; no `__init__` boilerplate |
 | interfaces | ABC families, Protocol seams | ABC only; Protocol only | registries need nominal bases; fakes need none |
-| type checker | pyright standard, strict on `core` | mypy --strict; basedpyright; ty (beta) | checks unannotated code; understands attrs and pydantic natively |
+| type checker | pyright standard, strict on `nuikit` | mypy --strict; basedpyright; ty (beta) | checks unannotated code; understands attrs and pydantic natively |
 | `__future__` annotations | always below 3.14, never from 3.14 | never; only where needed | consistent and automatic; follows PEP 649/749 |
 | module docstrings | one line on every module | only `__init__` and CLI (earlier rule) | each module states its responsibility (PEP 257, Google) |
 | errors | base error with exit codes | single UserError; builtins only | scripts can tell config errors from data errors |

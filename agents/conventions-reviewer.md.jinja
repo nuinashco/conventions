@@ -25,6 +25,9 @@ Use the scope the caller gives you. Without one:
   then each changed file in full) and whatever they break elsewhere;
 - otherwise review the whole repository.
 
+`src/nuikit/` and `tests/nuikit/` come from the template. Do not review their code; a local edit to them is a LAY-2
+finding (compare with `git log` and `.copier-answers.yml`).
+
 ## Steps
 
 1. Run the mechanical checks and report each in one line; do not re-derive what they already enforce:
