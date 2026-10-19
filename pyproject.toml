@@ -1,0 +1,55 @@
+[project]
+name = "conventions-hooks"
+version = "0.1.0"
+description = "pre-commit hooks that check the conventions in GUIDE.md"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = ["attrs>=24.2"]
+
+[project.scripts]
+check-comments = "conventions_hooks.comments:main"
+review-comments = "conventions_hooks.review:main"
+check-commit-msg = "conventions_hooks.commit_msg:main"
+
+[dependency-groups]
+dev = ["copier>=9.19", "pytest>=9.1", "ruff>=0.17"]
+
+[build-system]
+requires = ["uv_build>=0.12,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "conventions_hooks"
+
+[tool.ruff]
+line-length = 88
+src = ["src", "tests"]
+extend-exclude = ["templates", "shared"]  # Jinja sources; their renders are checked.
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "W", "I", "B", "UP", "SIM", "RET", "PTH", "C4", "C90", "RUF", "TID",
+    "FBT", "N", "PERF", "G", "LOG", "BLE", "PL", "D", "NPY", "ERA", "T20", "TD004",
+    "TD005", "TD006", "TD007", "FA",
+    "D401",  # The google convention drops imperative mood; selecting it restores it.
+]
+ignore = [
+    "PLC0415", "PLR2004", "PLR0913",
+    "D102", "D103", "D105", "D106", "D107",
+    "T201",  # The hooks report to stdout.
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.isort]
+known-first-party = ["conventions_hooks"]
+required-imports = ["from __future__ import annotations"]  # Runs on Python 3.12.
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--import-mode=importlib", "--strict-markers", "-m", "not templates"]
+markers = ["templates: render every profile and run its checks (slow, needs network)"]

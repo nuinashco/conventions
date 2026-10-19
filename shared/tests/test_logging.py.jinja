@@ -19,7 +19,7 @@ def root_logger():
 
 
 def test_events_and_foreign_logs_render_as_json_lines(root_logger, capsys):
-    configure_logging("info", "json")
+    configure_logging(level="info", fmt="json")
 
     structlog.stdlib.get_logger("app").info("run_started", seed=1)
     logging.getLogger("thirdparty").warning("plain %s", "message")

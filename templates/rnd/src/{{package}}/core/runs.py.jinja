@@ -59,6 +59,6 @@ def _git(*args: str) -> str | None:
         result = subprocess.run(
             ["git", *args], capture_output=True, text=True, check=False, cwd=paths.ROOT
         )
-    except OSError:  # git is not installed.
+    except OSError:  # `git` is not installed.
         return None
     return result.stdout.strip() if result.returncode == 0 else None

@@ -149,11 +149,12 @@ def import_submodules(package: str) -> None:
 
 
 def import_tree(package: str) -> None:
-    """Import `package` and every module below it except its CLIs."""
+    """Import `package` and every module below it except CLIs and `__main__` modules."""
     root = importlib.import_module(package)
     cli = f"{package}.cli"
     for info in pkgutil.walk_packages(getattr(root, "__path__", []), f"{package}."):
-        if info.name != cli and not info.name.startswith(f"{cli}."):
+        is_cli = info.name == cli or info.name.startswith(f"{cli}.")
+        if not is_cli and not info.name.endswith(".__main__"):
             importlib.import_module(info.name)
 
 

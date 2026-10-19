@@ -1,7 +1,12 @@
 # AGENTS.md
 
 {{ description.rstrip('.') }}: a uv workspace of labs sharing the `{{ course }}` package. Layout and lab anatomy:
-[CONTRIBUTING.md](CONTRIBUTING.md). Conventions and their reasons: [GUIDE.md]({{ guide_url }}).
+[CONTRIBUTING.md](CONTRIBUTING.md). Conventions and their reasons:
+[CONVENTIONS.md](CONVENTIONS.md), a read-only copy of the conventions guide.
+
+Before committing a change that adds or moves modules, configs, tests, entry points or docs, run the
+`conventions-reviewer` subagent (`.claude/agents/`) and fix its MUST findings. `.claude/settings.json` runs
+`check-comments` after each edit and `review-comments` before you hand back; fix what they report.
 
 ## Commands
 
@@ -27,4 +32,4 @@ make report LAB=002               # build the PDF in Docker
 - Identifiers, comments and docstrings are English; report text may be Ukrainian.
 - Comments say only what the code cannot; one-line imperative docstrings.
 - Tests check invariants, not numbers copied from config; one subprocess smoke test per script.
-- Commits: `feat(labNNN): imperative subject`, standard types only.
+- Commits: one line, `feat(labNNN): imperative subject`, standard types, no articles, no body.

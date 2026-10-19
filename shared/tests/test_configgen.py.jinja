@@ -19,19 +19,28 @@ class Outer(Schema):
     name: str = Field(description="required, no default")
     tags: list[str] = Field(default_factory=lambda: ["a"])
     inner: Inner = Field(default_factory=Inner, description="nested settings")
+    optional: Inner | None = Field(default_factory=Inner)
+    disabled: Inner | None = None
+    endpoint: str = Field(description="provided by a defaults-list group")
 
 
 def test_render_writes_defaults_required_markers_comments_and_nested_blocks():
-    text = render(ConfigFile("outer.yaml", Outer, defaults=("_self_",)))
+    text = render(
+        ConfigFile("outer.yaml", Outer, defaults=("_self_", "endpoint: null"))
+    )
 
     assert text.splitlines()[1:] == [
         "defaults:",
         "  - _self_",
+        "  - endpoint: null",
         "",
         "name: ???  # required, no default",
         'tags: ["a"]',
         "inner:  # nested settings",
         "  timeout_s: 30.0  # seconds",
+        "optional:",
+        "  timeout_s: 30.0  # seconds",
+        "disabled: null",
     ]
 
 

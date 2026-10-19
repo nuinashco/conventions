@@ -1,5 +1,8 @@
 """Every profile renders into a project whose own checks pass."""
 
+from __future__ import annotations
+
+import json
 import shutil
 import subprocess
 from pathlib import Path
@@ -8,6 +11,8 @@ import pytest
 from copier import run_copy
 
 REPO = Path(__file__).resolve().parents[1]
+
+pytestmark = pytest.mark.templates
 
 
 @pytest.fixture(scope="module")
@@ -50,6 +55,7 @@ def test_rnd_project_passes_its_checks_and_runs(template, tmp_path, data):
     sh(project, "uv", "run", "demo-configs", "--check")
 
     assert (project / "runs" / "smoke" / "run.json").is_file()
+    assert_ships_the_guide_and_its_reviewer(project)
 
 
 def test_uni_workspace_with_two_labs_passes_its_checks(template, tmp_path):
@@ -61,3 +67,19 @@ def test_uni_workspace_with_two_labs_passes_its_checks(template, tmp_path):
     sh(course, "uv", "run", "course", "configs", "--check")
 
     assert (course / "labs" / "002-second" / "src" / "lab002" / "config.py").is_file()
+    assert_ships_the_guide_and_its_reviewer(course)
+
+
+def assert_ships_the_guide_and_its_reviewer(project: Path) -> None:
+    # A Jinja delimiter in GUIDE.md would silently change the vendored copy.
+    guide = (REPO / "GUIDE.md").read_text(encoding="utf-8")
+    vendored = (project / "CONVENTIONS.md").read_text(encoding="utf-8")
+    reviewer = project / ".claude" / "agents" / "conventions-reviewer.md"
+    settings = json.loads((project / ".claude" / "settings.json").read_text())
+    assert vendored.split("\n", 1)[1] == guide
+    header = reviewer.read_text(encoding="utf-8").splitlines()[:2]
+    assert header == ["---", "name: conventions-reviewer"]
+    assert set(settings["hooks"]) == {"PostToolUse", "Stop"}
+    # The template's own code follows the comment rules it ships.
+    sources = [str(p) for p in project.rglob("*.py") if ".venv" not in p.parts]
+    sh(project, "uv", "run", "check-comments", *sources)

@@ -1,0 +1,33 @@
+{
+  "attribution": {
+    "commit": "",
+    "sessionUrl": false
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && uv run --quiet check-comments --claude-hook",
+            "timeout": 30,
+            "statusMessage": "Checking comment conventions"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && uv run --quiet review-comments --claude-hook",
+            "timeout": 300,
+            "statusMessage": "Reviewing new comments"
+          }
+        ]
+      }
+    ]
+  }
+}

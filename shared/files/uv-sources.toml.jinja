@@ -1,0 +1,9 @@
+{% set hooks_src = _copier_answers._src_path | replace("git+", "") %}
+{% set hooks_rev = _copier_conf.vcs_ref_hash %}
+{% if hooks_rev and hooks_src.startswith(("gh:", "https://", "git@")) %}
+# The conventions repo at the template's commit; `copier update` moves the pin.
+conventions-hooks = { git = "{{ hooks_src | replace('gh:', 'https://github.com/') }}", rev = "{{ hooks_rev }}" }
+{% else %}
+# The local conventions checkout this project was generated from.
+conventions-hooks = { path = "{{ hooks_src }}" }
+{% endif %}

@@ -11,7 +11,7 @@ type LogLevel = Literal["debug", "info", "warning", "error"]
 type LogFormat = Literal["auto", "console", "json"]
 
 
-def configure_logging(level: LogLevel = "info", fmt: LogFormat = "auto") -> None:
+def configure_logging(*, level: LogLevel = "info", fmt: LogFormat = "auto") -> None:
     """Route structlog and stdlib loggers through one stderr handler.
 
     Call once, from the entry point; library code only calls `get_logger()`.

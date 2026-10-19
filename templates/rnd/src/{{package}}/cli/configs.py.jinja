@@ -9,10 +9,14 @@ Usage:
 
 {% include "shared/python/_future.jinja" %}
 import click
+import rootutils
 
 from {{ package }}.config import GENERATED
 from {{ core }} import configgen, paths, registry
 from {{ core }}.errors import ConfigError, cli_boundary
+
+# Loads .env and sets PROJECT_ROOT, as every entry point does (GUIDE ENV-2).
+rootutils.setup_root(__file__, indicator=".project-root")
 
 
 @click.command(help=__doc__)

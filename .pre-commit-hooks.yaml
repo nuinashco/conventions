@@ -1,0 +1,18 @@
+# Hooks this repo provides; projects pin it by commit in their .pre-commit-config.yaml.
+- id: check-comments
+  name: comments are sentences, no banners, class docstrings are noun phrases (GUIDE DOC)
+  entry: check-comments
+  language: python
+  types: [python]
+- id: check-commit-msg
+  name: commit message is one line without articles (GUIDE GIT-1, GIT-2)
+  entry: check-commit-msg
+  language: python
+  stages: [commit-msg]
+- id: review-comments
+  name: comments say only what the code cannot (GUIDE DOC-4, asks claude -p)
+  entry: review-comments
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [manual]

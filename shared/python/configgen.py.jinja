@@ -4,7 +4,8 @@
 import json
 from collections.abc import Iterable, Iterator, Mapping
 from pathlib import Path
-from typing import Any
+from types import UnionType
+from typing import Any, Union, get_args, get_origin
 
 from attrs import frozen
 from pydantic import BaseModel
@@ -33,7 +34,8 @@ def render(file: ConfigFile) -> str:
     if file.defaults:
         lines += ["defaults:", *(f"  - {entry}" for entry in file.defaults)]
     lines.append("")
-    lines += _fields(file.schema, {"kind": file.kind} if file.kind else {}, indent=0)
+    values = {"kind": file.kind} if file.kind else {}
+    lines += _fields(file.schema, values, indent=0, skip=_groups(file.defaults))
     return "\n".join(lines) + "\n"
 
 
@@ -59,20 +61,46 @@ def write(files: Iterable[ConfigFile], root: Path) -> list[Path]:
     return changed
 
 
+def _groups(defaults: Iterable[str]) -> set[str]:
+    """Return the groups a defaults list selects, e.g. `eval` in `eval: smoke`."""
+    groups: set[str] = set()
+    for entry in defaults:
+        head = entry.split("#")[0]
+        if ":" in head:
+            groups.add(
+                head.split(":")[0].strip().removeprefix("override ").split("@")[0]
+            )
+    return groups
+
+
 def _fields(
-    schema: type[BaseModel], values: Mapping[str, Any], *, indent: int
+    schema: type[BaseModel],
+    values: Mapping[str, Any],
+    *,
+    indent: int,
+    skip: set[str] | None = None,
 ) -> Iterator[str]:
     pad = " " * indent
     for name, field in schema.model_fields.items():
+        if skip and name in skip:
+            continue  # A defaults-list group provides this field.
         comment = f"  # {field.description}" if field.description else ""
         value = values.get(name, _default(field))
-        nested = field.annotation
-        if isinstance(nested, type) and issubclass(nested, BaseModel):
+        nested = _model(field.annotation)
+        if nested is not None and value is not None:
             yield f"{pad}{name}:{comment}"
             inner = value if isinstance(value, BaseModel) else None
             yield from _fields(nested, _as_values(inner), indent=indent + 2)
         else:
             yield f"{pad}{name}: {_scalar(value)}{comment}"
+
+
+def _model(annotation: Any) -> type[BaseModel] | None:
+    """Return the model class of a `Model` or `Model | None` annotation."""
+    union = get_origin(annotation) in (Union, UnionType)
+    options: tuple[Any, ...] = get_args(annotation) if union else (annotation,)
+    models = [o for o in options if isinstance(o, type) and issubclass(o, BaseModel)]
+    return models[0] if len(models) == 1 else None
 
 
 def _default(field: FieldInfo) -> Any:

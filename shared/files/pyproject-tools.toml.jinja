@@ -1,11 +1,13 @@
 [tool.ruff]
 line-length = 88
 src = {{ ruff_src | tojson }}
+extend-exclude = ["CONVENTIONS.md"]  # Vendored guide: fix it upstream, not here.
 
 [tool.ruff.lint]
 select = [
     "E", "F", "W", "I", "B", "UP", "SIM", "RET", "PTH", "C4", "C90", "RUF", "TID",
     "FBT", "N", "PERF", "G", "LOG", "BLE", "PL", "D", "NPY", "ERA", "T20",
+    "TD004", "TD005", "TD006", "TD007",  # A TODO says what and why (GUIDE DOC-6).
     "D401",  # The google convention drops imperative mood; selecting it restores it.
 {% if legacy_python %}
     "FA",

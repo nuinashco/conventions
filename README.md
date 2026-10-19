@@ -11,6 +11,23 @@ My conventions for Python and ML projects, and the copier templates that impleme
   reports built from generated macros.
 - `templates/lab`: one lab inside a uni workspace, created with `make lab` there.
 
+## Hooks
+
+The repo is also the `conventions-hooks` package (`src/conventions_hooks/`), the checks this guide adds on top of ruff:
+
+| command | checks | runs |
+|---|---|---|
+| `check-comments` | comments are sentences, no section banners, class docstrings are noun phrases (DOC-2, DOC-4, DOC-5) | pre-commit on every commit; Claude Code `PostToolUse` hook after each edit |
+| `review-comments` | new comments say only what the code cannot (DOC-4), judged by `claude -p` | Claude Code `Stop` hook; `pre-commit run review-comments --hook-stage manual` |
+
+Generated projects install it as a dev dependency pinned to the template's commit (a local path until this repo is
+pushed) and wire both layers. Repos that don't use uv can use `.pre-commit-hooks.yaml` instead.
+
+```bash
+make test             # unit tests of the hooks, under a second
+make test-templates   # render every profile and run its checks (slow, needs network)
+```
+
 ## Start a project
 
 ```bash

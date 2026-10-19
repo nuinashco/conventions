@@ -1,4 +1,5 @@
 # Installed by `make setup` (pre-commit and commit-msg stages).
+default_stages: [pre-commit]  # Only the commit-msg hook runs at that stage.
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
@@ -48,6 +49,23 @@ repos:
         language: system
         types: [python]
         pass_filenames: false
+      - id: check-comments
+        name: comments are sentences, no banners (GUIDE DOC)
+        entry: uv run check-comments
+        language: system
+        types: [python]
+      - id: check-commit-msg
+        name: commit message is one line without articles (GUIDE GIT-1, GIT-2)
+        entry: uv run check-commit-msg
+        language: system
+        stages: [commit-msg]
+      - id: review-comments
+        name: comments say only what code cannot (GUIDE DOC-4, asks claude -p)
+        entry: uv run review-comments
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [manual]
 {% if ascii_only %}
       - id: ascii-only-python
         name: ASCII-only .py files (GUIDE STY-8)

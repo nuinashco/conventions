@@ -24,12 +24,16 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "conventions-hooks",
     "import-linter>=2.15",
     "pre-commit>=4.7",
     "pyright[nodejs]>=1.1.414",
     "pytest>=9.1",
     "ruff>=0.17",
 ]
+
+[tool.uv.sources]
+{% include "shared/files/uv-sources.toml.jinja" %}
 
 [build-system]
 requires = ["uv_build>=0.12,<0.14"]
@@ -41,7 +45,7 @@ module-name = "{{ package }}"
 {% set ruff_src = ["src", "tests"] %}
 {% set first_party = [package] %}
 {% set print_allowed = ["src/" ~ package ~ "/cli/**", "scripts/**"] %}
-{% set pyright_include = ["src", "tests"] %}
+{% set pyright_include = ["src", "tests", "scripts"] %}
 {% set pyright_strict = ["src/" ~ package ~ "/core"] %}
 {% set testpaths = ["tests"] %}
 {% include "shared/files/pyproject-tools.toml.jinja" %}

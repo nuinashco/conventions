@@ -1,7 +1,8 @@
 # Contributing
 
 How the course repository is built and how to change it. Using it: [README.md](README.md). Conventions that apply to
-every project, with their reasons: [GUIDE.md]({{ guide_url }}).
+every project, with their reasons: [CONVENTIONS.md](CONVENTIONS.md) (a read-only copy of the guide; `copier update`
+refreshes it). The `conventions-reviewer` subagent in `.claude/agents/` checks a branch or the repo against it.
 
 ## Layout
 
@@ -59,5 +60,5 @@ subprocess smoke test on a tiny config in `tmp_path`.
 
 ## Commits
 
-Conventional Commits with the standard types and the lab as scope: `feat(lab002): add the GraphFrames motif search`.
-Branches are `lab/NNN-topic` and squash-merge as `feat(labNNN): <title>`.
+Conventional Commits with the standard types and the lab as scope: `feat(lab002): add GraphFrames motif search`.
+One line, no articles, no body. Branches are `lab/NNN-topic` and squash-merge as `feat(labNNN): <title>`.

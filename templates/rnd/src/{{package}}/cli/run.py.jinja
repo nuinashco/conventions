@@ -29,7 +29,7 @@ log = structlog.stdlib.get_logger()
 @cli_boundary
 def main(dict_cfg: DictConfig) -> None:
     cfg = MainConfig.from_hydra(dict_cfg)
-    configure_logging(cfg.log_level, cfg.log_format)
+    configure_logging(level=cfg.log_level, fmt=cfg.log_format)
     seeding.seed_everything(cfg.seed, deterministic=cfg.deterministic)
     run_dir = runs.start_run(cfg, name=cfg.run_name)
 {% if use_wandb %}

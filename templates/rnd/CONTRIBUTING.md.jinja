@@ -1,7 +1,8 @@
 # Contributing
 
 How {{ project_name }} is built and how to change it. Using it: [README.md](README.md). Conventions that apply to
-every project, with their reasons: [GUIDE.md]({{ guide_url }}).
+every project, with their reasons: [CONVENTIONS.md](CONVENTIONS.md) (a read-only copy of the guide; `copier update`
+refreshes it). The `conventions-reviewer` subagent in `.claude/agents/` checks a branch or the repo against it.
 
 ## Architecture
 
@@ -38,6 +39,7 @@ src/{{ package }}/
 tests/                    mirrors src/ module by module
   test_invariants.py      configs compose and are fresh, kinds build, import layers hold
   integration/            end to end, `-m integration`
+scripts/                  one-off runnables, never imported; reused or tested ones become cli/ commands
 notebooks/                exploration only, outputs stripped; reference/ for third-party notebooks
 runs/ data/               gitignored
 ```
@@ -97,5 +99,5 @@ servers only for what cannot be measured in process.
 ## Commits
 
 Conventional Commits with the standard types (`feat fix docs refactor test build ci perf style chore revert`), an
-optional scope, a lowercase imperative subject. Short-lived `<type>/<slug>` branches, squash-merged. The commit-msg
-hook checks the format.
+optional scope, a lowercase imperative subject: one line, no articles, no body or trailers. Short-lived `<type>/<slug>`
+branches, squash-merged. The commit-msg hooks check all of it.

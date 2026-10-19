@@ -34,19 +34,20 @@ Version 0.1.0 · last reviewed 2026-10-18 · owner: nuinashco
 | area | rule |
 |---|---|
 | project | uv, `uv_build`, src layout, one import package, latest stable Python, `make help` |
+| entry points | interface commands in `<pkg>/cli/` (console scripts), one-off runnables in `scripts/` |
 | architecture | import-linter contracts, pure/side-effect split, one composition root, capabilities not identities |
 | extension points | family = `base.py` + `items/`, `@Factory.register(kind)` outermost, auto-discovered |
 | config | Hydra composes, `Schema.from_hydra` validates (forbid + frozen), defaults in `Field`, kind YAML generated |
 | paths | rootutils + `.project-root`, `core/paths.py` constants, `setup_root` in entry points |
 | types | annotated everywhere, pyright standard (strict on `core`), attrs for every class, pydantic only for configs |
 | style | ruff format at 88, curated ruff rules, absolute imports, keyword-only options, unit suffixes, ASCII in `.py` |
-| comments | one-line module docstring everywhere, one-line docstrings, comments only for what code can't say |
+| comments | one-line module docstring everywhere, one-line docstrings, comments only for what code can't say; checked by `check-comments` and `review-comments` |
 | errors | `<Pkg>Error` with `exit_code`, one `cli_boundary`, `lowercase message; remedy` |
 | logging | structlog over stdlib, `log.info("snake_case_event", key=value)`, console in a TTY, JSON otherwise |
 | tests | sentence names, unit-first, fakes not mocks, mirror `src/` per module, invariants, `-m integration` |
 | runs | `runs/<name>/` with config, git SHA and outputs; seed once, pass generators; pin revisions |
 | docs | README for users, CONTRIBUTING for contributors, mermaid with pure/side colours, AGENTS.md + CLAUDE.md |
-| git | Conventional Commits, imperative lowercase subjects, short branches, squash-merge |
+| git | Conventional Commits, one-line imperative lowercase subjects without articles, short branches, squash-merge |
 
 ## 1. Layout and packaging (LAY)
 
@@ -67,9 +68,11 @@ site-packages. *Check:* `[tool.uv.build-backend]` has a single `module-name`; `l
 A pre-release dependency is acceptable when it is the first to support that Python, with the reason next to it:
 the templates need `hydra-core>=1.4.0rc1` because 1.3.x crashes on 3.14. *Check:* template default; review.
 
-**LAY-4 MUST.** The top level holds `configs/` (Hydra YAML), `src/`, `tests/`, `notebooks/` and optionally
-`scripts/` (shell only). `data/`, `runs/`, `dist/` and `.env` are gitignored. `.env.example`, `.project-root` and
-`.python-version` are committed. *Check:* template `.gitignore`.
+**LAY-4 MUST.** The top level holds at least `configs/` (Hydra YAML), `src/`, `tests/` and `notebooks/`, and
+optionally `scripts/` (one-off runnables, LAY-7). Other top-level folders are allowed for what is not Python: product
+content (an agent's prompts, a submission) or vendored artifacts (wheels, gitignored). The layout tree in
+CONTRIBUTING explains each one. `data/`, `runs/`, `dist/` and `.env` are gitignored. `.env.example`, `.project-root`
+and `.python-version` are committed. *Check:* template `.gitignore`; review of the layout tree.
 
 **LAY-5 SHOULD.** Developer tools go in `[dependency-groups] dev`. Heavy optional features (GPU backends, trackers) are
 extras, and their imports are lazy (ARC-8).
@@ -78,11 +81,27 @@ extras, and their imports are lazy (ARC-8).
 comments. The standard targets are `setup lint format typecheck test test-integration configs check`.
 *Why:* one memorable entry point for people, CI and agents. *Check:* template.
 
+**LAY-7 MUST.** Entry points live by role.
+
+- A command that is part of the repo's interface (documented in the README, run by `make`, worth a test) is a
+  console script: one module in `<pkg>/cli/`, registered in `[project.scripts]`.
+- Anything run once or by hand (an experiment, data preparation, an analysis, a sweep) is a file in `scripts/`:
+  Python or shell, never imported, and free to declare its own extra dependencies with PEP 723 inline metadata.
+- When a script is reused or needs a test, it becomes a `cli/` command.
+- **[uni]** A lab's pipeline steps are scripts (UNI-2): each one is run by hand for that lab.
+- Not commands: a standalone subpackage's `__main__.py` that its own code starts as a child process stays inside that
+  subpackage, and shell scripts meant for another machine (a GPU box) stay in `scripts/` even when the README
+  mentions them.
+
+*Why:* commands inside the package are importable, so they are tested in process (click's `CliRunner`, Hydra's
+`compose`) and sit in the import-layer contract; one-off scripts stay out of the package and its API.
+*Check:* review; ruff and pyright cover `scripts/` too.
+
 ## 2. Architecture (ARC)
 
 **ARC-1 MUST [rnd].** Dependencies point one way, and the direction is declared as import-linter contracts in
-`pyproject.toml`: `cli` → app modules → `core`. A standalone subpackage never imports the rest of the package. The
-layers contract is exhaustive, so a new subpackage fails `make check` until it is placed in a layer.
+`pyproject.toml`: `cli` → app modules → `core`. A standalone subpackage never imports the rest of the package except `core`, and
+an explicit `forbidden` contract says so, whatever layer it sits in. The layers contract is exhaustive, so a new subpackage fails `make check` until it is placed in a layer.
 *Why:* a module hides a design decision ([Parnas 1972](https://blog.acolyer.org/2016/09/05/on-the-criteria-to-be-used-in-decomposing-systems-into-modules/)).
 Python has no package-private visibility, so a checked contract is the only way to keep a boundary
 ([Brown](https://simonbrown.je/modular-monolith)). *Check:* `lint-imports` in `make check`.
@@ -95,7 +114,7 @@ is unit-tested without doubles, and the effectful half stays thin. *Check:* revi
 two halves (RDOC-3).
 
 **ARC-3 MUST.** Each entry point has one composition root, where objects are built and wired: the `cli/<command>.py`
-function. Everything else receives collaborators through constructor arguments. Module-level state is limited to
+function, or the script itself. Everything else receives collaborators through constructor arguments. Module-level state is limited to
 loggers, path constants and family registries.
 *Why:* explicit dependencies replace patching in tests
 ([Cosmic Python ch. 13](https://www.cosmicpython.com/book/chapter_13_dependency_injection.html)). *Check:* review.
@@ -174,15 +193,18 @@ possible to detect unused or redundant settings"
 
 **CFG-3 MUST.** Defaults and documentation live in the schema: `Field(default, description="... (seconds)")`. YAML for
 each kind is generated by `make configs`, with every field, its default (or `???`) and its description as a comment.
-Generated files are committed, so the YAML shows what is tunable without opening Python. Hand-written YAML (entry
-configs, presets) only sets values. *Check:* `tests/test_invariants.py` fails when a generated file is stale.
+Generated files are committed, so the YAML shows what is tunable without opening Python. An entry config is generated
+too, with its Hydra defaults list; fields that a defaults-list group provides (`endpoint: null`, `eval: submission`)
+are left out. Hand-written YAML (presets) only sets values. *Check:* `tests/test_invariants.py` fails when a generated file is stale.
 
 ```python
 class LiteLLMConfig(RemoteEndpointConfig):
     """Endpoint that calls a provider through LiteLLM."""
 
     model: str = Field(description="LiteLLM model string")
-    rpm: PositiveInt | None = Field(None, description="requests per minute; null = unlimited")
+    rpm: PositiveInt | None = Field(
+        None, description="requests per minute; null = unlimited"
+    )
     timeout_s: PositiveFloat = Field(600, description="per-request timeout")
 ```
 
@@ -197,8 +219,14 @@ timeout_s: 600    # per-request timeout
 **CFG-4 MUST.** A value with no sensible default has no default in the schema and is `???` in YAML. Never use a
 placeholder value. *Check:* review.
 
-**CFG-5 MUST.** The config tree mirrors the code: `configs/<group>/` ↔ `<pkg>/<family>/`, and an entry config
-`configs/<command>.yaml` ↔ a schema in `<pkg>/config.py`. *Check:* review.
+**CFG-5 MUST.** The config tree mirrors the code:
+
+- a family selected through config has a group `configs/<config_group>/` ↔ `<pkg>/<family>/`;
+- each entry config, `configs/<command>.yaml` or `configs/main.yaml`, ↔ a schema in `<pkg>/config.py` (or a
+  `<pkg>/config/` package once there are several);
+- a group of presets for one schema (`configs/eval/`) ↔ that schema.
+
+A family chosen by a CLI argument rather than by config needs no group. *Check:* review.
 
 **CFG-6 MUST.** Secrets come from the environment (`.env`, loaded by `rootutils.setup_root`) through
 `${oc.env:VAR,null}`. They are typed `SecretStr`, are never written to disk unmasked, and reach child processes through
@@ -239,8 +267,8 @@ From 3.14 on it is never used: [PEP 649](https://peps.python.org/pep-0649/) make
 `required-imports`, set by the template only for Python below 3.14.
 
 **TYP-4 MUST.** pydantic is only for data parsed from outside: configs, HTTP bodies, files. Every other class is an
-attrs class: `@frozen` for values, `@define` for stateful objects, family bases and items included. Exceptions and
-factories (classes that are never instantiated) stay plain classes. Classes have no hand-written `__init__`. Construction logic goes into a classmethod constructor, or into `__attrs_post_init__` when it
+attrs class: `@frozen` for values, `@define` for stateful objects, family bases and items included. Exceptions,
+factories (classes that are never instantiated) and subclasses of third-party classes stay plain classes. Classes have no hand-written `__init__`. Construction logic goes into a classmethod constructor, or into `__attrs_post_init__` when it
 only derives private state. *Why:* validation libraries belong at the boundary; inside, a class should only hold
 already-valid data ([attrs](https://www.attrs.org/en/stable/why.html), [Hynek](https://speakerdeck.com/hynek/design-pressure)).
 *Check:* review (grep `def __init__`).
@@ -251,6 +279,7 @@ class RateLimiter:
     def __init__(self, rpm: float | None) -> None:
         self.interval_s = 60.0 / rpm if rpm else 0.0
         self._lock = asyncio.Lock()
+
 
 # Good: fields declare state; a named constructor derives it.
 @define
@@ -318,7 +347,8 @@ obvious subjects of a call are positional. *Check:* ruff FBT for booleans; revie
 
 **STY-6 MUST.** A name holding a number with a unit ends in a short unit suffix: `_s`, `_ms`, `_mb`, `_gb`,
 `_tokens`, `_steps`. Minutes and hours are spelled out (`_minutes`, `_hours`), because `_min` reads as "minimum".
-*Check:* review.
+A name that mirrors an external format (a file another tool reads, a library's parameters, a CLI flag) keeps that
+format's spelling: `timeout_seconds` in a scorer's config file, `max_model_len` from vLLM. *Check:* review.
 
 **STY-7 MUST.** Use pathlib, never `os.path`. *Check:* ruff PTH.
 
@@ -335,8 +365,8 @@ functions at real seams, not into one-call helpers that are shallow modules
 
 ## 8. Comments and docstrings (DOC)
 
-**DOC-1 MUST.** Every module starts with a one-line docstring stating its single responsibility. A CLI module's
-docstring is its `--help` text and may add a usage block. *Why:* "what is this file for" stays answerable and
+**DOC-1 MUST.** Every module starts with a one-line docstring stating its single responsibility. A CLI module's or
+script's docstring is its `--help` text and may add a usage block. *Why:* "what is this file for" stays answerable and
 greppable, and keeps each module honest about its scope ([PEP 257](https://peps.python.org/pep-0257/)).
 *Check:* ruff D100, D104.
 
@@ -347,7 +377,7 @@ greppable, and keeps each module honest about its scope ([PEP 257](https://peps.
 - every public class has one (`D101`);
 - a function or method gets one when its name and signature don't already say it all.
 
-*Check:* ruff D101, D401; review.
+*Check:* ruff D101, D401; `check-comments` flags a class docstring that opens with an order; review.
 
 **DOC-3 SHOULD.** Add Google-style `Args:`, `Returns:` or `Raises:` sections only for what types can't express: units,
 shapes, valid ranges, what `None` or an empty value means, and errors that are part of the contract.
@@ -363,7 +393,8 @@ shapes, valid ranges, what `None` or an empty value means, and errors that are p
 Never restate the code, never use section banners, and never leave commented-out code.
 *Why:* "Comments that contradict the code are worse than no comments" ([PEP 8](https://peps.python.org/pep-0008/)).
 Information that code can't express still needs writing down ([Ousterhout](https://github.com/johnousterhout/aposd-vs-clean-code)).
-*Check:* ruff ERA001; review.
+*Check:* ruff ERA001; `check-comments` flags banners; `review-comments` asks Claude whether new comments say anything
+the code doesn't (a Claude Code `Stop` hook, and on demand with `pre-commit run review-comments --hook-stage manual`).
 
 ```python
 # Bad: restates the code.
@@ -375,9 +406,12 @@ labels = model.fit_predict(embeddings)
 uri = f"{workdir_uri}/part-*.parquet"
 ```
 
-**DOC-5 MUST.** Comments are sentences: capitalised and ending with a period. *Check:* review.
+**DOC-5 MUST.** Comments are sentences: capitalised and ending with a period. A sentence that opens with a
+lowercase name puts it in backticks (`` `git` is not installed. ``). *Check:* `check-comments`, in pre-commit and as a
+Claude Code `PostToolUse` hook on every edited `.py` file.
 
 **DOC-6 SHOULD.** A `TODO` says why it isn't done now. Code generated without review is marked as such until reviewed.
+*Check:* ruff TD004 to TD007 (a `TODO:` with a description); review for the why.
 
 **DOC-7 MUST.** YAML comments document user-facing settings. Generated YAML carries the `Field` descriptions (CFG-3).
 
@@ -450,7 +484,10 @@ its own tests. *Why:* prefer real objects, then fakes; interaction testing coupl
 ([SWE at Google ch. 13](https://abseil.io/resources/swe-book/html/ch13.html),
 [Fowler](https://martinfowler.com/articles/mocksArentStubs.html)). *Check:* ruff `banned-api`.
 
-**TST-4 MUST.** The layout mirrors `src/` module by module: `tests/<pkg>/<sub>/test_<module>.py`. Cross-cutting
+**TST-4 MUST.** The layout mirrors `src/` module by module: `tests/<pkg>/<sub>/test_<module>.py` for every module
+with branching logic. Exempt modules are those with nothing a unit test could distinguish: schemas whose rules
+pydantic enforces, error classes, re-exporting `__init__` files, and thin wrappers that only start an external
+process (a `docker build`). They are covered by the invariants or the integration test. Cross-cutting
 invariants live in `tests/test_invariants.py`. End-to-end tests live in `tests/integration/`, are marked
 `integration` and are deselected by default (`-m integration` runs them). *Check:* `--strict-markers`; review.
 
@@ -532,7 +569,9 @@ tests and commits. *Why:* one document, one purpose ([SWE at Google ch. 10](http
 and pointers to CONTRIBUTING and this guide. CLAUDE.md contains `@AGENTS.md` plus any Claude-only extras. Agent files
 point to this guide instead of copying it, and leave to linters what linters check. *Why:*
 [agents.md](https://agents.md/); [Claude Code memory](https://code.claude.com/docs/en/memory) recommends short,
-specific files. *Check:* template.
+specific files. Each project also carries `CONVENTIONS.md`, a read-only copy of this guide rendered by the
+template, and a `conventions-reviewer` subagent (`.claude/agents/`) that checks a branch or the whole repo against
+it. *Check:* template.
 
 **RDOC-5 MUST.** Docs change in the same commit as the code they describe. A stale doc is a bug. *Check:* review.
 
@@ -542,20 +581,22 @@ specific files. *Check:* template.
 
 - a standard type: `feat fix docs refactor test build ci perf style chore revert`;
 - an optional scope;
-- a lowercase imperative subject, with no period, of at most 72 characters.
+- a lowercase imperative subject, with no period, of at most 72 characters;
+- no articles (`a`, `an`, `the`) and no filler: say what changed in as few words as hold it.
 
-Example: `fix(proxy): retry on 429 from upstream`. *Why:* the default tooling accepts exactly these types, and the
+Example: `fix(proxy): retry on 429 from upstream`, not `fix(proxy): add a retry for the 429 errors`. *Why:* the default tooling accepts exactly these types, and the
 imperative matches git's own convention ([Beams](https://cbea.ms/git-commit/)). *Check:* the
-`conventional-pre-commit` commit-msg hook.
+`conventional-pre-commit` and `check-commit-msg` commit-msg hooks.
 
-**GIT-2 MUST.** A body appears only for the why that can't be derived from the diff: a constraint, or an alternative
-that was rejected. Wrap it at 72 columns. *Check:* review.
+**GIT-2 MUST.** A commit message is one line: no body and no trailers. A reason worth keeping goes where readers
+look for it: a code comment for a constraint, the PR description for an alternative that was rejected. Claude Code's
+own trailer is off in `.claude/settings.json` (`attribution`). *Check:* `check-commit-msg`.
 
 **GIT-3 MUST.** Branches are short-lived and named `<type>/<slug>` (`feat/`, `fix/`, `docs/`, `refactor/`, plus `exp/`
 for experiments). Merges are squash-merges, and the PR title is the conventional commit that lands on `main`.
 *Check:* review.
 
-**GIT-4 SHOULD.** AI-assisted commits keep their `Co-Authored-By` trailer.
+**GIT-4** Retired on 2026-10-19: commit messages are one line, without trailers (GIT-2).
 
 **GIT-5 MUST.** Secrets, data, run outputs and notebook outputs are never committed. *Check:* gitleaks, nbstripout,
 `.gitignore`.
@@ -569,6 +610,12 @@ it on every pull request. pre-commit runs the fast checks plus the commit-msg li
 
 **TOOL-2 MUST.** Tool versions come from `uv.lock`. Hooks for Python tools are local `uv run` hooks, so pre-commit, CI
 and editors all use the same versions. *Check:* template.
+
+**TOOL-4 MUST.** The checks this guide adds on top of ruff live in the conventions repo as the `conventions-hooks`
+package (`check-comments`, `review-comments`), a dev dependency of every project, pinned by `uv.lock`. They run in two
+layers with the same code: pre-commit gates every commit by anyone, and `.claude/settings.json` hooks give Claude the
+findings while it works (`PostToolUse` after each edit, `Stop` before it hands back). *Why:* only pre-commit sees every
+author, but feedback during the edit is cheaper than at commit time. *Check:* template.
 
 **TOOL-3 MUST.** A generated project keeps its `.copier-answers.yml` and pulls template changes with `copier update`.
 *Check:* review.
@@ -613,6 +660,7 @@ holds.
 | config bridge | `Schema.from_hydra` | `_target_` + instantiate; Hydra structured configs | parse at the boundary; YAML never names classes |
 | config defaults | schema is the source, YAML generated | YAML + schema + parity test; YAML only | one source of truth while YAML stays readable |
 | CLI | Hydra for config-heavy commands, click for utilities | Hydra only; click wrapping Hydra; typer | each fits its job |
+| entry points | interface commands in `cli/`, one-offs in `scripts/` | `scripts/` for everything; `cli/` only | commands get in-process tests and the layer check; one-offs stay out of the package |
 | data classes | attrs for every class, pydantic for configs | dataclasses; pydantic everywhere | validation at the edge, plain typed state inside; no `__init__` boilerplate |
 | interfaces | ABC families, Protocol seams | ABC only; Protocol only | registries need nominal bases; fakes need none |
 | type checker | pyright standard, strict on `core` | mypy --strict; basedpyright; ty (beta) | checks unannotated code; understands attrs and pydantic natively |
@@ -621,7 +669,7 @@ holds.
 | errors | base error with exit codes | single UserError; builtins only | scripts can tell config errors from data errors |
 | logging | structlog over stdlib, snake_case events | stdlib %-style; loguru | structured events for cloud pipelines; one renderer for third-party logs |
 | test doubles | fakes, mocks banned | mocks at unmanaged edges (Khorikov) | tests don't couple to the implementation (SWE at Google ch. 13) |
-| commits | standard types, imperative | custom `doc`/`ref`; behaviour-as-fact subjects | default tooling accepts them; git convention |
+| commits | standard types, imperative, one line, no articles | custom `doc`/`ref`; behaviour-as-fact subjects; bodies with the why | default tooling accepts them; git convention; terse history you can scan |
 | merging | squash | rebase-merge; commit to main | messy branch history is fine; `main` stays one commit per change |
 | Python | latest stable | 3.12 floor | newest language features; pin lower per project when forced |
 
