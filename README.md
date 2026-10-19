@@ -35,6 +35,7 @@ make test-templates   # render every profile and run its checks (slow, needs net
 uvx copier copy --data profile=rnd ~/Projects/Personal/conventions my-project
 cd my-project
 git init && make setup    # uv sync + pre-commit and commit-msg hooks
+make github               # once the GitHub repo exists: squash-merge settings (GIT-3)
 make check                # ruff, import contracts, pyright, pytest
 ```
 

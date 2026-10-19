@@ -87,6 +87,7 @@ def assert_ships_the_guide_and_its_reviewer(project: Path) -> None:
     reviewer = project / ".claude" / "agents" / "conventions-reviewer.md"
     settings = json.loads((project / ".claude" / "settings.json").read_text())
     assert vendored.split("\n", 1)[1] == guide
+    assert (project / ".github" / "pull_request_template.md").is_file()
     header = reviewer.read_text(encoding="utf-8").splitlines()[:2]
     assert header == ["---", "name: conventions-reviewer"]
     assert set(settings["hooks"]) == {"PreToolUse", "PostToolUse", "Stop"}

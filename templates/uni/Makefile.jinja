@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help setup lint format typecheck test test-integration configs lab report check
+.PHONY: help setup github lint format typecheck test test-integration configs lab report check
 
 # The template this course came from, and its version: new labs use the same one.
 SRC := $(shell sed -n 's/^_src_path: //p' .copier-answers.yml)
