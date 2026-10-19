@@ -12,7 +12,8 @@ src/{{ course }}/            shared by every lab: labs, latex, paths, report, st
 src/nuikit/               copied from the conventions template: config, configgen, registry, errors, logging,
                           runs, seeding; change it upstream and `copier update`
 labs/NNN-topic/           one uv workspace member per lab, package labNNN, created by `make lab`
-  config/main.yaml        generated from src/labNNN/config.py by `make configs`
+  config/run.yaml         entry config of scripts/run.py: values for every run of the lab
+  config/defaults/        every setting with its default, generated from src/labNNN/config.py
   config/hydra/           Hydra settings: runs keep their resolved config in outputs/<script>/<time>/.hydra/
   src/labNNN/             the lab's pure computations and its config schemas
   scripts/                Hydra entry points: load config, call src/, write data/ and report values
@@ -27,7 +28,7 @@ tests/                    tests of the shared package; tests/nuikit/ comes with 
 
 ```mermaid
 flowchart LR
-    yaml["config/main.yaml"]:::pure --> script["scripts/run.py"]:::side
+    yaml["config/run.yaml"]:::pure --> script["scripts/run.py"]:::side
     raw["data/raw/"]:::side --> script
     script --> compute["src/labNNN/<br/>pure computations"]:::pure
     script --> data["data/*.json, *.parquet"]:::side

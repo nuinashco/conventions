@@ -1,0 +1,6 @@
+# Entry config of scripts/run.py: values set below change every run of this lab.
+# Every setting, with its default and description: defaults/run.yaml (generated).
+defaults:
+  - defaults/run@_here_
+  - hydra: default
+  - _self_

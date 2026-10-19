@@ -13,7 +13,7 @@ cp .env.example .env
 
 ## Daily workflow
 
-1. Run: `{{ cli }}-run` (defaults from `configs/main.yaml`), overriding anything Hydra-style:
+1. Run: `{{ cli }}-run`, overriding anything Hydra-style:
    `{{ cli }}-run seed=1 run_name=baseline`.
 2. Results land in `runs/<run_name>/`: the resolved `config.yaml` (secrets masked), `run.json` (git SHA, dirty flag,
    argv, start time) and the run's outputs.
@@ -29,6 +29,13 @@ cp .env.example .env
 
 ## Configs
 
-`configs/main.yaml` lists every setting with its default and a comment. It is generated from the schema in
-`src/{{ package }}/config.py`: change the schema, then run `make configs`. Secrets go in `.env` and reach configs as
-`${oc.env:NAME,null}`.
+`configs/defaults/run.yaml` lists every setting with its default and a comment. It is generated from the schema in
+`src/{{ package }}/config.py`, so it is never edited. To change a value:
+
+| for | edit |
+|---|---|
+| one run | `key=value` on the command line; the run directory records it |
+| every run of this repo | `configs/run.yaml`, the entry config, below its `defaults:` list |
+| the default itself | the schema, then `make configs` |
+
+Secrets go in `.env` and reach configs as `${oc.env:NAME,null}`.

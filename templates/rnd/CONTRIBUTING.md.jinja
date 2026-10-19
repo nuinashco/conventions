@@ -38,7 +38,8 @@ exhaustive, so a new subpackage fails `make check` until it is placed in `layers
 
 ```text
 configs/                  Hydra YAML; generated files say so in their first line
-  main.yaml               entry config of {{ cli }}-run (generated from MainConfig)
+  run.yaml                entry config of {{ cli }}-run: picks groups, holds this repo's choices
+  defaults/run.yaml       every MainConfig setting with its default (generated)
   hydra/default.yaml      Hydra writes nothing; the app writes runs/
 src/{{ package }}/
   cli/                    one module per console script: the composition roots
@@ -93,7 +94,7 @@ family even before any code uses it.
 |---|---|---|
 | a family | `src/{{ package }}/<family>/base.py` + `items/` | place it in the import-linter `layers`; `make configs` |
 | an item | `src/{{ package }}/<family>/items/<kind>.py` | `make configs` |
-| an entry config | a schema in `config.py`, listed in `GENERATED` | a `cli/<command>.py` and a console script |
+| an entry config | a schema in `config.py` listed in `GENERATED` as `defaults/<command>.yaml`, and `configs/<command>.yaml` composing it | a `cli/<command>.py` and a console script |
 | a setting | a `Field(default=..., description=...)` on the schema | `make configs` |
 
 ## Tests

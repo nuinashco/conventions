@@ -11,7 +11,8 @@ make report LAB={{ number }}-{{ topic }}                          # report/repor
 
 | step | script | reads | writes |
 |---|---|---|---|
-| estimate | `scripts/run.py` | `config/main.yaml` | `data/estimate.json`, `report/generated/values.tex` |
+| estimate | `scripts/run.py` | `config/run.yaml` | `data/estimate.json`, `report/generated/values.tex` |
 
-Settings live in `src/lab{{ number }}/config.py`; `make configs` (at the repo root) renders them
-to `config/main.yaml`. Only `data/raw/` and `report/report.pdf` are committed.
+Defaults live in `src/lab{{ number }}/config.py`; `make configs` (at the repo root) mirrors them to
+`config/defaults/run.yaml`. Values for every run of this lab go in `config/run.yaml`, for one run on the command line.
+Only `data/raw/` and `report/report.pdf` are committed.

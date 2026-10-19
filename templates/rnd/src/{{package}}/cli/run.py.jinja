@@ -1,8 +1,8 @@
-"""`{{ cli }}-run`: validate configs/main.yaml, seed, and start a run directory.
+"""`{{ cli }}-run`: validate configs/run.yaml, seed, and start a run directory.
 
 Usage:
 
-    {{ cli }}-run                            # defaults from configs/main.yaml
+    {{ cli }}-run                            # configs/run.yaml as it is
     {{ cli }}-run seed=1 run_name=baseline   # Hydra overrides
 
 Writes runs/<run_name>/ with the resolved config and its provenance.
@@ -27,7 +27,7 @@ rootutils.setup_root(__file__, indicator=".project-root")
 log = structlog.stdlib.get_logger()
 
 
-@hydra.main(config_path=str(paths.CONFIGS_DIR), config_name="main")
+@hydra.main(config_path=str(paths.CONFIGS_DIR), config_name="run")
 @cli_boundary
 def main(dict_cfg: DictConfig) -> None:
     cfg = MainConfig.from_hydra(dict_cfg)

@@ -13,15 +13,17 @@ from nuikit import configgen, registry
 from {{ package }} import paths
 from {{ package }}.config import GENERATED
 
-ENTRY_CONFIGS = [f for f in GENERATED if f.defaults]
+MIRRORS = [f for f in GENERATED if f.path.startswith("defaults/")]
 
 
-@pytest.mark.parametrize("file", ENTRY_CONFIGS, ids=lambda f: f.path)
-def test_entry_config_composes_and_validates(file):
+@pytest.mark.parametrize("mirror", MIRRORS, ids=lambda f: f.path)
+def test_entry_config_composes_its_mirror_and_validates(mirror):
+    entry = mirror.path.removeprefix("defaults/").removesuffix(".yaml")
     with initialize_config_dir(str(paths.CONFIGS_DIR)):
-        cfg = compose(config_name=file.path.removesuffix(".yaml"))
+        cfg = compose(config_name=entry)
 
-    file.schema.from_hydra(cfg)
+    mirror.schema.from_hydra(cfg)
+    assert set(OmegaConf.load(paths.CONFIGS_DIR / mirror.path)) <= set(cfg)
 
 
 def test_generated_configs_are_fresh():

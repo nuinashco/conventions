@@ -1,4 +1,4 @@
-"""Schemas of the entry configs in configs/; `make configs` renders them to YAML."""
+"""Schemas of the entry configs; `make configs` mirrors them to configs/defaults/."""
 
 {% include "shared/python/_future.jinja" %}
 {% if use_wandb %}
@@ -13,7 +13,7 @@ from nuikit.logging import LogFormat, LogLevel
 
 
 class MainConfig(Schema):
-    """Entry config of `{{ cli }}-run` (configs/main.yaml)."""
+    """Entry config of `{{ cli }}-run` (configs/run.yaml)."""
 
     run_name: str = Field(
         default="${now:%Y-%m-%d_%H-%M-%S}", description="directory under runs/"
@@ -34,6 +34,4 @@ class MainConfig(Schema):
 {% endif %}
 
 
-GENERATED = (
-    ConfigFile("main.yaml", MainConfig, defaults=("hydra: default", "_self_")),
-)
+GENERATED = (ConfigFile("defaults/run.yaml", MainConfig),)

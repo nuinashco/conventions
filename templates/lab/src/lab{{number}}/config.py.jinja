@@ -1,4 +1,4 @@
-"""Schemas of this lab's configs; `make configs` renders them to config/."""
+"""Schemas of this lab's configs; `make configs` mirrors them to config/defaults/."""
 
 {% include "shared/python/_future.jinja" %}
 from pathlib import Path
@@ -27,13 +27,11 @@ class PathsConfig(Schema):
 
 
 class MainConfig(Schema):
-    """Entry config of scripts/run.py (config/main.yaml)."""
+    """Entry config of scripts/run.py (config/run.yaml)."""
 
     seed: int = Field(default=42, description="seeds random, numpy and torch")
     samples: PositiveInt = Field(default=100_000, description="Monte Carlo draws")
     paths: PathsConfig = Field(default_factory=PathsConfig)
 
 
-GENERATED = (
-    ConfigFile("main.yaml", MainConfig, defaults=("hydra: default", "_self_")),
-)
+GENERATED = (ConfigFile("defaults/run.yaml", MainConfig),)
