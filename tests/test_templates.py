@@ -56,6 +56,11 @@ def test_rnd_project_passes_its_checks_and_runs(template, tmp_path, data):
 
     assert (project / "runs" / "smoke" / "run.json").is_file()
     assert_ships_the_guide_and_its_reviewer(project)
+    assert_protects(
+        project,
+        ["src/nuikit/config.py", "configs/defaults/run.yaml", "CONVENTIONS.md"],
+        editable=["configs/run.yaml", "src/demo/paths.py"],
+    )
 
 
 def test_uni_workspace_with_two_labs_passes_its_checks(template, tmp_path):
@@ -68,6 +73,11 @@ def test_uni_workspace_with_two_labs_passes_its_checks(template, tmp_path):
 
     assert (course / "labs" / "002-second" / "src" / "lab002" / "config.py").is_file()
     assert_ships_the_guide_and_its_reviewer(course)
+    assert_protects(
+        course,
+        ["labs/001-first/config/defaults/run.yaml", "src/nuikit/errors.py"],
+        editable=["labs/001-first/config/run.yaml", "src/course/paths.py"],
+    )
 
 
 def assert_ships_the_guide_and_its_reviewer(project: Path) -> None:
@@ -79,7 +89,21 @@ def assert_ships_the_guide_and_its_reviewer(project: Path) -> None:
     assert vendored.split("\n", 1)[1] == guide
     header = reviewer.read_text(encoding="utf-8").splitlines()[:2]
     assert header == ["---", "name: conventions-reviewer"]
-    assert set(settings["hooks"]) == {"PostToolUse", "Stop"}
+    assert set(settings["hooks"]) == {"PreToolUse", "PostToolUse", "Stop"}
     # The template's own code follows the comment rules it ships.
     sources = [str(p) for p in project.rglob("*.py") if ".venv" not in p.parts]
     sh(project, "uv", "run", "check-comments", *sources)
+
+
+def assert_protects(
+    project: Path, protected: list[str], *, editable: list[str]
+) -> None:
+    result = subprocess.run(
+        ["uv", "run", "check-protected", *protected, *editable],
+        cwd=project,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    listed = [line.split(":")[0] for line in result.stdout.splitlines()]
+    assert listed == protected, result.stdout + result.stderr

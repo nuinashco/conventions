@@ -19,6 +19,7 @@ The repo is also the `conventions-hooks` package (`src/conventions_hooks/`), the
 |---|---|---|
 | `check-comments` | comments are sentences, no section banners, class docstrings are noun phrases (DOC-2, DOC-4, DOC-5) | pre-commit on every commit; Claude Code `PostToolUse` hook after each edit |
 | `review-comments` | new comments say only what the code cannot (DOC-4), judged by `claude -p` | Claude Code `Stop` hook; `pre-commit run review-comments --hook-stage manual` |
+| `check-protected` | files `.gitattributes` marks `protected` (generated, vendored, published) are not edited by hand (TOOL-5) | Claude Code `PreToolUse` hook before each edit |
 
 Generated projects install it as a dev dependency pinned to the template's commit (a local path until this repo is
 pushed) and wire both layers. Repos that don't use uv can use `.pre-commit-hooks.yaml` instead.

@@ -10,6 +10,7 @@ dependencies = ["attrs>=24.2"]
 check-comments = "conventions_hooks.comments:main"
 review-comments = "conventions_hooks.review:main"
 check-commit-msg = "conventions_hooks.commit_msg:main"
+check-protected = "conventions_hooks.protected:main"
 
 [dependency-groups]
 dev = ["copier>=9.19", "pytest>=9.1", "ruff>=0.17"]

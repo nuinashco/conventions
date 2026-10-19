@@ -1,0 +1,89 @@
+"""`check-protected`: what `.gitattributes` marks is not edited by hand (GUIDE TOOL-5).
+
+Usage:
+
+    check-protected src/nuikit/config.py configs/run.yaml   # says which are protected
+
+    check-protected --claude-hook    # Claude Code PreToolUse hook: reads its JSON
+
+A `.gitattributes` line such as `src/nuikit/** protected=vendored` marks the files; the
+value picks the reason shown. In hook mode an edit to a marked file is denied through
+Claude Code's JSON output, which hands the reason to Claude. The exit code stays 0, so
+the settings can add `|| true` and a broken environment never blocks every edit.
+Commands such as `make configs` or `copier update` still rewrite these files.
+"""
+
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+from collections.abc import Sequence
+from pathlib import Path
+
+REASONS = {
+    "generated": (
+        "it is generated; change its source and regenerate it (its first line says how)"
+    ),
+    "vendored": (
+        "it comes from the conventions template; change it in nuinashco/conventions, "
+        "then run `copier update`"
+    ),
+    "published": (
+        "it is a third-party file kept as published; copy it elsewhere to change it"
+    ),
+}
+UNMARKED = ("unspecified", "unset")
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Report the protected paths named on the command line, or refuse a Claude edit."""
+    args = sys.argv[1:] if argv is None else list(argv)
+    if args == ["--claude-hook"]:
+        return claude_hook(sys.stdin.read())
+    if not args or any(arg.startswith("-") for arg in args):
+        print(__doc__)
+        return 0 if args in (["-h"], ["--help"]) else 2
+    found = [(arg, why) for arg in args if (why := reason(Path(arg).absolute()))]
+    for arg, why in found:
+        print(f"{arg}: {why}")
+    return 1 if found else 0
+
+
+def claude_hook(payload: str) -> int:
+    """Deny a Claude Code edit to a protected file, with the reason."""
+    data = json.loads(payload)
+    tool_input = data.get("tool_input") or {}
+    raw = tool_input.get("file_path") or tool_input.get("notebook_path")
+    if not raw:
+        return 0
+    why = reason(Path(data.get("cwd") or ".") / raw)
+    if why is None:
+        return 0
+    decision = {
+        "hookEventName": "PreToolUse",
+        "permissionDecision": "deny",
+        "permissionDecisionReason": f"{raw} must not be edited by hand; {why}",
+    }
+    print(json.dumps({"hookSpecificOutput": decision}))
+    return 0
+
+
+def reason(path: Path) -> str | None:
+    """Return why `path` must not be edited by hand, or None when it may be."""
+    # The nearest existing directory finds the repo, even for a file not written yet.
+    cwd = next((p for p in path.parents if p.is_dir()), Path.cwd())
+    try:
+        result = subprocess.run(
+            ["git", "check-attr", "protected", "--", str(path)],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:  # `git` is not installed.
+        return None
+    value = result.stdout.strip().rpartition(": ")[2]
+    if result.returncode != 0 or not value or value in UNMARKED:
+        return None
+    return REASONS.get(value, "it is marked protected in .gitattributes")

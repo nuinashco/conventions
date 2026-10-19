@@ -21,7 +21,7 @@ This repo holds my coding conventions: `GUIDE.md` (the rules) and copier templat
 ```text
 GUIDE.md          the rules
 README.md         how to use the templates, the hooks and adopt the guide
-src/conventions_hooks/   check-comments, review-comments (the conventions-hooks package)
+src/conventions_hooks/   check-comments, review-comments, check-commit-msg, check-protected (conventions-hooks)
 .pre-commit-hooks.yaml   the same hooks for repos that consume this one through pre-commit
 copier.yml        questions; `profile` selects templates/<profile>
 shared/           Jinja partials included by several profiles

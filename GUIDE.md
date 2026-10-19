@@ -66,7 +66,7 @@ repo depends on it. *Why:* project code reads without template plumbing in it, a
 block (STY-3 gives `nuikit` its own isort section). uv supports several top-level modules but ["does not recommend
 this structure"](https://docs.astral.sh/uv/concepts/build-backend/) because generic names like `common` collide in
 site-packages; a distinctive name avoids that. *Check:* `module-name = ["<pkg>", "nuikit"]`; `lint-imports` keeps
-`nuikit` from importing `<pkg>` [rnd]; `copier update` shows local edits to `nuikit` as conflicts.
+`nuikit` from importing `<pkg>` [rnd]; `check-protected` refuses agent edits to it (TOOL-5).
 
 **LAY-3 MUST.** `requires-python` starts at the latest stable CPython when the project is created (3.14 as of
 2026-10). Pin lower only when a dependency or runtime forces it, and say which one in a comment next to the pin.
@@ -639,6 +639,19 @@ author, but feedback during the edit is cheaper than at commit time. *Check:* te
 
 **TOOL-3 MUST.** A generated project keeps its `.copier-answers.yml` and pulls template changes with `copier update`.
 *Check:* review.
+
+**TOOL-5 MUST.** Files nobody edits by hand are listed in `.gitattributes` with `protected=<why>`:
+
+- `generated`: config mirrors, `report/generated/`, `.copier-answers.yml`;
+- `vendored`: `src/nuikit/`, `tests/nuikit/`, `CONVENTIONS.md`, the reviewer subagent;
+- `published`: third-party files kept as published, such as `notebooks/reference/`.
+
+The same lines carry `linguist-generated` or `linguist-vendored`, so GitHub folds those diffs in pull requests. The
+`check-protected` Claude Code `PreToolUse` hook refuses edits to them with the reason and the right place to make the
+change; the commands that own them (`make configs`, `copier update`) still write them. The hook fails open: a broken
+environment lets edits through instead of blocking every one. Names carry no marker (no `_`
+prefix): `_` means private in Python, and `nuikit` is imported everywhere. *Why:* agents fix whatever file is in
+front of them, and a refusal that names the source is the cheapest redirect. *Check:* template; `check-protected PATH`.
 
 ## 16. uni profile (UNI)
 

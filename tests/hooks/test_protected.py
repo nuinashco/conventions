@@ -1,0 +1,61 @@
+"""Files marked `protected` in .gitattributes are refused, with the reason."""
+
+from __future__ import annotations
+
+import json
+import subprocess
+
+import pytest
+
+from conventions_hooks.protected import claude_hook, main, reason
+
+
+@pytest.fixture
+def repo(tmp_path):
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    (tmp_path / ".gitattributes").write_text(
+        "src/nuikit/** linguist-vendored protected=vendored\n"
+        "configs/defaults/** linguist-generated protected=generated\n"
+        "notes/** protected\n",
+        encoding="utf-8",
+    )
+    return tmp_path
+
+
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("src/nuikit/config.py", "conventions template"),
+        ("configs/defaults/new/run.yaml", "generated"),
+        ("notes/todo.md", "marked protected"),
+        ("src/pkg/config.py", None),
+    ],
+    ids=["vendored", "generated-not-written-yet", "bare-attribute", "unmarked"],
+)
+def test_reason_follows_the_gitattributes_value(repo, path, expected):
+    why = reason(repo / path)
+
+    assert why is None if expected is None else expected in why
+
+
+def test_path_outside_any_repo_is_not_protected(tmp_path):
+    assert reason(tmp_path / "loose.py") is None
+
+
+def test_claude_edit_to_protected_file_is_denied_with_reason(repo, capsys):
+    payload = {"cwd": str(repo), "tool_input": {"file_path": "src/nuikit/errors.py"}}
+
+    assert claude_hook(json.dumps(payload)) == 0
+    decision = json.loads(capsys.readouterr().out)["hookSpecificOutput"]
+    assert decision["permissionDecision"] == "deny"
+    assert "nuinashco/conventions" in decision["permissionDecisionReason"]
+
+
+def test_command_line_lists_only_protected_paths(repo, capsys, monkeypatch):
+    monkeypatch.chdir(repo)
+
+    assert main(["src/nuikit/config.py", "src/pkg/config.py"]) == 1
+    assert capsys.readouterr().out.splitlines() == [
+        "src/nuikit/config.py: it comes from the conventions template; change it in "
+        "nuinashco/conventions, then run `copier update`"
+    ]
