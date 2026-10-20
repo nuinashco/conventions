@@ -34,7 +34,7 @@ Version 0.1.0 · last reviewed 2026-10-18 · owner: nuinashco
 | area | rule |
 |---|---|
 | project | uv, `uv_build`, src layout, one import package, latest stable Python, `make help` |
-| entry points | interface commands in `<pkg>/cli/` (console scripts), one-off runnables in `scripts/` |
+| entry points | by lifecycle: what the workflow depends on in `<pkg>/cli/` (console scripts), exploratory or one-time runnables in `scripts/`; logic in the package |
 | architecture | import-linter contracts, pure/side-effect split, one composition root, capabilities not identities |
 | extension points | family = `base.py` + `items/`, `@Factory.register(kind)` outermost, auto-discovered |
 | config | Hydra composes, `Schema.from_hydra` validates (forbid + frozen), defaults in `Field` mirrored to `defaults/` and `kinds/`, hand-written entry configs and presets on top |
@@ -86,13 +86,18 @@ extras, and their imports are lazy (ARC-8).
 comments. The standard targets are `setup lint format typecheck test test-integration configs check`.
 *Why:* one memorable entry point for people, CI and agents. *Check:* template.
 
-**LAY-7 MUST.** Entry points live by role.
+**LAY-7 MUST.** Entry points live by lifecycle, not by the kind of task: the same data preparation is a command in
+one repo and a script in another.
 
-- A command that is part of the repo's interface (documented in the README, run by `make`, worth a test) is a
-  console script: one module in `<pkg>/cli/`, registered in `[project.scripts]`.
-- Anything run once or by hand (an experiment, data preparation, an analysis, a sweep) is a file in `scripts/`:
-  Python or shell, never imported, and free to declare its own extra dependencies with PEP 723 inline metadata.
-- When a script is reused or needs a test, it becomes a `cli/` command.
+- A console script, one module in `<pkg>/cli/` registered in `[project.scripts]`, is anything the workflow depends
+  on: `make` or CI runs it, it is rerun whenever its inputs change, its output is committed or checked by a test, or
+  the README documents it for users.
+- A file in `scripts/` is exploratory or one-time: a number or figure for a note, an idea being tried, a paper
+  result reproduced once. It is Python or shell, never imported, and free to declare its own extra dependencies with
+  PEP 723 inline metadata. It may import the package and compose `configs/` with Hydra; a script that makes runs
+  starts them as commands do (RUN-1).
+- Either way the logic lives in the package, and the entry point only wires it (ARC-3).
+- When a script is rerun, shared or needs a test, it becomes a `cli/` command.
 - **[uni]** A lab's pipeline steps are scripts (UNI-2): each one is run by hand for that lab.
 - Not commands: a standalone subpackage's `__main__.py` that its own code starts as a child process stays inside that
   subpackage, and shell scripts meant for another machine (a GPU box) stay in `scripts/` even when the README
@@ -711,7 +716,7 @@ holds.
 | config comments | only options and what the key can't say | a description on every field | comments that repeat the key bury the ones that matter |
 | entry configs | hand-written, composing a generated mirror | generated entry config; hand-written only | one place to edit the standard run while every default stays documented |
 | CLI | Hydra for config-heavy commands, click for utilities | Hydra only; click wrapping Hydra; typer | each fits its job |
-| entry points | interface commands in `cli/`, one-offs in `scripts/` | `scripts/` for everything; `cli/` only | commands get in-process tests and the layer check; one-offs stay out of the package |
+| entry points | by lifecycle: workflow commands in `cli/`, one-offs in `scripts/` | by task type (data prep is a script); `scripts/` for everything; `cli/` only | commands get in-process tests and the layer check; one-offs stay out of the package; a task type says nothing about how often it runs |
 | data classes | attrs for every class, pydantic for configs | dataclasses; pydantic everywhere | validation at the edge, plain typed state inside; no `__init__` boilerplate |
 | interfaces | ABC families, Protocol seams | ABC only; Protocol only | registries need nominal bases; fakes need none |
 | type checker | pyright standard, strict on `nuikit` | mypy --strict; basedpyright; ty (beta) | checks unannotated code; understands attrs and pydantic natively |
