@@ -198,7 +198,8 @@ possible to detect unused or redundant settings"
 *Check:* `nuikit` config tests.
 
 **CFG-3 MUST.** Defaults and documentation live in the schema: `Field(default, description="... (seconds)")`.
-`make configs` renders each schema to a mirror: every field, its default (or `???`) and its description as a comment.
+`make configs` renders each schema to a mirror: every field, its default (or `???`) and its description as a comment,
+with a blank line after each nested block.
 Mirrors are committed and never edited, so the YAML shows what is tunable without opening Python. An entry config's
 mirror is `configs/defaults/<command>.yaml` and leaves out the fields that config groups provide; a family item's
 mirror is `configs/<group>/kinds/<kind>.yaml`. Everything else is hand-written, composes a mirror and only sets values:
