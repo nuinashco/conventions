@@ -96,8 +96,12 @@ one repo and a script in another.
   result reproduced once. It is Python or shell, never imported, and free to declare its own extra dependencies with
   PEP 723 inline metadata. It may import the package and compose `configs/` with Hydra; a script that makes runs
   starts them as commands do (RUN-1).
-- Either way the logic lives in the package, and the entry point only wires it (ARC-3).
+- Either way, logic that more than one entry point needs lives in the package, and the entry point only wires it
+  (ARC-3).
 - When a script is rerun, shared or needs a test, it becomes a `cli/` command.
+- A one-time conversion of frozen inputs, such as a published dataset turned into a committed table, stays a script
+  although a test checks its output, when that output is committed with the sha256 of its inputs and of the script.
+  The test checks the pin, a command runs the same check, and a changed input or script names the script to rerun.
 - **[uni]** A lab's pipeline steps are scripts (UNI-2): each one is run by hand for that lab.
 - Not commands: a standalone subpackage's `__main__.py` that its own code starts as a child process stays inside that
   subpackage, and shell scripts meant for another machine (a GPU box) stay in `scripts/` even when the README

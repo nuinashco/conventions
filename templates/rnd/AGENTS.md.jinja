@@ -23,7 +23,7 @@ make configs      # regenerate configs/ after changing any config schema
 - `src/{{ package }}/cli/`: one module per console script; the only place objects are wired together.
 - `scripts/`: exploratory or one-time runnables, never imported; they may import the package and compose
   `configs/`. Anything `make`, CI or a test depends on is a `cli/` command; a script that is rerun or shared becomes
-  one.
+  one. A one-time conversion whose committed output is pinned by the sha256 of its inputs and itself stays a script.
 - `src/{{ package }}/config.py`: entry config schemas; `paths.py`: repository paths.
 - `src/nuikit/`: shared machinery (config base, YAML generation, registry, errors, logging, runs, seeding), copied
   from the conventions template. Change it there and `copier update`; never edit it here.
