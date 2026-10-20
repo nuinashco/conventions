@@ -24,7 +24,8 @@ make report LAB=002               # build the PDF in Docker
 
 - Shared helpers go in `src/{{ course }}/`, never copied between labs. `src/nuikit/` comes from the template: never
   edit it here.
-- A lab's parameters live in its config schema (`Field(default=..., description=...)`), never as constants in code;
+- A lab's parameters live in its config schema (a default each; a description only for options or what the name
+  can't say), never as constants in code;
   `config/defaults/` is generated, never edited by hand; `config/run.yaml` holds the lab's choices.
 - Scripts are thin: load config, call pure functions from `src/labNNN/`, write files. Randomness takes the
   `np.random.Generator` that `seed_everything` returns.

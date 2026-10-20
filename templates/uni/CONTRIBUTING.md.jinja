@@ -38,8 +38,8 @@ flowchart LR
     classDef side fill:#f8e3d8,stroke:#b4532a,color:#4a1f0c
 ```
 
-- Parameters come from the lab's config, never from constants in code. Add a `Field(default=..., description=...)`
-  to the schema in `src/labNNN/config.py`, then run `make configs`.
+- Parameters come from the lab's config, never from constants in code. Add a field with a default to the schema in
+  `src/labNNN/config.py`, described only if its name leaves something open (DOC-7), then run `make configs`.
 - Storage format follows the data's role: CSV raw, parquet derived tables, JSON metrics, NPZ arrays (`Storage`).
 - Report numbers go through `report.number()` and `report.write_values()`; figures go to `report/generated/figures/`.
 - Identifiers, comments and docstrings are English; report text, plot labels and messages for graders may be

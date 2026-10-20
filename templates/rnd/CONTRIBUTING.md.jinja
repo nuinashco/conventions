@@ -71,7 +71,7 @@ src/{{ package }}/<family>/
 class SquareConfig(ShapeConfig):
     """Square settings."""
 
-    side_m: float = Field(default=1.0, gt=0, description="side length")
+    side_m: float = Field(default=1.0, gt=0)
 
 
 @ShapeFactory.register("square")  # Outermost: attrs replaces the class.
@@ -95,7 +95,7 @@ family even before any code uses it.
 | a family | `src/{{ package }}/<family>/base.py` + `items/` | place it in the import-linter `layers`; `make configs` |
 | an item | `src/{{ package }}/<family>/items/<kind>.py` | `make configs` |
 | an entry config | a schema in `config.py` listed in `GENERATED` as `defaults/<command>.yaml`, and `configs/<command>.yaml` composing it | a `cli/<command>.py` and a console script |
-| a setting | a `Field(default=..., description=...)` on the schema | `make configs` |
+| a setting | a field with a default on the schema, described only if its name leaves something open (DOC-7) | `make configs` |
 
 ## Tests
 

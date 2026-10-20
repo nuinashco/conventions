@@ -44,10 +44,11 @@ finding (compare with `git log` and `.copier-answers.yml`).
      `kind ==` or `isinstance` checks on items), ARC-8 (heavy imports are lazy);
    - types and data: TYP-4 (attrs for every class except configs, no hand-written `__init__`), TYP-6, TYP-9 (dicts
      only for wire payloads);
-   - configs: CFG-3 (defaults and descriptions in `Field`, generated YAML never edited by hand), CFG-7 (no tunable
-     constants in code);
+   - configs: CFG-3 (defaults in the schema, generated YAML never edited by hand), CFG-7 (no tunable constants in
+     code);
    - style: STY-4 (options and flags keyword-only), STY-5 (naming), STY-6 (unit suffixes);
-   - comments: DOC-2 to DOC-5 (one-line docstrings; comments only for what the code cannot say; sentences);
+   - comments: DOC-2 to DOC-5 (one-line docstrings; comments only for what the code cannot say; sentences), DOC-7
+     (YAML comments and `Field` descriptions only list options or say what the key cannot);
    - errors and logs: ERR-3 (`lowercase problem; remedy`), ERR-5 (every broad `except` justified), LOG-2
      (snake_case events with key-values), LOG-4 (results to stdout, events to the log);
    - tests: TST-1 to TST-3 and TST-6 (sentence names, no overlapping cases, fakes not mocks, nothing slow without a
