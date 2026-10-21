@@ -1,7 +1,6 @@
 # Files nobody edits by hand (GUIDE TOOL-5). check-protected refuses agent edits to them and
 # GitHub folds their diffs; the command that owns each one still rewrites it.
 configs/defaults/** linguist-generated protected=generated
-configs/**/kinds/** linguist-generated protected=generated
 .copier-answers.yml linguist-generated protected=generated
 src/nuikit/** linguist-vendored protected=vendored
 tests/nuikit/** linguist-vendored protected=vendored

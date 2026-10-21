@@ -37,7 +37,7 @@ Version 0.1.0 · last reviewed 2026-10-18 · owner: nuinashco
 | entry points | by lifecycle: what the workflow depends on in `<pkg>/cli/` (console scripts), exploratory or one-time runnables in `scripts/`; logic in the package |
 | architecture | import-linter contracts, pure/side-effect split, one composition root, capabilities not identities |
 | extension points | family = `base.py` + `items/`, `@Factory.register(kind)` outermost, auto-discovered |
-| config | Hydra composes, `Schema.from_hydra` validates (forbid + frozen), defaults in `Field` mirrored to `defaults/` and `kinds/`, hand-written entry configs and presets on top |
+| config | Hydra composes, `Schema.from_hydra` validates (forbid + frozen), defaults in `Field` mirrored to `defaults/` and one file per kind, hand-written entry configs and presets on top |
 | paths | rootutils + `.project-root`, `<pkg>/paths.py` constants, `setup_root` in entry points |
 | types | annotated everywhere, pyright standard (strict on `nuikit`), attrs for every class, pydantic only for configs |
 | style | ruff format at 88, curated ruff rules, absolute imports, keyword-only options, unit suffixes, ASCII in `.py` |
@@ -182,7 +182,7 @@ before `@define` would register the discarded class (TYP-5). *Check:* `nuikit` r
 `Config` and builds the item (config-first creation); `validate(data)` only validates. *Check:* registry tests;
 pyright.
 
-**FAM-4 MUST.** Each factory declares `config_group`. `make configs` writes `configs/<group>/kinds/<kind>.yaml` for
+**FAM-4 MUST.** Each factory declares `config_group`. `make configs` writes `configs/<group>/<kind>.yaml` for
 every registered kind (CFG-3). *Check:* `tests/test_invariants.py` fails on stale or missing files.
 
 **FAM-5 SHOULD.** CONTRIBUTING's "Extending" table lists every family: what to add, where, and what selects it.
@@ -211,9 +211,11 @@ name, type and default leave something open (DOC-7). `make configs` renders each
 default (or `???`) and its description as a comment, with a blank line after each nested block.
 Mirrors are committed and never edited, so the YAML shows what is tunable without opening Python. An entry config's
 mirror is `configs/defaults/<command>.yaml` and leaves out the fields that config groups provide; a family item's
-mirror is `configs/<group>/kinds/<kind>.yaml`. Everything else is hand-written, composes a mirror and only sets values:
-the entry config `configs/<command>.yaml`, whose defaults list picks the mirror, the groups and Hydra's settings with
-`_self_` last, and the presets in each group. A value changes in the narrowest place that fits:
+mirror is `configs/<group>/<kind>.yaml`, the option that `<group>=<kind>` selects. Everything else is hand-written,
+composes a mirror and only sets values: the entry config `configs/<command>.yaml`, whose defaults list picks the
+mirror, the groups and Hydra's settings with `_self_` last, and the presets in each group, which name variants of a
+kind (`configs/endpoint/gemini.yaml` composing `litellm`) and never take a kind's name. A value changes in the
+narrowest place that fits:
 
 | to change | edit |
 |---|---|
@@ -669,9 +671,10 @@ author, but feedback during the edit is cheaper than at commit time. *Check:* te
 - `vendored`: `src/nuikit/`, `tests/nuikit/`, `CONVENTIONS.md`, the reviewer subagent;
 - `published`: third-party files kept as published, such as `notebooks/reference/`.
 
-The same lines carry `linguist-generated` or `linguist-vendored`, so GitHub folds those diffs in pull requests. The
-`check-protected` Claude Code `PreToolUse` hook refuses edits to them with the reason and the right place to make the
-change; the commands that own them (`make configs`, `copier update`) still write them. The hook fails open: a broken
+The same lines carry `linguist-generated` or `linguist-vendored`, so GitHub folds those diffs in pull requests. A
+family item's mirror sits beside hand-written presets, so no path pattern can mark it: its first line, `# Generated
+by`, marks it instead. The `check-protected` Claude Code `PreToolUse` hook refuses edits to all of them with the
+reason and the right place to make the change; the commands that own them (`make configs`, `copier update`) still write them. The hook fails open: a broken
 environment lets edits through instead of blocking every one. Names carry no marker (no `_`
 prefix): `_` means private in Python, and `nuikit` is imported everywhere. *Why:* agents fix whatever file is in
 front of them, and a refusal that names the source is the cheapest redirect. *Check:* template; `check-protected PATH`.

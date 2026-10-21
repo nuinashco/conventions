@@ -84,7 +84,7 @@ class Square(Shape[SquareConfig]):  # The type argument binds Square.Config.
 ```
 
 `ShapeFactory.from_config({"kind": "square", "side_m": 2})` validates against `SquareConfig` and builds the item;
-`make configs` writes `configs/shape/kinds/square.yaml`. The family's `__init__.py` imports `items`, so importing
+`make configs` writes `configs/shape/square.yaml`, the file `shape=square` selects. The family's `__init__.py` imports `items`, so importing
 the family registers its kinds; `make configs` and the invariant tests import the whole package, so they see every
 family even before any code uses it.
 
