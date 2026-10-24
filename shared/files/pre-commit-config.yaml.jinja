@@ -60,7 +60,7 @@ repos:
         language: system
         stages: [commit-msg]
       - id: review-comments
-        name: comments say only what code cannot (GUIDE DOC-4, asks claude -p)
+        name: comments and descriptions say only what code cannot (GUIDE DOC-2 to DOC-7, asks claude -p)
         entry: uv run review-comments
         language: system
         pass_filenames: false
