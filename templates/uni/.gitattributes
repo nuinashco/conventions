@@ -8,3 +8,4 @@ src/nuikit/** linguist-vendored protected=vendored
 tests/nuikit/** linguist-vendored protected=vendored
 CONVENTIONS.md linguist-vendored protected=vendored
 .claude/agents/conventions-reviewer.md linguist-vendored protected=vendored
+.claude/agents/descriptions-judge.md linguist-vendored protected=vendored

@@ -18,15 +18,23 @@ The repo is also the `conventions-hooks` package (`src/conventions_hooks/`), the
 | command | checks | runs |
 |---|---|---|
 | `check-comments` | comments are sentences, no section banners, class docstrings are noun phrases (DOC-2, DOC-4, DOC-5) | pre-commit on every commit; Claude Code `PostToolUse` hook after each edit |
-| `review-comments` | new comments say only what the code cannot (DOC-4), judged by `claude -p` | Claude Code `Stop` hook; `pre-commit run review-comments --hook-stage manual` |
+| `review-comments` | new comments, docstrings and `Field` descriptions say only what the code cannot (DOC-2 to DOC-7), judged by `claude -p` with a structured verdict | Claude Code `Stop` hook; `pre-commit run review-comments --hook-stage manual` |
 | `check-protected` | files `.gitattributes` marks `protected` (generated, vendored, published) are not edited by hand (TOOL-5) | Claude Code `PreToolUse` hook before each edit |
 
 Generated projects install it as a dev dependency pinned to the template's commit (a local path until this repo is
 pushed) and wire both layers. Repos that don't use uv can use `.pre-commit-hooks.yaml` instead.
 
+Projects also get two read-only subagents in `.claude/agents/`: `conventions-reviewer` checks a branch or the repo
+against the guide, and `descriptions-judge` checks each config description and YAML comment against DOC-7 and the code.
+
+`review-comments` and both subagents are LLM judges (TOOL-6). `tests/judges/` holds their labelled cases: diffs that
+must pass or fail, and projects with planted mistakes. Rerun them after changing a judge's prompt or the model, and
+add each mistake a judge makes as a new case.
+
 ```bash
 make test             # unit tests of the hooks, under a second
 make test-templates   # render every profile and run its checks (slow, needs network)
+make test-judges      # the judges on their labelled cases (live `claude` calls: minutes, about $3)
 ```
 
 ## Start a project

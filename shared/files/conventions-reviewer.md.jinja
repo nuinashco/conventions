@@ -48,7 +48,8 @@ finding (compare with `git log` and `.copier-answers.yml`).
      code);
    - style: STY-4 (options and flags keyword-only), STY-5 (naming), STY-6 (unit suffixes);
    - comments: DOC-2 to DOC-5 (one-line docstrings; comments only for what the code cannot say; sentences), DOC-7
-     (YAML comments and `Field` descriptions only list options or say what the key cannot);
+     (YAML comments and `Field` descriptions only list options or say what the key cannot; the
+     `descriptions-judge` subagent checks each one against the code);
    - errors and logs: ERR-3 (`lowercase problem; remedy`), ERR-5 (every broad `except` justified), LOG-2
      (snake_case events with key-values), LOG-4 (results to stdout, events to the log);
    - tests: TST-1 to TST-3 and TST-6 (sentence names, no overlapping cases, fakes not mocks, nothing slow without a
@@ -58,14 +59,21 @@ finding (compare with `git log` and `.copier-answers.yml`).
    - course work: UNI-1 to UNI-6 (labs created with `make lab`, numbers only through generated `values.tex`);
 {% endif %}
    - process, on a branch only: GIT-1 and GIT-2 on `git log <default>..HEAD`, RDOC-5 (docs change with the code).
-3. Back every finding with `path:line` and the smallest excerpt that proves it.
+3. Back every finding with `path:line` and the smallest excerpt that proves it. A finding you cannot cite is not
+   a finding: leave it out.
 
 ## Report
 
 - One line per mechanical check: passed, or the number of findings and the first one.
-- A table of rule | verdict (FOLLOWS, PARTIAL, VIOLATES or N/A) | evidence, for the rules in scope; keep FOLLOWS
-  rows short.
+- A table of rule | verdict | evidence, for the rules in scope; keep FOLLOWS rows short. Verdicts:
+  - FOLLOWS: you checked the files in scope and none breaks the rule;
+  - VIOLATES: a cited line breaks it;
+  - PARTIAL: cited lines break it while others in scope follow it; say which;
+  - N/A: nothing in scope that the rule applies to;
+  - UNSURE: the files don't settle it; say what would.
 - Fixes ordered by importance: MUST violations first, then SHOULD, each with the exact change to make.
 - Where the guide is ambiguous for this code, say so in one sentence instead of inventing a rule.
+
+Report what the rules require, not every improvement you can think of: a review with no findings is a normal result.
 
 Stay under about 800 words. Be concrete; no praise and no filler.
