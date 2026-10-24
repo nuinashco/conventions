@@ -4,7 +4,8 @@
 and their reasons: [CONVENTIONS.md](CONVENTIONS.md), a read-only copy of the conventions guide.
 
 Before committing a change that adds or moves modules, configs, tests, entry points or docs, run the
-`conventions-reviewer` subagent (`.claude/agents/`) and fix its MUST findings. `.claude/settings.json` runs
+`conventions-reviewer` subagent (`.claude/agents/`) and fix its MUST findings; after changing config fields, their
+descriptions or YAML comments, run `descriptions-judge` and apply its verdicts. `.claude/settings.json` runs
 `check-protected` before each edit (files `.gitattributes` marks `protected` are changed at their source),
 `check-comments` after it and `review-comments` before you hand back; fix what they report.
 

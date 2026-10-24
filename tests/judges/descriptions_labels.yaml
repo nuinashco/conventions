@@ -1,0 +1,17 @@
+# Labelled settings of fixtures/descriptions/ for the descriptions-judge (test_agents.py).
+# `expect` lists the verdicts that count as right; with KEEP, the judge may also leave the setting out of the report;
+# NONE passes when the judge proposes no description for it.
+
+- {path: config.py, setting: run_name, expect: [DROP]}  # results_dir on the next line shows it
+- {path: config.py, setting: wandb_project, expect: [DROP]}  # the guide's own DOC-7 example
+- {path: config.py, setting: workers, expect: [DROP]}
+- {path: config.py, setting: log_level, expect: [ADD]}  # the mirror shows only "info", not the options
+- {path: config.py, setting: poll_interval, expect: [ADD, RENAME]}  # seconds (time.sleep); the repo owns the name
+- {path: config.py, setting: port, expect: [NONE]}
+- {path: config.py, setting: cache_dir, expect: [KEEP]}
+- {path: config.py, setting: max_items, expect: [FIX]}  # null means 100 (service.py), not unlimited
+- {path: config.py, setting: upload, expect: [KEEP]}  # side effect: files leave the machine
+- {path: config.py, setting: compaction_interval, expect: [ADD]}  # counts invocations (agentlib), reads as seconds
+- {path: config.py, setting: rpm, expect: [KEEP]}
+- {path: free.yaml, setting: rpm, expect: [KEEP, TRIM]}  # DOC-7 lists a source, not advice; trimming the advice is fair
+- {path: free.yaml, setting: max_concurrency, expect: [DROP]}

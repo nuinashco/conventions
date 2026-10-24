@@ -2,7 +2,8 @@
 
 How {{ project_name }} is built and how to change it. Using it: [README.md](README.md). Conventions that apply to
 every project, with their reasons: [CONVENTIONS.md](CONVENTIONS.md) (a read-only copy of the guide; `copier update`
-refreshes it). The `conventions-reviewer` subagent in `.claude/agents/` checks a branch or the repo against it.
+refreshes it). The `conventions-reviewer` subagent in `.claude/agents/` checks a branch or the repo against it;
+`descriptions-judge` checks each config description and YAML comment against DOC-7 and the code.
 
 ## Architecture
 

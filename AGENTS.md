@@ -10,6 +10,8 @@ This repo holds my coding conventions: `GUIDE.md` (the rules) and copier templat
 - Rules use RFC 2119 keywords in capitals, and each one has a *Why* and a *Check*. Prefer a check a tool can run.
 - Templates must render and pass their own `make check` for every profile: run `make test-templates` before
   committing a template change. `make test` covers the hooks package.
+- A change to a judge's prompt (`review-comments`, the subagents in `shared/files/`) or its model is measured with
+  `make test-judges` before committing; a mistake a judge makes becomes a case in `tests/judges/` (TOOL-6).
 - Generated projects follow `GUIDE.md` themselves, so template code is held to the same rules: attrs classes, one-line
   module docstrings, comments only for what code can't say, ASCII in `.py` files.
 - Releases are git tags (`vMAJOR.MINOR.PATCH`). Projects pull changes with `copier update`, so a template change must
@@ -26,5 +28,6 @@ src/conventions_hooks/   check-comments, review-comments, check-commit-msg, chec
 copier.yml        questions; `profile` selects templates/<profile>
 shared/           Jinja partials included by several profiles
 templates/        rnd, uni, lab
-tests/            hooks/: unit tests (`make test`); test_templates.py: every profile renders and passes its checks
+tests/            hooks/: unit tests (`make test`); test_templates.py: every profile renders and passes its checks;
+                  judges/: labelled cases for the LLM judges (`make test-judges`)
 ```

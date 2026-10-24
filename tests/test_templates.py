@@ -55,10 +55,15 @@ def test_rnd_project_passes_its_checks_and_runs(template, tmp_path, data):
     sh(project, "uv", "run", "demo-configs", "--check")
 
     assert (project / "runs" / "smoke" / "run.json").is_file()
-    assert_ships_the_guide_and_its_reviewer(project)
+    assert_ships_the_guide_and_its_agents(project)
     assert_protects(
         project,
-        ["src/nuikit/config.py", "configs/defaults/run.yaml", "CONVENTIONS.md"],
+        [
+            "src/nuikit/config.py",
+            "configs/defaults/run.yaml",
+            "CONVENTIONS.md",
+            ".claude/agents/descriptions-judge.md",
+        ],
         editable=["configs/run.yaml", "src/demo/paths.py"],
     )
 
@@ -72,7 +77,7 @@ def test_uni_workspace_with_two_labs_passes_its_checks(template, tmp_path):
     sh(course, "uv", "run", "course", "configs", "--check")
 
     assert (course / "labs" / "002-second" / "src" / "lab002" / "config.py").is_file()
-    assert_ships_the_guide_and_its_reviewer(course)
+    assert_ships_the_guide_and_its_agents(course)
     assert_protects(
         course,
         ["labs/001-first/config/defaults/run.yaml", "src/nuikit/errors.py"],
@@ -80,16 +85,17 @@ def test_uni_workspace_with_two_labs_passes_its_checks(template, tmp_path):
     )
 
 
-def assert_ships_the_guide_and_its_reviewer(project: Path) -> None:
+def assert_ships_the_guide_and_its_agents(project: Path) -> None:
     # A Jinja delimiter in GUIDE.md would silently change the vendored copy.
     guide = (REPO / "GUIDE.md").read_text(encoding="utf-8")
     vendored = (project / "CONVENTIONS.md").read_text(encoding="utf-8")
-    reviewer = project / ".claude" / "agents" / "conventions-reviewer.md"
+    agents = project / ".claude" / "agents"
     settings = json.loads((project / ".claude" / "settings.json").read_text())
     assert vendored.split("\n", 1)[1] == guide
     assert (project / ".github" / "pull_request_template.md").is_file()
-    header = reviewer.read_text(encoding="utf-8").splitlines()[:2]
-    assert header == ["---", "name: conventions-reviewer"]
+    for name in ("conventions-reviewer", "descriptions-judge"):
+        header = (agents / f"{name}.md").read_text(encoding="utf-8").splitlines()[:2]
+        assert header == ["---", f"name: {name}"]
     assert set(settings["hooks"]) == {"PreToolUse", "PostToolUse", "Stop"}
     # The template's own code follows the comment rules it ships.
     sources = [str(p) for p in project.rglob("*.py") if ".venv" not in p.parts]

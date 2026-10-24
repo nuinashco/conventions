@@ -1,0 +1,178 @@
+# Labelled diffs for the review-comments judge (tests/judges/test_review_comments.py).
+# Each case adds one comment or docstring; `label` is the verdict GUIDE section 8 requires.
+# Keep cases unambiguous under the guide: a case reviewers disagree on measures nothing.
+
+- id: restates-increment
+  label: FAIL
+  diff: |
+    +++ b/retry.py
+    +    # Increment the retry counter.
+    +    retries += 1
+
+- id: narrates-loop
+  label: FAIL
+  diff: |
+    +++ b/grade.py
+    +    # Loop over every task, grade it and collect the scores.
+    +    scores = [grade(task) for task in tasks]
+
+- id: docstring-repeats-types
+  label: FAIL
+  diff: |
+    +++ b/io.py
+    +def load(path: Path) -> dict[str, Any]:
+    +    """Take a Path and return a dict of str to Any."""
+
+- id: sleep-without-reason
+  label: FAIL
+  diff: |
+    +++ b/poll.py
+    +    # Wait half a second.
+    +    time.sleep(0.5)
+
+- id: explains-how
+  label: FAIL
+  diff: |
+    +++ b/params.py
+    +    # Use a dict comprehension to drop the None values.
+    +    params = {k: v for k, v in params.items() if v is not None}
+
+- id: args-section-repeats-types
+  label: FAIL
+  diff: |
+    +++ b/scale.py
+    +def scale(x: float, factor: float) -> float:
+    +    """Scale a value.
+    +
+    +    Args:
+    +        x: A float.
+    +        factor: A float.
+    +
+    +    Returns:
+    +        A float.
+    +    """
+
+- id: class-docstring-repeats-name
+  label: FAIL
+  diff: |
+    +++ b/runs.py
+    +class RunDir:
+    +    """The RunDir class."""
+
+- id: inline-restates-call
+  label: FAIL
+  diff: |
+    +++ b/main.py
+    +    config = load(path)  # Load the config.
+
+- id: vague-reason
+  label: FAIL
+  diff: |
+    +++ b/batch.py
+    +    # Check that the list is not empty to avoid errors.
+    +    if items:
+
+- id: external-constraint
+  label: PASS
+  diff: |
+    +++ b/limits.py
+    +# Kaggle kills a task after 300 s of wall clock; stop 20 s early to save the patch.
+    +TASK_TIMEOUT_S = 280
+
+- id: provenance
+  label: PASS
+  diff: |
+    +++ b/speed.py
+    +# Measured on 4x L4 with vLLM 0.19 on 2026-10-20 (benchmark kernel, 2 repeats).
+    +DECODE_S_PER_TOKEN = 0.0259
+
+- id: none-meaning
+  label: PASS
+  diff: |
+    +++ b/storage.py
+    +    # None: the provider picks its default region.
+    +    region: str | None = None
+
+- id: non-obvious-reason
+  label: PASS
+  diff: |
+    +++ b/manifest.py
+    +    # Sorted so reruns hash the same; the API lists files in any order.
+    +    files = sorted(api.list_files(bucket))
+
+- id: docstring-adds-behaviour
+  label: PASS
+  diff: |
+    +++ b/runs.py
+    +def run_dir(name: str) -> Path:
+    +    """Return the run directory for `name`, creating it on first use."""
+
+- id: workaround-with-version
+  label: PASS
+  diff: |
+    +++ b/llm.py
+    +    # `litellm` 1.105 drops `reasoning` from assistant messages; resend it as
+    +    # `reasoning_content` so the next turn keeps the model's thoughts.
+    +    message["reasoning_content"] = message.get("reasoning")
+
+- id: unit-and-reason
+  label: PASS
+  diff: |
+    +++ b/client.py
+    +    # Seconds; httpx's default of 5 is too short for vLLM's first call.
+    +    timeout = 30
+
+- id: code-only
+  label: PASS
+  diff: |
+    +++ b/math_utils.py
+    +def add(a: int, b: int) -> int:
+    +    return a + b
+
+- id: constraint-that-reads-like-narration
+  label: PASS
+  diff: |
+    +++ b/proxy.py
+    +    # Close the client inside the loop: httpx raises if it outlives its event loop.
+    +    await client.aclose()
+
+- id: description-repeats-key
+  label: FAIL
+  diff: |
+    +++ b/config.py
+    +    workers: PositiveInt = Field(default=4, description="number of workers")
+
+- id: description-is-the-guide-example
+  label: FAIL
+  diff: |
+    +++ b/config.py
+    +    wandb_project: str = Field(default="demo", description="W&B project")
+
+- id: description-restates-a-flag
+  label: FAIL
+  diff: |
+    +++ b/config.py
+    +    log_calls: bool = Field(default=True, description="whether to log calls")
+
+- id: description-lists-options
+  label: PASS
+  diff: |
+    +++ b/config.py
+    +    log_format: Literal["auto", "console", "json"] = Field(
+    +        default="auto", description="auto|console|json"
+    +    )
+
+- id: description-says-what-null-means
+  label: PASS
+  diff: |
+    +++ b/config.py
+    +    cache_dir: Path | None = Field(default=None, description="null: no cache")
+
+- id: description-disambiguates-a-mirrored-name
+  label: PASS
+  diff: |
+    +++ b/config.py
+    +    # Spelled as in the scorer's eval_config.yaml (STY-6).
+    +    timeout_seconds: PositiveInt = Field(
+    +        default=300, description="per shell command, not per task"
+    +    )
