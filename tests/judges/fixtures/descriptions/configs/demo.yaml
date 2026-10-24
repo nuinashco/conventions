@@ -1,0 +1,5 @@
+# Entry config of `demo-run`: values set below change every run of this repo.
+defaults:
+  - defaults/demo@_here_
+  - endpoint: free
+  - _self_

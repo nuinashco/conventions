@@ -1,0 +1,8 @@
+# Free tier of the demo API.
+defaults:
+  - remote@_here_
+  - _self_
+
+name: free
+rpm: 15  # Free-tier limit; raise it on a paid key.
+max_concurrency: 2  # Max concurrency.

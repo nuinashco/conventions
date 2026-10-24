@@ -41,7 +41,7 @@ Version 0.1.0 · last reviewed 2026-10-18 · owner: nuinashco
 | paths | rootutils + `.project-root`, `<pkg>/paths.py` constants, `setup_root` in entry points |
 | types | annotated everywhere, pyright standard (strict on `nuikit`), attrs for every class, pydantic only for configs |
 | style | ruff format at 88, curated ruff rules, absolute imports, keyword-only options, unit suffixes, ASCII in `.py` |
-| comments | one-line module docstring everywhere, one-line docstrings, comments only for what code can't say; checked by `check-comments` and `review-comments`; YAML comments and `Field` descriptions only for options and what the key can't say |
+| comments | one-line module docstring everywhere, one-line docstrings, comments only for what code can't say; checked by `check-comments` and `review-comments`; YAML comments and `Field` descriptions only for options and what the key can't say, judged by `descriptions-judge` |
 | errors | `nuikit.errors.UserError` with `exit_code`, one `cli_boundary`, `lowercase message; remedy` |
 | logging | structlog over stdlib, `log.info("snake_case_event", key=value)`, console in a TTY, JSON otherwise |
 | tests | sentence names, unit-first, fakes not mocks, mirror `src/` per module, invariants, `-m integration` |
@@ -453,7 +453,8 @@ Claude Code `PostToolUse` hook on every edited `.py` file.
 options (`auto|console|json`) or says what its key and value can't: a unit the name lacks, what `null` or an edge
 value means, a side effect, a source. It never repeats the key: `wandb_project: x  # W&B project` says nothing.
 *Why:* when every line has a comment, readers skip them all and the few that matter go unread; DOC-4, applied to
-configs. *Check:* review; the `conventions-reviewer` subagent.
+configs. *Check:* `review-comments` on new descriptions; the `descriptions-judge` subagent, which checks each one
+against the code.
 
 ## 9. Errors (ERR)
 
@@ -611,8 +612,8 @@ and pointers to CONTRIBUTING and this guide. CLAUDE.md contains `@AGENTS.md` plu
 point to this guide instead of copying it, and leave to linters what linters check. *Why:*
 [agents.md](https://agents.md/); [Claude Code memory](https://code.claude.com/docs/en/memory) recommends short,
 specific files. Each project also carries `CONVENTIONS.md`, a read-only copy of this guide rendered by the
-template, and a `conventions-reviewer` subagent (`.claude/agents/`) that checks a branch or the whole repo against
-it. *Check:* template.
+template, a `conventions-reviewer` subagent (`.claude/agents/`) that checks a branch or the whole repo against
+it, and a `descriptions-judge` subagent for DOC-7. *Check:* template.
 
 **RDOC-5 MUST.** Docs change in the same commit as the code they describe. A stale doc is a bug. *Check:* review.
 
@@ -671,7 +672,7 @@ author, but feedback during the edit is cheaper than at commit time. *Check:* te
 **TOOL-5 MUST.** Files nobody edits by hand are listed in `.gitattributes` with `protected=<why>`:
 
 - `generated`: config mirrors, `report/generated/`, `.copier-answers.yml`;
-- `vendored`: `src/nuikit/`, `tests/nuikit/`, `CONVENTIONS.md`, the reviewer subagent;
+- `vendored`: `src/nuikit/`, `tests/nuikit/`, `CONVENTIONS.md`, the template's subagents;
 - `published`: third-party files kept as published, such as `notebooks/reference/`.
 
 The same lines carry `linguist-generated` or `linguist-vendored`, so GitHub folds those diffs in pull requests. A
@@ -681,6 +682,16 @@ reason and the right place to make the change; the commands that own them (`make
 environment lets edits through instead of blocking every one. Names carry no marker (no `_`
 prefix): `_` means private in Python, and `nuikit` is imported everywhere. *Why:* agents fix whatever file is in
 front of them, and a refusal that names the source is the cheapest redirect. *Check:* template; `check-protected PATH`.
+
+**TOOL-6 SHOULD.** A check that asks an LLM, such as a `claude -p` hook or a review subagent, is a judge and is built
+as one: narrow criteria with named verdicts, an "unsure" outcome instead of a guess, a cited line for every finding, a
+fresh context holding only the artefact and the rules, and structured output wherever code reads the verdict. It has a
+labelled set of passing and failing cases, rerun whenever its prompt or model changes; every error it makes becomes a
+case. Anything a script can decide stays a script. *Why:* a judge's leniency or harshness shows only against labelled
+cases, and a narrow, cited criterion is easier to align than a broad rubric
+([Husain](https://hamel.dev/blog/posts/llm-judge/),
+[Anthropic](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents)). *Check:* review; the template's
+judges are measured by `make test-judges` in the conventions repo.
 
 ## 16. uni profile (UNI)
 

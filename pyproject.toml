@@ -13,7 +13,7 @@ check-commit-msg = "conventions_hooks.commit_msg:main"
 check-protected = "conventions_hooks.protected:main"
 
 [dependency-groups]
-dev = ["copier>=9.19", "pytest>=9.1", "ruff>=0.17"]
+dev = ["copier>=9.19", "pytest>=9.1", "pyyaml>=6", "ruff>=0.17"]
 
 [build-system]
 requires = ["uv_build>=0.12,<0.14"]
@@ -25,7 +25,10 @@ module-name = "conventions_hooks"
 [tool.ruff]
 line-length = 88
 src = ["src", "tests"]
-extend-exclude = ["templates", "shared"]  # Jinja sources; their renders are checked.
+extend-exclude = [
+    "templates", "shared",  # Jinja sources; their renders are checked.
+    "tests/judges/fixtures",  # Projects a judge reviews, with planted mistakes.
+]
 
 [tool.ruff.lint]
 select = [
@@ -52,5 +55,8 @@ ban-relative-imports = "all"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = ["--import-mode=importlib", "--strict-markers", "-m", "not templates"]
-markers = ["templates: render every profile and run its checks (slow, needs network)"]
+addopts = ["--import-mode=importlib", "--strict-markers", "-m", "not templates and not judges"]
+markers = [
+    "templates: render every profile and run its checks (slow, needs network)",
+    "judges: run the Claude judges on labelled cases (live `claude` calls, costs tokens)",
+]

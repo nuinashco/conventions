@@ -10,7 +10,7 @@
   language: python
   stages: [commit-msg]
 - id: review-comments
-  name: comments say only what the code cannot (GUIDE DOC-4, asks claude -p)
+  name: comments and descriptions say only what the code cannot (GUIDE DOC-2 to DOC-7, asks claude -p)
   entry: review-comments
   language: python
   pass_filenames: false

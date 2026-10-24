@@ -6,11 +6,12 @@ Usage:
 
     review-comments --claude-hook    # Claude Code Stop hook: the working tree's diff
 
-Sends the diff and the guide's comment rules to `claude -p` with every tool disabled,
-and fails when the answer starts with FAIL. As a Stop hook it skips turns that add no
-comment lines and diffs it has already passed, and reports findings to Claude with exit
-code 2. Set REVIEW_COMMENTS_MODEL to choose a model. Needs the Claude Code CLI, logged
-in.
+Sends the diff and the guide's comment rules to `claude -p` with every tool and hook
+disabled, and fails when its structured verdict is FAIL. Comments, docstrings and
+`Field` descriptions are judged (DOC-2 to DOC-7). As a Stop hook it skips turns that add
+no comment lines and diffs it has already passed, and reports findings to Claude with
+exit code 2. Set REVIEW_COMMENTS_MODEL to choose a model. Needs the Claude Code CLI,
+logged in. The labelled cases in the conventions repo (`make test-judges`) measure it.
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ import subprocess
 import sys
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 GUIDE_FILES = ("CONVENTIONS.md", "GUIDE.md")
 SECTION = re.compile(
@@ -38,15 +40,42 @@ FALLBACK_RULES = """\
 - Comments are sentences: a capital letter first, a period last.
 """
 INSTRUCTIONS = """\
-Review only the comments and docstrings that the diff on stdin adds or changes, against
-the rules on stdin. Flag a comment that restates the code, narrates what the next lines
-do, or explains how instead of why; a docstring that repeats the signature or documents
-what the types already say; and a constant, workaround or unit whose reason is missing.
-Ignore code style and everything that is not a comment or a docstring.
-Answer PASS on the first line if nothing breaks the rules. Otherwise answer FAIL on the
-first line, then one line per finding: `path:line: RULE problem; rewrite as: ...` or
-`...; delete it`.
+Review only the comments, docstrings and pydantic `Field(description=...)` strings that
+the diff on stdin adds or changes, against the rules on stdin. Flag:
+- a comment that restates the code, narrates what the next lines do, or explains how
+  instead of why; a constant, workaround or unit whose reason is missing;
+- a docstring that repeats the signature or documents what the types already say;
+- a description that repeats its field's name, value or type instead of listing the
+  options or saying what the key and value can't (DOC-7).
+Ignore code style and everything else. Flag only what clearly breaks a rule: when
+unsure, leave it out, and an empty list of findings is a normal result. Quote each
+flagged text exactly, then give the verdict: FAIL if there is any finding, else PASS.
 """
+SCHEMA = {
+    "type": "object",
+    "properties": {
+        "findings": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "line": {"type": "integer"},
+                    "quote": {"type": "string"},
+                    "rule": {"type": "string"},
+                    "problem": {"type": "string"},
+                    "fix": {
+                        "type": "string",
+                        "description": "the rewrite, or: delete it",
+                    },
+                },
+                "required": ["path", "line", "quote", "rule", "problem", "fix"],
+            },
+        },
+        "verdict": {"enum": ["PASS", "FAIL"]},
+    },
+    "required": ["findings", "verdict"],
+}
 
 type Ask = Callable[[list[str], str], str]
 
@@ -56,17 +85,50 @@ class ReviewError(Exception):
 
 
 def review(diff: str, rules: str, *, ask: Ask) -> tuple[bool, str]:
-    """Return whether the diff's comments pass, and Claude's answer."""
+    """Return whether the diff's comments pass, and the findings as text."""
     if not diff.strip():
         return True, ""
-    answer = ask(command(), f"# Rules\n\n{rules}\n\n# Diff\n\n{diff}").strip()
-    first = answer.splitlines()[0].strip().upper() if answer else ""
-    return first.startswith("PASS"), answer
+    answer = ask(command(), f"# Rules\n\n{rules}\n\n# Diff\n\n{diff}")
+    verdict = parse(answer)
+    findings = [
+        f"{f['path']}:{f['line']}: {f['rule']} {f['problem']} ({f['quote']!r}); "
+        f"{f['fix']}"
+        for f in verdict["findings"]
+    ]
+    passed = verdict["verdict"] == "PASS" and not findings
+    return passed, "\n".join([verdict["verdict"], *findings])
+
+
+def parse(answer: str) -> dict[str, Any]:
+    """Return the structured verdict from `claude -p --output-format json`."""
+    try:
+        verdict = json.loads(answer).get("structured_output")
+    except (json.JSONDecodeError, AttributeError) as e:
+        raise ReviewError(f"claude returned no JSON: {answer[:200]}") from e
+    if not isinstance(verdict, dict) or verdict.get("verdict") not in {"PASS", "FAIL"}:
+        raise ReviewError(f"claude returned no verdict: {answer[:200]}")
+    return verdict
 
 
 def command() -> list[str]:
-    """Return the `claude` command line: print mode, no tools, no saved session."""
-    args = ["claude", "-p", "--tools", "", "--no-session-persistence"]
+    """Return the `claude` command line: print mode, JSON verdict, no tools or hooks.
+
+    Hooks stay off because the project's own Stop hook would run this review again
+    inside the review, and so on until the timeout.
+    """
+    args = [
+        "claude",
+        "-p",
+        "--tools",
+        "",
+        "--no-session-persistence",
+        "--settings",
+        json.dumps({"disableAllHooks": True}),
+        "--output-format",
+        "json",
+        "--json-schema",
+        json.dumps(SCHEMA),
+    ]
     if model := os.environ.get("REVIEW_COMMENTS_MODEL"):
         args += ["--model", model]
     return [*args, INSTRUCTIONS]
@@ -152,12 +214,11 @@ def working_diff(root: Path) -> str:
 
 
 def adds_comments(diff: str) -> bool:
-    """Return whether the diff adds a line that may hold a comment or docstring."""
+    """Return whether the diff adds a line that may hold a comment or description."""
     added = (line[1:] for line in diff.splitlines() if line.startswith("+"))
+    markers = ("#", '"""', "'''", "description=")
     return any(
-        "#" in text or '"""' in text or "'''" in text
-        for text in added
-        if not text.startswith("++")
+        any(m in text for m in markers) for text in added if not text.startswith("++")
     )
 
 
