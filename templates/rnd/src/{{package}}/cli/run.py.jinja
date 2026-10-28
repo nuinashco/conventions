@@ -36,6 +36,8 @@ def main(dict_cfg: DictConfig) -> None:
     run_dir = runs.start_run(cfg, name=cfg.run_name, runs_dir=paths.RUNS_DIR)
 {% if use_wandb %}
     if cfg.tracker == "wandb":
-        runs.mirror_to_wandb(cfg, run_dir, project=cfg.wandb_project)
+        runs.mirror_to_wandb(
+            cfg, run_dir, project=cfg.wandb_project, entity=cfg.wandb_entity
+        )
 {% endif %}
     log.info("run_started", run_dir=str(run_dir), seed=cfg.seed)

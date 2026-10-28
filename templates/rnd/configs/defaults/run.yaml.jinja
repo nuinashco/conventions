@@ -8,4 +8,5 @@ log_format: "auto"  # auto|console|json; auto: console in a terminal, JSON other
 {% if use_wandb %}
 tracker: null  # wandb: mirror the run to W&B; null: run dir only
 wandb_project: "{{ project_name }}"
+wandb_entity: null  # W&B team or user; null: your default entity
 {% endif %}
