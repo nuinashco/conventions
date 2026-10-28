@@ -33,7 +33,7 @@ class MainConfig(Schema):
     )
     wandb_project: str = "{{ project_name }}"
     wandb_entity: str | None = Field(
-        default=None, description="W&B team or user; null: your default entity"
+        default=None, description="null: your default entity"
     )
 {% endif %}
 
