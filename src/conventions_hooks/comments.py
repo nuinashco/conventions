@@ -28,7 +28,17 @@ from pathlib import Path
 
 from attrs import frozen
 
-DIRECTIVES = ("noqa", "type:", "pyright:", "pragma", "fmt:", "isort:", "ruff:", "mypy:")
+DIRECTIVES = (
+    "noqa",
+    "type:",
+    "pyright:",
+    "pragma",
+    "fmt:",
+    "isort:",
+    "ruff:",
+    "mypy:",
+    "conventions:",
+)
 BANNER = re.compile(r"^#|-{3,}|={3,}|\*{3,}|~{3,}|_{3,}|\+{3,}|#{3,}")
 CLOSERS = ")]}\"'`"
 # Base-form verbs that open an order, not a noun phrase; words that are also common
@@ -64,7 +74,7 @@ class Block:
     inline: bool
 
 
-def check_source(source: str, path: str = "<string>") -> list[Finding]:
+def check_source(source: str, *, path: str = "<string>") -> list[Finding]:
     """Return the comment and docstring findings for one Python source."""
     findings = [
         finding for block in _blocks(source) for finding in _check_block(block, path)
@@ -89,7 +99,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 def check_file(path: Path) -> list[Finding]:
     """Return the findings for one Python file."""
-    return check_source(path.read_text(encoding="utf-8"), str(path))
+    return check_source(path.read_text(encoding="utf-8"), path=str(path))
 
 
 def claude_hook(payload: str) -> int:

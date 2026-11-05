@@ -129,6 +129,7 @@ def command() -> list[str]:
         "--json-schema",
         json.dumps(SCHEMA),
     ]
+    # conventions: ENV-3 - a hook has no paths.py; its one setting is this variable.
     if model := os.environ.get("REVIEW_COMMENTS_MODEL"):
         args += ["--model", model]
     return [*args, INSTRUCTIONS]

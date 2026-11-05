@@ -8,6 +8,7 @@ dependencies = ["attrs>=24.2"]
 
 [project.scripts]
 check-comments = "conventions_hooks.comments:main"
+check-conventions = "conventions_hooks.conventions:main"
 review-comments = "conventions_hooks.review:main"
 check-commit-msg = "conventions_hooks.commit_msg:main"
 check-protected = "conventions_hooks.protected:main"
