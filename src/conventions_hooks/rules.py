@@ -285,20 +285,26 @@ def stale(root: Path) -> list[Path]:
     return _stale(root, outputs(root))
 
 
-def write(root: Path) -> list[Path]:
-    """Rewrite the stale generated files under `root`; return their paths."""
+def write(root: Path) -> tuple[list[Path], list[Path]]:
+    """Bring the generated files under `root` up to date.
+
+    Returns:
+        The paths it rewrote, and the paths of the orphan skills it deleted.
+    """
     expected = outputs(root)
-    changed = _stale(root, expected)
-    for path in changed:
+    written, removed = [], []
+    for path in _stale(root, expected):
         target = root / path
         if path in expected:
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(expected[path], encoding="utf-8")
+            written.append(path)
         else:
             target.unlink()
             if not any(target.parent.iterdir()):
                 target.parent.rmdir()
-    return changed
+            removed.append(path)
+    return written, removed
 
 
 def guide_page(guide: Guide) -> str:
@@ -461,8 +467,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             for path in found:
                 print(f"{path}: stale; run `make build`")
             return 1 if found else 0
-        for path in write(root):
+        written, removed = write(root)
+        for path in written:
             print(f"wrote {path}")
+        for path in removed:
+            print(f"removed {path}")
     except RulesError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
