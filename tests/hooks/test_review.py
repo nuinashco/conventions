@@ -8,12 +8,11 @@ import subprocess
 import pytest
 
 from conventions_hooks.review import (
-    FALLBACK_RULES,
     ReviewError,
     claude_hook,
     command,
+    comment_rules,
     review,
-    rules,
 )
 
 FINDING = {
@@ -59,6 +58,27 @@ def test_findings_come_back_as_lines_with_their_quote_and_fix():
     assert "+# Add one." in calls[0]
 
 
+def test_findings_under_an_ignored_rule_are_dropped_and_then_pass():
+    calls: list[str] = []
+    ask = answering(verdict(FINDING), calls)
+
+    assert review("+# Add one.", "rules", ask=ask, ignore=frozenset({"DOC-4"})) == (
+        True,
+        "PASS",
+    )
+
+
+def test_a_repo_that_ignores_every_judged_rule_is_not_reviewed():
+    calls: list[str] = []
+    ignore = frozenset(f"DOC-{n}" for n in range(1, 8))
+
+    passed = review(
+        "+# Add one.", "rules", ask=answering(verdict(), calls), ignore=ignore
+    )
+
+    assert (passed, calls) == ((True, ""), [])
+
+
 def test_an_answer_without_a_structured_verdict_is_an_error():
     with pytest.raises(ReviewError, match="no verdict"):
         review("+# Add one.", "rules", ask=answering('{"result": "FAIL"}', []))
@@ -71,28 +91,37 @@ def test_the_review_runs_with_hooks_off_so_it_cannot_trigger_itself():
     assert settings == {"disableAllHooks": True}
 
 
-def test_rules_come_from_the_guide_section_or_the_fallback(tmp_path):
-    assert rules(tmp_path) == FALLBACK_RULES
-    guide = "## 7. Code\n\n## 8. Comments and docstrings\n\nRule.\n\n## 9. Errors\n"
-    (tmp_path / "CONVENTIONS.md").write_text(guide)
+def test_the_judge_gets_the_comment_rules_shipped_with_the_package():
+    rules = comment_rules()
 
-    assert rules(tmp_path) == "## 8. Comments and docstrings\n\nRule."
+    assert rules.startswith("# Comments and docstrings (DOC)")
+    assert "### DOC-4 MUST" in rules
+    assert "### DOC-7 MUST" in rules
 
 
 @pytest.fixture
-def repo(tmp_path):
+def repo(opted_in):
     def git(*args: str) -> None:
-        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)
+        subprocess.run(["git", *args], cwd=opted_in, check=True, capture_output=True)
 
     git("init", "-q")
-    (tmp_path / "module.py").write_text("x = 1\n")
+    (opted_in / "module.py").write_text("x = 1\n")
     git("add", "-A")
     git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "init")
-    return tmp_path
+    return opted_in
 
 
 def stop(*, active: bool = False) -> str:
     return json.dumps({"stop_hook_active": active})
+
+
+def test_the_stop_hook_skips_a_repo_that_has_not_opted_in(repo, capsys):
+    calls: list[str] = []
+    (repo / "pyproject.toml").write_text('[project]\nname = "x"\n')
+    (repo / "new.py").write_text("# Add one.\nx = 1 + 1\n")
+
+    assert claude_hook(stop(), repo, ask=answering(verdict(FINDING), calls)) == 0
+    assert (calls, capsys.readouterr().err) == ([], "")
 
 
 def test_the_stop_hook_skips_turns_without_new_comments(repo):

@@ -35,24 +35,26 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "attrs" },
+    { name = "pyyaml" },
 ]
 
 [package.dev-dependencies]
 dev = [
     { name = "copier" },
     { name = "pytest" },
-    { name = "pyyaml" },
     { name = "ruff" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "attrs", specifier = ">=24.2" }]
+requires-dist = [
+    { name = "attrs", specifier = ">=24.2" },
+    { name = "pyyaml", specifier = ">=6" },
+]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "copier", specifier = ">=9.19" },
     { name = "pytest", specifier = ">=9.1" },
-    { name = "pyyaml", specifier = ">=6" },
     { name = "ruff", specifier = ">=0.17" },
 ]
 

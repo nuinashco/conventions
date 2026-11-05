@@ -1,0 +1,7 @@
+# Files nobody edits by hand (GUIDE TOOL-5): `make build` writes them from rules/ and agents/.
+# check-protected refuses agent edits to them and GitHub folds their diffs.
+GUIDE.md linguist-generated protected=generated
+COVERAGE.md linguist-generated protected=generated
+src/conventions_hooks/doc_rules.md linguist-generated protected=generated
+plugins/conventions/skills/** linguist-generated protected=generated
+plugins/conventions/agents/** linguist-generated protected=generated

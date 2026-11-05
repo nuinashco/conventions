@@ -4,9 +4,10 @@ version = "0.1.0"
 description = "pre-commit hooks that check the conventions in GUIDE.md"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = ["attrs>=24.2"]
+dependencies = ["attrs>=24.2", "pyyaml>=6"]
 
 [project.scripts]
+build-rules = "conventions_hooks.rules:main"
 check-comments = "conventions_hooks.comments:main"
 check-conventions = "conventions_hooks.conventions:main"
 review-comments = "conventions_hooks.review:main"
@@ -14,7 +15,7 @@ check-commit-msg = "conventions_hooks.commit_msg:main"
 check-protected = "conventions_hooks.protected:main"
 
 [dependency-groups]
-dev = ["copier>=9.19", "pytest>=9.1", "pyyaml>=6", "ruff>=0.17"]
+dev = ["copier>=9.19", "pytest>=9.1", "ruff>=0.17"]
 
 [build-system]
 requires = ["uv_build>=0.12,<0.14"]
