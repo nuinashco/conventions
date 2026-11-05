@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import re
-import shlex
 import tomllib
 from pathlib import Path
 
@@ -13,32 +12,38 @@ from conventions_hooks import rules
 REPO = Path(__file__).resolve().parents[1]
 PLUGIN = REPO / "plugins" / "conventions"
 RUN_CHECK = '"${CLAUDE_PLUGIN_ROOT}/bin/run-check"'
+HOOK = re.compile(rf"{re.escape(RUN_CHECK)} (\S+) --claude-hook")
 
 
 def test_generated_files_are_fresh():
     assert rules.stale(REPO) == [], "run `make build`"
 
 
+def hook_script(command: str) -> str:
+    """Return the console script that a plugin hook's `command` runs."""
+    match = HOOK.fullmatch(command)
+    assert match, f"{command!r} is not `{RUN_CHECK} <script> --claude-hook`"
+    return match[1]
+
+
 def test_plugin_hooks_run_console_scripts_of_this_package_on_their_events():
     scripts = tomllib.loads((REPO / "pyproject.toml").read_text())["project"]["scripts"]
     hooks = json.loads((PLUGIN / "hooks" / "hooks.json").read_text())["hooks"]
 
-    wired = {
-        (event, group.get("matcher", ""), shlex.split(hook["command"])[1])
+    wired = sorted(
+        (event, group.get("matcher", ""), hook_script(hook["command"]))
         for event, groups in hooks.items()
         for group in groups
         for hook in group["hooks"]
-        if hook["command"].startswith(f"{RUN_CHECK} ")
-        and hook["command"].endswith(" --claude-hook")
-    }
+    )
 
-    assert wired == {
-        ("PreToolUse", "Edit|Write|MultiEdit|NotebookEdit", "check-protected"),
+    assert wired == [
         ("PostToolUse", "Edit|Write|MultiEdit", "check-comments"),
         ("PostToolUse", "Edit|Write|MultiEdit", "check-conventions"),
+        ("PreToolUse", "Edit|Write|MultiEdit|NotebookEdit", "check-protected"),
         ("Stop", "", "review-comments"),
-    }
-    assert {command for *_, command in wired} <= set(scripts)
+    ]
+    assert {script for *_, script in wired} <= set(scripts)
 
 
 def test_marketplace_lists_both_plugins_with_sources_that_resolve():
