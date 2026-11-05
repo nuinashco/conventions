@@ -1,0 +1,25 @@
+{
+  "name": "nuinashco",
+  "owner": {
+    "name": "nuinashco"
+  },
+  "metadata": {
+    "description": "Claude Code plugins for repos that follow the nuinashco conventions."
+  },
+  "plugins": [
+    {
+      "name": "conventions",
+      "source": "./plugins/conventions",
+      "description": "The conventions as skills per area, a conventions reviewer and a descriptions judge, and hooks that run the conventions-hooks checks in repos that opt in."
+    },
+    {
+      "name": "nuikit",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/nuinashco/nuikit.git",
+        "path": "plugin"
+      },
+      "description": "Skills for projects built on the nuikit library: families, family items, config fields and entry points."
+    }
+  ]
+}

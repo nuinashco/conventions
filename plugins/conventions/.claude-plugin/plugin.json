@@ -1,0 +1,12 @@
+{
+  "name": "conventions",
+  "description": "The nuinashco conventions for Python and ML repos: a skill per rule area, the conventions-reviewer and descriptions-judge subagents, and hooks that run the conventions-hooks checks in repos that opt in with [tool.conventions].",
+  "author": {
+    "name": "Ivan Havlytskyi",
+    "url": "https://github.com/nuinashco"
+  },
+  "homepage": "https://github.com/nuinashco/conventions",
+  "repository": "https://github.com/nuinashco/conventions",
+  "license": "MIT",
+  "keywords": ["conventions", "python", "style", "review", "hooks"]
+}

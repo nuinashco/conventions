@@ -1,0 +1,49 @@
+{
+  "description": "Run the project's own conventions-hooks checks; bin/run-check does nothing in a repo without [tool.conventions].",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/run-check\" check-protected --claude-hook",
+            "timeout": 30,
+            "statusMessage": "Checking for protected files"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/run-check\" check-comments --claude-hook",
+            "timeout": 30,
+            "statusMessage": "Checking comment conventions"
+          },
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/run-check\" check-conventions --claude-hook",
+            "timeout": 30,
+            "statusMessage": "Checking code conventions"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/run-check\" review-comments --claude-hook",
+            "timeout": 300,
+            "statusMessage": "Reviewing new comments"
+          }
+        ]
+      }
+    ]
+  }
+}
