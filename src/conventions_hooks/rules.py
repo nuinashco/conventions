@@ -32,6 +32,8 @@ HEADING = re.compile(
     r"^### (?P<id>[A-Z]+-\d+) (?P<level>MUST|SHOULD|MAY)(?: \[(?P<tag>[a-z]+)\])?$",
     re.MULTILINE,
 )
+STRAY_HEADING = re.compile(r"#{1,3}(?!#)")
+FENCE = "```"
 FRONTMATTER = re.compile(r"\A---\n(?P<meta>.*?)\n---\n", re.DOTALL)
 CHECK = re.compile(r"\n\n\*Check:\* ")
 WHY = "\n\n*Why:* "
@@ -132,6 +134,10 @@ class Area:
         paths = meta.get("paths", [])
         if not isinstance(paths, list) or not all(isinstance(p, str) for p in paths):
             raise RulesError(f"{source}: paths must be a list of globs")
+        if stray := _stray_heading(body):
+            raise RulesError(
+                f"{source}: {stray!r} is not a `### <ID> <LEVEL>` rule heading"
+            )
         headings = list(HEADING.finditer(body))
         if not headings:
             raise RulesError(f"{source}: no `### <ID> <LEVEL>` rule headings")
@@ -466,6 +472,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 def _rule(heading: re.Match[str], section: str, *, source: str) -> Rule:
     content = f"\n\n{section.strip()}"
     checks = list(CHECK.finditer(content))
+    if len(checks) > 1:
+        raise RulesError(
+            f"{source}: {heading['id']} has more than one *Check:* paragraph; "
+            "is the heading after it malformed?"
+        )
     check = content[checks[-1].end() :] if checks else ""
     if not check or "\n\n" in check:
         raise RulesError(
@@ -488,6 +499,17 @@ def _rule(heading: re.Match[str], section: str, *, source: str) -> Rule:
         why=why,
         check=check,
     )
+
+
+def _stray_heading(body: str) -> str:
+    """Return the first heading outside a code fence that is not a rule heading."""
+    fenced = False
+    for line in body.splitlines():
+        if line.lstrip().startswith(FENCE):
+            fenced = not fenced
+        elif not fenced and STRAY_HEADING.match(line) and not HEADING.fullmatch(line):
+            return line
+    return ""
 
 
 def _frontmatter(text: str, *, source: str) -> tuple[dict[str, object], str]:

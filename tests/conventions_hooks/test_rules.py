@@ -160,6 +160,13 @@ def test_the_guide_keeps_areas_in_the_order_the_intro_gives(repo):
             "retired rule IDs reused",
         ),
         (ABC.replace("### ABC-2", "### ABC-1"), "used twice"),
+        (ABC.replace("### ABC-2 SHOULD", "### ABC-2 Should"), "not a `### <ID>"),
+        (ABC.replace("### ABC-2 SHOULD", "###ABC-2 SHOULD"), "not a `### <ID>"),
+        (ABC.replace("Nothing else.", "Nothing else.\n\n## Aside"), "not a `### <ID>"),
+        (
+            ABC.replace("*Why:* readers", "*Check:* lint.\n\n*Why:* readers"),
+            "more than one \\*Check:\\* paragraph",
+        ),
     ],
     ids=[
         "no-check",
@@ -168,6 +175,10 @@ def test_the_guide_keeps_areas_in_the_order_the_intro_gives(repo):
         "skill-name",
         "retired-id",
         "repeated-id",
+        "level-case",
+        "heading-without-space",
+        "other-heading",
+        "two-checks",
     ],
 )
 def test_a_rule_file_out_of_shape_is_an_error_naming_it(repo, text, problem):
