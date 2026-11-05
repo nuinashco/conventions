@@ -56,7 +56,7 @@ IDs are never reused.
 | [LAY-3](#lay-3-must) | MUST | `requires-python` starts at the latest stable CPython when the project is created (3.14 as of 2026-10). Pin lower only when a dependency or runtime forces it, and say which one in a comment next to the pin. |
 | [LAY-5](#lay-5-should) | SHOULD | Developer tools go in `[dependency-groups] dev`. Heavy optional features (GPU backends, trackers) are extras, and their imports are lazy (ARC-8). |
 | [LAY-6](#lay-6-must) | MUST | A Makefile runs every routine task and documents itself: `make help` lists the targets from their `##` comments. The standard targets are `setup lint format typecheck test check`, plus what the project needs, such as `test-integration` and `configs` in an rnd project or `build` in a library. |
-| [ARC-1](#arc-1-must) | MUST | Dependencies between a package's subpackages point one way, and the direction is declared as import-linter contracts in `pyproject.toml`. A `layers` contract orders the subpackages from the entry points down to the lowest layer (such as `paths`), and it is exhaustive, so a new subpackage fails `make check` until it is placed in a layer. |
+| [ARC-1](#arc-1-must-rnd) | MUST [rnd] | Dependencies between a package's subpackages point one way, and the direction is declared as import-linter contracts in `pyproject.toml`. A `layers` contract orders the subpackages from the entry points down to the lowest layer (such as `paths`), and it is exhaustive, so a new subpackage fails `make check` until it is placed in a layer. |
 | [ARC-2](#arc-2-must) | MUST | Every seam has a pure half that decides and an effectful half that acts: `plan.py` / `served.py`, `adapter.py` / `runner.py`, `compiler.py` / `harness.py`. |
 | [ARC-3](#arc-3-must) | MUST | Each entry point has one composition root, where objects are built and wired: the `cli/<command>.py` function, or the script itself. |
 | [ARC-4](#arc-4-must) | MUST | Code branches on declared capabilities, not identities. Use a `ClassVar[bool]` such as `requires_hardware`, or a method that returns `None` when a feature is absent; never `if item.kind == "api"` or `isinstance(x, ConcreteItem)`. |
@@ -176,7 +176,7 @@ standard targets are `setup lint format typecheck test check`, plus what the pro
 
 ## 2. Architecture (ARC)
 
-### ARC-1 MUST
+### ARC-1 MUST [rnd]
 
 Dependencies between a package's subpackages point one way, and the direction is declared as import-linter contracts
 in `pyproject.toml`. A `layers` contract orders the subpackages from the entry points down to the lowest layer (such as

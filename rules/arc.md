@@ -11,7 +11,7 @@ paths:
   - pyproject.toml
 ---
 
-### ARC-1 MUST
+### ARC-1 MUST [rnd]
 
 Dependencies between a package's subpackages point one way, and the direction is declared as import-linter contracts
 in `pyproject.toml`. A `layers` contract orders the subpackages from the entry points down to the lowest layer (such as
