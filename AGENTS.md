@@ -39,5 +39,5 @@ agents/                   sources of the plugin's subagents
 src/conventions_hooks/    the hooks, settings.py ([tool.conventions]), rules.py (build-rules)
 plugins/conventions/      the plugin: .claude-plugin/plugin.json, hooks/, bin/run-check, generated skills/ and agents/
 .claude-plugin/           marketplace.json of the nuinashco marketplace
-tests/                    hooks/: unit tests; test_invariants.py, test_run_check.py; judges/: labelled cases
+tests/                    conventions_hooks/: unit tests; test_invariants.py, test_run_check.py; judges/: cases
 ```
