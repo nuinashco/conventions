@@ -1,21 +1,33 @@
 [project]
 name = "conventions-hooks"
 version = "0.1.0"
-description = "pre-commit hooks that check the conventions in GUIDE.md"
+description = "Checks, rules and the Claude Code plugin of the nuinashco conventions"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Ivan Havlytskyi", email = "ivan.havlytskyi@gmail.com" }]
 requires-python = ">=3.12"
 dependencies = ["attrs>=24.2", "pyyaml>=6"]
+
+[project.urls]
+Repository = "https://github.com/nuinashco/conventions"
 
 [project.scripts]
 build-rules = "conventions_hooks.rules:main"
 check-comments = "conventions_hooks.comments:main"
-check-conventions = "conventions_hooks.conventions:main"
-review-comments = "conventions_hooks.review:main"
 check-commit-msg = "conventions_hooks.commit_msg:main"
+check-conventions = "conventions_hooks.conventions:main"
 check-protected = "conventions_hooks.protected:main"
+review-comments = "conventions_hooks.review:main"
 
 [dependency-groups]
-dev = ["pytest>=9.1", "ruff>=0.17"]
+dev = [
+    "pre-commit>=4.7",
+    "pyright[nodejs]>=1.1.414",
+    "pytest>=9.1",
+    "ruff>=0.17",
+    "types-pyyaml>=6",
+]
 
 [build-system]
 requires = ["uv_build>=0.12,<0.14"]
@@ -23,6 +35,10 @@ build-backend = "uv_build"
 
 [tool.uv.build-backend]
 module-name = "conventions_hooks"
+
+[tool.conventions]
+# The paths rules are for rnd projects (nuinashco/rnd-template); hooks have no paths.py.
+ignore = ["ENV-1", "ENV-3"]
 
 [tool.ruff]
 line-length = 88
@@ -45,12 +61,18 @@ ignore = [
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
 [tool.ruff.lint.isort]
 known-first-party = ["conventions_hooks"]
 required-imports = ["from __future__ import annotations"]  # Runs on Python 3.12.
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"unittest.mock".msg = "use an in-process fake instead (GUIDE: TST-3)"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -59,3 +81,10 @@ addopts = ["--import-mode=importlib", "--strict-markers", "-m", "not judges"]
 markers = [
     "judges: run the Claude judges on labelled cases (live `claude` calls, costs tokens)",
 ]
+
+[tool.pyright]
+include = ["src", "tests"]
+exclude = ["tests/judges/fixtures"]  # Judged projects whose dependencies are not installed.
+typeCheckingMode = "standard"
+venvPath = "."
+venv = ".venv"
