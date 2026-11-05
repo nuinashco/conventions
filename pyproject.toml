@@ -6,7 +6,7 @@ readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Ivan Havlytskyi", email = "ivan.havlytskyi@gmail.com" }]
-requires-python = ">=3.12"
+requires-python = ">=3.12"  # Projects on 3.12 and 3.13 install it as a dev tool (LAY-3).
 dependencies = ["attrs>=24.2"]
 
 [project.urls]

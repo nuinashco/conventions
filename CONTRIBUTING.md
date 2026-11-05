@@ -68,4 +68,7 @@ major version.
 
 ## Deviations
 
-None.
+- **TOOL-1**: `make check` runs no `lint-imports`, and pre-commit has no nbstripout. The package has no subpackages
+  for an import contract to order, and the repo has no notebooks.
+- **STY-2, LOG-4**: ruff's T201 is ignored for the whole package. Every module is a console script that reports on
+  stdout with `print`, and click or rich would become a dependency of every project that installs the hooks.
