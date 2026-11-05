@@ -1,0 +1,11 @@
+# Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
+_commit: v1.0.0
+_src_path: gh:nuinashco/rnd-template
+author_email: ivan.havlytskyi@gmail.com
+author_name: Ivan Havlytskyi
+description: demo
+example: false
+package: demo
+project_name: demo
+python: '3.14'
+use_wandb: false

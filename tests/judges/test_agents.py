@@ -1,20 +1,21 @@
-"""The template's subagents give the labelled verdicts on seeded projects."""
+"""The plugin's subagents give the labelled verdicts on fixture projects."""
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
+import sys
 from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 import yaml
-from copier import run_copy
-from jinja2 import Template
 
 REPO = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).parent
+AGENTS = REPO / "plugins" / "conventions" / "agents"
 LABELS = yaml.safe_load((HERE / "descriptions_labels.yaml").read_text())
 VERDICTS = {"KEEP", "TRIM", "DROP", "ADD", "FIX", "RENAME", "UNSURE"}
 # Planted by reviewer_report. A new module without tests, a CONTRIBUTING entry or an
@@ -82,8 +83,25 @@ def commit(project: Path, message: str) -> None:
     )
 
 
+def seed(project: Path, fixture: str) -> Path:
+    """Copy a fixture project and the plugin's subagents into `project`, committed."""
+    shutil.copytree(HERE / "fixtures" / fixture, project, dirs_exist_ok=True)
+    agents = project / ".claude" / "agents"
+    agents.mkdir(parents=True, exist_ok=True)
+    for agent in AGENTS.glob("*.md"):
+        shutil.copy(agent, agents / agent.name)
+    sh(project, "git", "init", "-q", "-b", "main")
+    commit(project, "init")
+    return project
+
+
 def ask_agent(project: Path, name: str, prompt: str) -> str:
-    """Return the report of the project's subagent `name`, run as `claude -p` would."""
+    """Return the report of the project's subagent `name`, run as `claude -p` would.
+
+    This test's own environment comes first on PATH, so the agent finds
+    `check-conventions` and `check-comments` without a project venv.
+    """
+    path = os.pathsep.join([str(Path(sys.executable).parent), os.environ["PATH"]])
     result = subprocess.run(
         [
             "claude",
@@ -100,6 +118,7 @@ def ask_agent(project: Path, name: str, prompt: str) -> str:
         ],
         input=prompt,
         cwd=project,
+        env={**os.environ, "PATH": path},
         capture_output=True,
         text=True,
         check=False,
@@ -120,17 +139,7 @@ def table_rows(report: str) -> Iterator[list[str]]:
 
 @pytest.fixture(scope="module")
 def descriptions_report(tmp_path_factory: pytest.TempPathFactory) -> str:
-    project = tmp_path_factory.mktemp("descriptions")
-    shutil.copytree(HERE / "fixtures" / "descriptions", project, dirs_exist_ok=True)
-    agents = project / ".claude" / "agents"
-    agents.mkdir(parents=True)
-    source = (REPO / "shared" / "files" / "descriptions-judge.md.jinja").read_text()
-    (agents / "descriptions-judge.md").write_text(
-        Template(source).render(project_name="demo")
-    )
-    shutil.copy(REPO / "GUIDE.md", project / "CONVENTIONS.md")
-    sh(project, "git", "init", "-q", "-b", "main")
-    commit(project, "init")
+    project = seed(tmp_path_factory.mktemp("descriptions"), "descriptions")
     return ask_agent(project, "descriptions-judge", "Scope: the whole repository.")
 
 
@@ -156,26 +165,17 @@ def test_the_descriptions_judge_gives_the_labelled_verdict(label, descriptions_r
 
 @pytest.fixture(scope="module")
 def reviewer_report(tmp_path_factory: pytest.TempPathFactory) -> str:
-    # A plain copy: copier renders a git template from its last commit.
-    template = tmp_path_factory.mktemp("template")
-    ignore = shutil.ignore_patterns(".git", ".venv", "__pycache__", ".pytest_cache")
-    shutil.copytree(REPO, template, ignore=ignore, dirs_exist_ok=True)
-    project = tmp_path_factory.mktemp("reviewed") / "demo"
-    run_copy(
-        str(template),
-        project,
-        data={"profile": "rnd", "project_name": "demo"},
-        defaults=True,
-        quiet=True,
-    )
-    sh(project, "git", "init", "-q", "-b", "main")
-    commit(project, "init")
+    project = seed(tmp_path_factory.mktemp("reviewed") / "demo", "reviewer")
     sh(project, "git", "switch", "-qc", "feat/worker")
     (project / "src" / "demo" / "worker.py").write_text(WORKER)
     with (project / "configs" / "run.yaml").open("a") as f:
         f.write("\nseed: 7  # The seed.\n")
     commit(project, "feat: add queue worker")
-    return ask_agent(project, "conventions-reviewer", "Review this branch.")
+    prompt = (
+        "Review this branch. This checkout has no virtual environment and no network: "
+        "skip `make check`."
+    )
+    return ask_agent(project, "conventions-reviewer", prompt)
 
 
 def flagged(report: str) -> set[str]:

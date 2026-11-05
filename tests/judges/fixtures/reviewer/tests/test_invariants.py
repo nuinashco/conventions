@@ -1,0 +1,44 @@
+"""Repository-wide invariants: configs compose and are fresh, import layers hold."""
+
+from typing import Any, cast
+
+import pytest
+from hydra import compose, initialize_config_dir
+from importlinter.cli import lint_imports
+from omegaconf import OmegaConf
+
+from nuikit import configgen, registry
+
+from demo import paths
+from demo.config import GENERATED
+
+MIRRORS = [f for f in GENERATED if f.path.startswith("defaults/")]
+
+
+@pytest.mark.parametrize("mirror", MIRRORS, ids=lambda f: f.path)
+def test_entry_config_composes_its_mirror_and_validates(mirror):
+    entry = mirror.path.removeprefix("defaults/").removesuffix(".yaml")
+    with initialize_config_dir(str(paths.CONFIGS_DIR)):
+        cfg = compose(config_name=entry)
+
+    mirror.schema.from_hydra(cfg)
+    assert set(OmegaConf.load(paths.CONFIGS_DIR / mirror.path)) <= set(cfg)
+
+
+def test_generated_configs_are_fresh():
+    files = [*GENERATED, *registry.config_files("demo")]
+
+    assert configgen.stale(files, paths.CONFIGS_DIR) == [], "run `make configs`"
+
+
+def test_every_kind_without_required_fields_builds_from_its_generated_yaml():
+    for factory in registry.families("demo"):
+        for kind in factory.list_registered():
+            yaml = OmegaConf.load(paths.CONFIGS_DIR / registry.kind_path(factory, kind))
+            if not OmegaConf.missing_keys(yaml):
+                data = OmegaConf.to_container(yaml, resolve=True)
+                factory.from_config(cast("dict[str, Any]", data))
+
+
+def test_import_layers_hold():
+    assert lint_imports() == 0
