@@ -1,0 +1,35 @@
+---
+area: LOG
+title: Logging
+skill: logging
+description: >-
+  Use when adding a log event, binding log context, or printing output meant for the user.
+paths:
+  - src/**/*.py
+  - scripts/**/*.py
+---
+
+LOG-1 and LOG-3, structlog over the standard library and its renderer, are rules of
+[nuikit](https://github.com/nuinashco/nuikit/blob/main/docs/guide.md), whose `configure_logging` sets both up.
+
+### LOG-2 MUST
+
+Events are stable snake_case ids with key-value context: `log.info("proxy_started", port=8000)`. Never build an event
+with an f-string or `%`.
+
+*Why:* events stay queryable in JSON logs and in BigQuery.
+
+*Check:* `check-conventions` flags formatted events and events that are not snake_case.
+
+### LOG-4 MUST
+
+Logs record events. Output meant for the user (tables, results) goes to stdout through `click.echo` or rich, never
+through the logger. Library code never calls `print`.
+
+*Check:* ruff T201, allowed only in `cli/` and `scripts/`.
+
+### LOG-5 SHOULD
+
+Bind run context once with `structlog.contextvars.bind_contextvars(run=...)` instead of repeating it in every event.
+
+*Check:* review.
