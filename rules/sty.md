@@ -45,7 +45,7 @@ of a call are positional.
 
 ### STY-5 MUST
 
-Modules, functions, classes, constants and private names each have their form:
+Naming:
 
 - Modules are short nouns (`harness`, `soundness`). Functions are verbs (`select`, `bind`).
 - Classes are nouns, and family items carry the family suffix (`LiteLLMEndpoint`, `GoldPatches`).
