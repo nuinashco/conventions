@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
 
 import pytest
@@ -255,3 +256,17 @@ def test_a_missing_rules_directory_is_reported_without_a_traceback(
 
     assert main(["--check"]) == 2
     assert "run build-rules at the repo root" in capsys.readouterr().err
+
+
+def test_build_rules_without_pyyaml_says_where_to_run_it(repo, monkeypatch, capsys):
+    find_spec = importlib.util.find_spec
+    monkeypatch.setattr(
+        importlib.util,
+        "find_spec",
+        lambda name: None if name == "yaml" else find_spec(name),
+    )
+    monkeypatch.chdir(repo)
+
+    assert main([]) == 2
+    assert "pyyaml is not installed" in capsys.readouterr().err
+    assert not (repo / "GUIDE.md").exists()

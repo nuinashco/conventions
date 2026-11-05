@@ -6,7 +6,8 @@ Usage:
 
     build-rules --check    # change nothing; exit 1 naming the stale files
 
-Run it at the root of nuinashco/conventions. It reads `rules/`, one file per area plus
+Run it at the root of nuinashco/conventions, whose dev group brings pyyaml; the hooks
+that projects install never need it. It reads `rules/`, one file per area plus
 `_intro.md`, `_decisions.md` and `_sources.md`, and the subagent sources in `agents/`.
 It writes GUIDE.md, COVERAGE.md, the comment rules that `review-comments` ships with,
 and the skills and subagents of the plugin in `plugins/conventions/`.
@@ -14,12 +15,12 @@ and the skills and subagents of the plugin in `plugins/conventions/`.
 
 from __future__ import annotations
 
+import importlib.util
 import re
 import sys
 from collections.abc import Iterator, Sequence
 from pathlib import Path
 
-import yaml
 from attrs import frozen
 
 RULES_DIR = Path("rules")
@@ -425,6 +426,8 @@ def agent_page(text: str, guide: Guide, *, source: str) -> str:
     `{{checklist}}` becomes the review-only rules by area, then the rules a tool checks
     only in part; `{{rule:DOC-7}}` becomes that rule in full.
     """
+    import yaml
+
     match = FRONTMATTER.match(text)
     if not match or "name" not in (yaml.safe_load(match["meta"]) or {}):
         raise RulesError(f"{source}: starts without frontmatter naming the agent")
@@ -468,6 +471,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args not in ([], ["--check"]):
         print(__doc__)
         return 0 if args in (["-h"], ["--help"]) else 2
+    if importlib.util.find_spec("yaml") is None:
+        print(
+            "error: pyyaml is not installed; run `uv run build-rules` at the root of "
+            "nuinashco/conventions, whose dev group has it",
+            file=sys.stderr,
+        )
+        return 2
     root = Path.cwd()
     try:
         if args == ["--check"]:
@@ -530,6 +540,8 @@ def _stray_heading(body: str) -> str:
 
 
 def _frontmatter(text: str, *, source: str) -> tuple[dict[str, object], str]:
+    import yaml
+
     match = FRONTMATTER.match(text)
     if not match:
         raise RulesError(f"{source}: starts without `---` frontmatter")
@@ -540,6 +552,8 @@ def _frontmatter(text: str, *, source: str) -> tuple[dict[str, object], str]:
 
 
 def _dump_frontmatter(meta: dict[str, object]) -> str:
+    import yaml
+
     dumped = yaml.safe_dump(meta, sort_keys=False, allow_unicode=True, width=10_000)
     return f"---\n{dumped}---\n\n"
 

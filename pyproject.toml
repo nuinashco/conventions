@@ -7,7 +7,7 @@ license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Ivan Havlytskyi", email = "ivan.havlytskyi@gmail.com" }]
 requires-python = ">=3.12"
-dependencies = ["attrs>=24.2", "pyyaml>=6"]
+dependencies = ["attrs>=24.2"]
 
 [project.urls]
 Repository = "https://github.com/nuinashco/conventions"
@@ -25,6 +25,7 @@ dev = [
     "pre-commit>=4.7",
     "pyright[nodejs]>=1.1.414",
     "pytest>=9.1",
+    "pyyaml>=6",
     "ruff>=0.17",
     "types-pyyaml>=6",
 ]
