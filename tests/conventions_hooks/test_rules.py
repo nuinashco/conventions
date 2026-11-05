@@ -222,7 +222,7 @@ def test_an_agent_gets_the_checklist_and_any_rule_it_quotes(repo):
     page = agent_page(REVIEWER, guide, source="agents/conventions-reviewer.md")
 
     assert "  - **ABC-1** MUST: Letters come in order. Nothing else." in page
-    assert "- **ABC-2** SHOULD [rnd]: Vowels are optional" in page
+    assert "### ABC-2 SHOULD [rnd]\n\nVowels are optional, e.g. in names." in page
     assert "### DOC-1 MUST\n\nEvery module has a docstring." in page
     with pytest.raises(RulesError, match="unknown placeholder 'name'"):
         agent_page("---\nname: x\n---\n{{name}}\n", guide, source="agents/x.md")

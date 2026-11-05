@@ -13,9 +13,11 @@ system temp directory.
 ## Sources of truth
 
 - The conventions of nuinashco/conventions. Their rules have IDs (`STY-4`), levels (MUST, SHOULD and MAY in the RFC
-  2119 sense), a *Why* and a *Check*. The checklist below holds the rules only a reviewer checks, one line each. Their
-  full text is in the `conventions` plugin's skills, one per area, when you can load them, and in
-  https://github.com/nuinashco/conventions/blob/main/GUIDE.md; read a rule in full when its line leaves you unsure.
+  2119 sense), a *Why* and a *Check*. A rule tagged `[rnd]` applies only to research and development projects, such as
+  those made from nuinashco/rnd-template (they have a `.copier-answers.yml`). The checklist below lists the rules only
+  a reviewer checks, one line each, and quotes in full the rules that tools check only in part, then DOC-4 and DOC-7.
+  The full text of a one-line rule is in the `conventions` plugin's skill for its area; load it when you can and the
+  line leaves you unsure, and otherwise say UNSURE rather than guess.
 - The repo's own rules: `AGENTS.md`, and the files in `.claude/rules/`, whose `paths:` frontmatter says which files
   each one covers. A repo that depends on `nuikit` also follows nuikit's rules (FAM, CFG, ERR-1, ERR-2, LOG-1, LOG-3,
   RUN-1, RUN-2), which the `nuikit` plugin's skills carry.
@@ -45,9 +47,9 @@ finding (compare with `git log`).
 
    A finding of `check-conventions` or `check-comments` also gets a VIOLATES row in the table, under its rule ID.
 2. Judge, on the files in scope, the rules of the checklist below and the repo's own rules. Judge DOC-4 and DOC-7 too,
-   on every comment, docstring, `Field` description and YAML comment in scope: their judges (`review-comments`, the
-   `descriptions-judge` subagent) run only when someone asks. Process rules apply on a branch only: GIT-1 and GIT-2 on
-   `git log <default>..HEAD`, and RDOC-5 (docs change with the code).
+   quoted after the checklist, on every comment, docstring, `Field` description and YAML comment in scope: their judges
+   (`review-comments`, the `descriptions-judge` subagent) run only when someone asks. Process rules apply on a branch
+   only: GIT-1 and GIT-2 on `git log <default>..HEAD`, and RDOC-5 (docs change with the code).
 3. Back every finding with `path:line` and the smallest excerpt that proves it. A finding you cannot cite is not
    a finding: leave it out.
 
@@ -88,21 +90,222 @@ Rules whose only check is review, by area:
 
 Tools check these only in part; judge what they leave:
 
-- **LAY-3** MUST: `requires-python` starts at the latest stable CPython when the project is created (3.14 as of 2026-10). Pin lower only when a dependency or runtime forces it, and say which one in a comment next to the pin. *Check:* template default; review.
-- **ARC-4** MUST: Code branches on declared capabilities, not identities. Use a `ClassVar[bool]` such as `requires_hardware`, or a method that returns `None` when a feature is absent; never `if item.kind == "api"` or `isinstance(x, ConcreteItem)`. *Check:* `check-conventions` flags comparisons with a `kind` attribute; review for `isinstance`.
-- **ARC-8** MUST: Heavy or optional third-party modules (torch, vllm, litellm, cloud SDKs, wandb) are imported inside the function that needs them. Annotations that name them use `if TYPE_CHECKING:` imports. *Check:* `check-conventions` flags a module-level import of a known heavy module under `src/`; review for the others; ruff PLC0415 is off on purpose.
-- **TYP-4** MUST: pydantic is only for data parsed from outside: configs, HTTP bodies, files. Every other class is an attrs class: `@frozen` for values, `@define` for stateful objects, family bases and items included. *Check:* `check-conventions` flags a hand-written `__init__` and dataclasses; review for pydantic inside the boundary.
-- **STY-4** MUST: Every optional parameter and every boolean parameter is keyword-only (after `*`). Only the one or two obvious subjects of a call are positional. *Check:* ruff FBT for booleans; `check-conventions` flags a positional parameter with a default; review for the rest.
-- **STY-5** MUST: Naming: Modules are short nouns (`harness`, `soundness`). Functions are verbs (`select`, `bind`); Classes are nouns, and family items carry the family suffix (`LiteLLMEndpoint`, `GoldPatches`); Schemas end in `Config`. Acronyms stay capitalised (`HDBSCANClustering`, `BQ2GCSCollector`); Constants are UPPER_SNAKE right after the imports; Anything not used outside its module starts with `_`. *Check:* ruff N; review.
-- **DOC-2** MUST: Docstrings are one line where possible: a function's is imperative ("Return the run directory for `name`."); `D401` checks this; a class's is a noun phrase saying what an instance represents ("Spacing between requests to one upstream."); every public class has one (`D101`); a function or method gets one when its name and signature don't already say it all. *Check:* ruff D101, D401; `check-comments` flags a class docstring that opens with an order; review.
-- **DOC-6** SHOULD: A `TODO` says why it isn't done now. Code generated without review is marked as such until reviewed. *Check:* ruff TD004 to TD007 (a `TODO:` with a description); review for the why.
-- **ERR-3** MUST: A message is lowercase with no trailing period. It states what is wrong, then `; ` and the remedy, naming the command or config key. *Check:* `check-conventions` flags a capitalised first word and a trailing period; review for the remedy.
-- **TST-1** MUST: Tests are pytest functions (no test classes) named as sentences stating a behaviour: `test_sound_selection_never_falls_back_to_every_task`. *Check:* `check-conventions` flags test classes; review for the names.
-- **TST-4** MUST: The layout mirrors `src/` module by module: `tests/<pkg>/<sub>/test_<module>.py` for every module with branching logic. Exempt modules are those with nothing a unit test could distinguish: schemas whose rules pydantic enforces, error classes, re-exporting `__init__` files, and thin wrappers that only start an external process (a `docker build`). *Check:* `--strict-markers`; review.
-- **RDOC-4** MUST: AGENTS.md is the entry point for coding agents, at most 60 lines: commands, layout, what this repo asks beyond the conventions, and pointers to CONTRIBUTING. *Check:* template; review.
-- **GIT-3** MUST: Branches are short-lived and named `<type>/<slug>` (`feat/`, `fix/`, `docs/`, `refactor/`, plus `exp/` for experiments). Merges are squash-merges, and the PR title is the conventional commit that lands on `main`. *Check:* `make github`; review.
-- **GIT-6** MUST: A PR description follows `.github/pull_request_template.md`: a summary of why, the changes made with the alternatives rejected, and the checklist; results, how to reproduce them and notes for the reviewer when they apply. *Check:* template; review.
-- **TOOL-6** SHOULD: A check that asks an LLM, such as a `claude -p` hook or a review subagent, is a judge and is built as one: narrow criteria with named verdicts, an "unsure" outcome instead of a guess, a cited line for every finding, a fresh context holding only the artefact and the rules, and structured output wherever code reads the verdict. *Check:* review; the plugin's judges are measured by `make test-judges` in nuinashco/conventions.
+### LAY-3 MUST
+
+`requires-python` starts at the latest stable CPython when the project is created (3.14 as of 2026-10). Pin lower only
+when a dependency or runtime forces it, and say which one in a comment next to the pin. A pre-release dependency is
+acceptable when it is the first to support that Python, with the reason next to it: nuikit needs
+`hydra-core>=1.4.0rc1` because 1.3.x crashes on 3.14.
+
+*Check:* template default; review.
+
+### ARC-4 MUST
+
+Code branches on declared capabilities, not identities. Use a `ClassVar[bool]` such as `requires_hardware`, or a method
+that returns `None` when a feature is absent; never `if item.kind == "api"` or `isinstance(x, ConcreteItem)`.
+
+*Why:* adding an item never edits its callers.
+
+*Check:* `check-conventions` flags comparisons with a `kind` attribute; review for `isinstance`.
+
+### ARC-8 MUST
+
+Heavy or optional third-party modules (torch, vllm, litellm, cloud SDKs, wandb) are imported inside the function that
+needs them. Annotations that name them use `if TYPE_CHECKING:` imports.
+
+*Why:* CLI start-up time, test runtime, and optional extras.
+
+*Check:* `check-conventions` flags a module-level import of a known heavy module under `src/`; review for the others;
+ruff PLC0415 is off on purpose.
+
+### TYP-4 MUST
+
+pydantic is only for data parsed from outside: configs, HTTP bodies, files. Every other class is an attrs class:
+`@frozen` for values, `@define` for stateful objects, family bases and items included. Exceptions, factories (classes
+that are never instantiated) and subclasses of third-party classes stay plain classes. Classes have no hand-written
+`__init__`. Construction logic goes into a classmethod constructor, or into `__attrs_post_init__` when it only derives
+private state.
+
+```python
+# Bad: construction does work in __init__.
+class RateLimiter:
+    def __init__(self, rpm: float | None) -> None:
+        self.interval_s = 60.0 / rpm if rpm else 0.0
+        self._lock = asyncio.Lock()
+
+
+# Good: fields declare state; a named constructor derives it.
+@define
+class RateLimiter:
+    """Spacing between requests to one upstream."""
+
+    interval_s: float
+    _lock: asyncio.Lock = field(factory=asyncio.Lock, init=False)
+
+    @classmethod
+    def per_minute(cls, rpm: float | None) -> RateLimiter:
+        return cls(60.0 / rpm if rpm else 0.0)
+```
+
+*Why:* validation libraries belong at the boundary; inside, a class should only hold already-valid data
+([attrs](https://www.attrs.org/en/stable/why.html), [Hynek](https://speakerdeck.com/hynek/design-pressure)).
+
+*Check:* `check-conventions` flags a hand-written `__init__` and dataclasses; review for pydantic inside the boundary.
+
+### STY-4 MUST
+
+Every optional parameter and every boolean parameter is keyword-only (after `*`). Only the one or two obvious subjects
+of a call are positional.
+
+*Check:* ruff FBT for booleans; `check-conventions` flags a positional parameter with a default; review for the rest.
+
+### STY-5 MUST
+
+Naming:
+
+- Modules are short nouns (`harness`, `soundness`). Functions are verbs (`select`, `bind`).
+- Classes are nouns, and family items carry the family suffix (`LiteLLMEndpoint`, `GoldPatches`).
+- Schemas end in `Config`. Acronyms stay capitalised (`HDBSCANClustering`, `BQ2GCSCollector`).
+- Constants are UPPER_SNAKE right after the imports.
+- Anything not used outside its module starts with `_`.
+
+*Check:* ruff N; review.
+
+### DOC-2 MUST
+
+Docstrings are one line where possible:
+
+- a function's is imperative ("Return the run directory for `name`."); `D401` checks this;
+- a class's is a noun phrase saying what an instance represents ("Spacing between requests to one upstream.");
+- every public class has one (`D101`);
+- a function or method gets one when its name and signature don't already say it all.
+
+*Check:* ruff D101, D401; `check-comments` flags a class docstring that opens with an order; review.
+
+### DOC-6 SHOULD
+
+A `TODO` says why it isn't done now. Code generated without review is marked as such until reviewed.
+
+*Check:* ruff TD004 to TD007 (a `TODO:` with a description); review for the why.
+
+### ERR-3 MUST
+
+A message is lowercase with no trailing period. It states what is wrong, then `; ` and the remedy, naming the command or
+config key. An unknown name lists the valid ones.
+
+```text
+error: no soundness data; run `g4swe-grade controls` first
+error: unknown endpoint kind 'gemni'; registered: gemini, litellm, passthrough
+```
+
+*Check:* `check-conventions` flags a capitalised first word and a trailing period; review for the remedy.
+
+### TST-1 MUST
+
+Tests are pytest functions (no test classes) named as sentences stating a behaviour:
+`test_sound_selection_never_falls_back_to_every_task`.
+
+*Check:* `check-conventions` flags test classes; review for the names.
+
+### TST-4 MUST
+
+The layout mirrors `src/` module by module: `tests/<pkg>/<sub>/test_<module>.py` for every module with branching logic.
+Exempt modules are those with nothing a unit test could distinguish: schemas whose rules pydantic enforces, error
+classes, re-exporting `__init__` files, and thin wrappers that only start an external process (a `docker build`). They
+are covered by the invariants or the integration test. Cross-cutting invariants live in `tests/test_invariants.py`.
+End-to-end tests live in `tests/integration/`, are marked `integration` and are deselected by default
+(`-m integration` runs them).
+
+*Check:* `--strict-markers`; review.
+
+### RDOC-4 MUST
+
+AGENTS.md is the entry point for coding agents, at most 60 lines: commands, layout, what this repo asks beyond the
+conventions, and pointers to CONTRIBUTING. CLAUDE.md is `@AGENTS.md`, plus any Claude-only extras. The conventions
+reach Claude through the `conventions` plugin of the `nuinashco` marketplace (its skills, its `conventions-reviewer`
+and `descriptions-judge` subagents and its hooks, TOOL-4), and a project's own path-scoped rules live in
+`.claude/rules/`. Agent files never copy this guide, and leave to linters what linters check.
+
+*Why:* [agents.md](https://agents.md/); [Claude Code memory](https://code.claude.com/docs/en/memory) recommends short,
+specific files, and a skill or a path-scoped rule loads only when its files are in play.
+
+*Check:* template; review.
+
+### GIT-3 MUST
+
+Branches are short-lived and named `<type>/<slug>` (`feat/`, `fix/`, `docs/`, `refactor/`, plus `exp/` for
+experiments). Merges are squash-merges, and the PR title is the conventional commit that lands on `main`. `make github`
+sets the repo up once: squash-merge only, the PR title as the commit title with an empty body (GIT-2), merged branches
+deleted. GitHub appends ` (#N)` to the title, so PR titles stay within 65 characters.
+
+*Check:* `make github`; review.
+
+### GIT-6 MUST
+
+A PR description follows `.github/pull_request_template.md`: a summary of why, the changes made with the alternatives
+rejected, and the checklist; results, how to reproduce them and notes for the reviewer when they apply.
+
+*Why:* commits are one line, so the PR holds the reasoning, and the squash commit links to it by number.
+
+*Check:* template; review.
+
+### TOOL-6 SHOULD
+
+A check that asks an LLM, such as a `claude -p` hook or a review subagent, is a judge and is built as one: narrow
+criteria with named verdicts, an "unsure" outcome instead of a guess, a cited line for every finding, a fresh context
+holding only the artefact and the rules, and structured output wherever code reads the verdict. It has a labelled set
+of passing and failing cases, rerun whenever its prompt or model changes; every error it makes becomes a case. Anything
+a script can decide stays a script.
+
+*Why:* a judge's leniency or harshness shows only against labelled cases, and a narrow, cited criterion is easier to
+align than a broad rubric ([Husain](https://hamel.dev/blog/posts/llm-judge/),
+[Anthropic](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents)).
+
+*Check:* review; the plugin's judges are measured by `make test-judges` in nuinashco/conventions.
+
+## Comments and descriptions
+
+### DOC-4 MUST
+
+A comment explains what the code can't say:
+
+- an external constraint;
+- a non-obvious reason;
+- a unit;
+- where a value came from (cite the source);
+- what `None` means.
+
+Never restate the code, never use section banners, and never leave commented-out code.
+
+```python
+# Bad: restates the code.
+# Perform clustering
+labels = model.fit_predict(embeddings)
+
+# Good: says what the code can't.
+# Wildcard is mandatory: BigQuery extract rejects single-file URIs for tables over 1 GB.
+uri = f"{workdir_uri}/part-*.parquet"
+```
+
+*Why:* "Comments that contradict the code are worse than no comments" ([PEP 8](https://peps.python.org/pep-0008/)).
+Information that code can't express still needs writing down
+([Ousterhout](https://github.com/johnousterhout/aposd-vs-clean-code)).
+
+*Check:* ruff ERA001; `check-comments` flags banners; `review-comments` asks Claude whether new comments say anything
+the code doesn't (the plugin's `Stop` hook, and on demand with `pre-commit run review-comments --hook-stage manual`).
+
+### DOC-7 MUST
+
+A YAML comment, and so a `Field` description that a mirror turns into one
+([CFG-3](https://github.com/nuinashco/nuikit/blob/main/docs/guide.md#cfg-3-must)), lists a setting's options
+(`auto|console|json`) or says what its key and value can't: a unit the name lacks, what `null` or an edge value means,
+a side effect, a source. It never repeats the key: `wandb_project: x  # W&B project` says nothing.
+
+*Why:* when every line has a comment, readers skip them all and the few that matter go unread; DOC-4, applied to
+configs.
+
+*Check:* `review-comments` on new descriptions; the `descriptions-judge` subagent, which checks each one against the
+code.
 
 ## Report
 

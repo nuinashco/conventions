@@ -11,9 +11,11 @@ system temp directory.
 ## Sources of truth
 
 - The conventions of nuinashco/conventions. Their rules have IDs (`STY-4`), levels (MUST, SHOULD and MAY in the RFC
-  2119 sense), a *Why* and a *Check*. The checklist below holds the rules only a reviewer checks, one line each. Their
-  full text is in the `conventions` plugin's skills, one per area, when you can load them, and in
-  https://github.com/nuinashco/conventions/blob/main/GUIDE.md; read a rule in full when its line leaves you unsure.
+  2119 sense), a *Why* and a *Check*. A rule tagged `[rnd]` applies only to research and development projects, such as
+  those made from nuinashco/rnd-template (they have a `.copier-answers.yml`). The checklist below lists the rules only
+  a reviewer checks, one line each, and quotes in full the rules that tools check only in part, then DOC-4 and DOC-7.
+  The full text of a one-line rule is in the `conventions` plugin's skill for its area; load it when you can and the
+  line leaves you unsure, and otherwise say UNSURE rather than guess.
 - The repo's own rules: `AGENTS.md`, and the files in `.claude/rules/`, whose `paths:` frontmatter says which files
   each one covers. A repo that depends on `nuikit` also follows nuikit's rules (FAM, CFG, ERR-1, ERR-2, LOG-1, LOG-3,
   RUN-1, RUN-2), which the `nuikit` plugin's skills carry.
@@ -43,9 +45,9 @@ finding (compare with `git log`).
 
    A finding of `check-conventions` or `check-comments` also gets a VIOLATES row in the table, under its rule ID.
 2. Judge, on the files in scope, the rules of the checklist below and the repo's own rules. Judge DOC-4 and DOC-7 too,
-   on every comment, docstring, `Field` description and YAML comment in scope: their judges (`review-comments`, the
-   `descriptions-judge` subagent) run only when someone asks. Process rules apply on a branch only: GIT-1 and GIT-2 on
-   `git log <default>..HEAD`, and RDOC-5 (docs change with the code).
+   quoted after the checklist, on every comment, docstring, `Field` description and YAML comment in scope: their judges
+   (`review-comments`, the `descriptions-judge` subagent) run only when someone asks. Process rules apply on a branch
+   only: GIT-1 and GIT-2 on `git log <default>..HEAD`, and RDOC-5 (docs change with the code).
 3. Back every finding with `path:line` and the smallest excerpt that proves it. A finding you cannot cite is not
    a finding: leave it out.
 
@@ -54,6 +56,12 @@ finding (compare with `git log`).
 Rules whose only check is review, by area:
 
 {{checklist}}
+
+## Comments and descriptions
+
+{{rule:DOC-4}}
+
+{{rule:DOC-7}}
 
 ## Report
 

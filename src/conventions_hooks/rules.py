@@ -445,19 +445,21 @@ def agent_page(text: str, guide: Guide, *, source: str) -> str:
 
 
 def checklist(guide: Guide) -> str:
-    """Return the review-only rules by area, then the rules tools check in part."""
+    """Return the review-only rules by area in brief, then the partly checked ones.
+
+    Rules of the second kind come in full: what a tool leaves to judgement is often
+    beyond what a summary holds.
+    """
     lines = []
     for area in guide.areas:
         if judged := [rule for rule in area.rules if rule.review_only]:
             lines.append(f"- {area.name}:")
             lines += [f"  - **{r.id}** {r.label}: {r.summary}" for r in judged]
+    parts = ["\n".join(lines)]
     if partly := [rule for rule in guide.rules() if rule.review_in_part]:
-        lines += ["", "Tools check these only in part; judge what they leave:", ""]
-        lines += [
-            f"- **{r.id}** {r.label}: {r.summary} *Check:* {_line(r.check)}"
-            for r in partly
-        ]
-    return "\n".join(lines)
+        parts.append("Tools check these only in part; judge what they leave:")
+        parts += [rule.text for rule in partly]
+    return "\n\n".join(part for part in parts if part)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
