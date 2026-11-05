@@ -58,10 +58,10 @@ def test_broken_rules_are_reported_where_they_happen(source, expected):
     assert rules(source) == expected
 
 
-def test_the_claude_hook_reports_an_edited_python_file(tmp_path, capsys):
-    module = tmp_path / "module.py"
+def test_the_claude_hook_reports_an_edited_python_file(opted_in, capsys):
+    module = opted_in / "module.py"
     module.write_text("x = 1  # seconds.\n")
-    notes = tmp_path / "notes.md"
+    notes = opted_in / "notes.md"
     notes.write_text("# notes\n")
 
     def payload(path: object) -> str:

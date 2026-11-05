@@ -128,11 +128,11 @@ def test_eager_heavy_imports_are_allowed_outside_the_package():
     assert rules("import torch\n", "scripts/train_once.py") == []
 
 
-def test_the_claude_hook_reports_an_edited_python_file(tmp_path, capsys):
-    module = tmp_path / "src" / "demo" / "runner.py"
+def test_the_claude_hook_reports_an_edited_python_file(opted_in, capsys):
+    module = opted_in / "src" / "demo" / "runner.py"
     module.parent.mkdir(parents=True)
     module.write_text("if item.kind == 'api':\n    pass\n")
-    notes = tmp_path / "notes.md"
+    notes = opted_in / "notes.md"
     notes.write_text("kind == api\n")
 
     def payload(path: object) -> str:

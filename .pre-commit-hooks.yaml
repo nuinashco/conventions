@@ -1,7 +1,13 @@
-# Hooks this repo provides; projects pin it by commit in their .pre-commit-config.yaml.
+# Hooks this repo provides to repos that use pre-commit without uv; uv projects run the same
+# commands as local `uv run` hooks, pinned by their uv.lock (GUIDE TOOL-2, TOOL-4).
 - id: check-comments
   name: comments are sentences, no banners, class docstrings are noun phrases (GUIDE DOC)
   entry: check-comments
+  language: python
+  types: [python]
+- id: check-conventions
+  name: code rules an AST can decide (GUIDE LAY-2, ARC-4, ARC-8, TYP-4, STY-4, ERR-3, LOG-2, TST-1)
+  entry: check-conventions
   language: python
   types: [python]
 - id: check-commit-msg

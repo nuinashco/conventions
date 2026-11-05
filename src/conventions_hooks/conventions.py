@@ -7,7 +7,8 @@ Usage:
     check-conventions --claude-hook    # Claude Code PostToolUse hook: reads its JSON
 
 In hook mode the edited file's findings go to stderr with exit code 2, which Claude
-Code hands back to Claude.
+Code hands back to Claude; a repo without a `[tool.conventions]` table is skipped.
+Rules listed in that table's `ignore` are skipped in both modes.
 
 Each check stands in for a rule whose *Check* used to be review alone: no grab-bag
 modules (LAY-2), heavy imports kept lazy (ARC-8), no branching on `kind` (ARC-4),
@@ -22,7 +23,6 @@ rule with its reason, on the flagged line or alone on the line above it:
 from __future__ import annotations
 
 import ast
-import json
 import re
 import sys
 from collections.abc import Iterator, Sequence
@@ -30,7 +30,7 @@ from pathlib import Path, PurePath
 
 from attrs import frozen
 
-from conventions_hooks.comments import Finding
+from conventions_hooks.findings import Finding, check_edit, check_paths
 
 GRAB_BAGS = frozenset({"utils", "util", "common", "core", "helpers", "misc"})
 HEAVY = frozenset(
@@ -49,28 +49,13 @@ ALLOW = re.compile(r"#\s*conventions:\s*([A-Z]+-\d+)")
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Check the files named on the command line, or the file a Claude edit wrote."""
-    args = sys.argv[1:] if argv is None else list(argv)
-    if args == ["--claude-hook"]:
-        return claude_hook(sys.stdin.read())
-    if any(arg.startswith("-") for arg in args):
-        print(__doc__)
-        return 0 if args in (["-h"], ["--help"]) else 2
-    findings = [finding for path in args for finding in check_file(Path(path))]
-    for finding in findings:
-        print(finding)
-    return 1 if findings else 0
+    args = sys.argv[1:] if argv is None else argv
+    return check_paths(args, check_file=check_file, usage=__doc__ or "")
 
 
 def claude_hook(payload: str) -> int:
     """Check the Python file a Claude Code tool call wrote; exit code 2 reports back."""
-    tool_input = json.loads(payload).get("tool_input") or {}
-    path = Path(tool_input.get("file_path") or "")
-    if path.suffix != ".py" or not path.is_file():
-        return 0
-    findings = check_file(path)
-    for finding in findings:
-        print(finding, file=sys.stderr)
-    return 2 if findings else 0
+    return check_edit(payload, check_file=check_file)
 
 
 def check_file(path: Path) -> list[Finding]:
