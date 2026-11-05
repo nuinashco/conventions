@@ -11,8 +11,8 @@ MUST rules whose only *Check* is review: 10 of 53. Each is a candidate for a hoo
 
 ## Types and data (TYP): 2
 
-- [TYP-6](GUIDE.md#typ-6-must): Family bases are ABCs: the registry checks subclassing, and items inherit `Config` and helpers.
-- [TYP-9](GUIDE.md#typ-9-must): Dicts are for wire payloads only (JSON in, JSON out).
+- [TYP-6](GUIDE.md#typ-6-must): Family bases are ABCs: the registry checks subclassing, and items inherit `Config` and helpers. An injected collaborator that only needs a shape (a clock, an HTTP client, an uploader) is typed as a `Protocol`, so fakes need no inheritance.
+- [TYP-9](GUIDE.md#typ-9-must): Dicts are for wire payloads only (JSON in, JSON out). A dict with a fixed set of known keys is a class.
 
 ## Code style (STY): 1
 
@@ -25,9 +25,9 @@ MUST rules whose only *Check* is review: 10 of 53. Each is a candidate for a hoo
 ## Tests (TST): 2
 
 - [TST-2](GUIDE.md#tst-2-must): Unit tests come first. Each case covers a distinct branch or behaviour: no cross-product parametrisation, and nothing re-tested at a higher level that a unit test already covers.
-- [TST-6](GUIDE.md#tst-6-must): Child processes, servers and Docker appear only in tests of what can't be measured in process.
+- [TST-6](GUIDE.md#tst-6-must): Child processes, servers and Docker appear only in tests of what can't be measured in process. Before adding a slow test, check `pytest --durations=10`.
 
 ## Repository docs (RDOC): 2
 
 - [RDOC-2](GUIDE.md#rdoc-2-must): A standalone subpackage has its own README.md and CONTRIBUTING.md next to its code.
-- [RDOC-5](GUIDE.md#rdoc-5-must): Docs change in the same commit as the code they describe.
+- [RDOC-5](GUIDE.md#rdoc-5-must): Docs change in the same commit as the code they describe. A stale doc is a bug.

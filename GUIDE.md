@@ -53,40 +53,40 @@ IDs are never reused.
 |---|---|---|
 | [LAY-1](#lay-1-must) | MUST | Projects use uv with the `uv_build` backend, the src layout and a committed `uv.lock`. |
 | [LAY-2](#lay-2-must) | MUST | A distribution has one top-level import package, `src/<pkg>/`. A standalone part of the project (a proxy, a client) is a subpackage such as `<pkg>/proxy/`, isolated by an import contract (ARC-1). |
-| [LAY-3](#lay-3-must) | MUST | `requires-python` starts at the latest stable CPython when the project is created (3.14 as of 2026-10). |
+| [LAY-3](#lay-3-must) | MUST | `requires-python` starts at the latest stable CPython when the project is created (3.14 as of 2026-10). Pin lower only when a dependency or runtime forces it, and say which one in a comment next to the pin. |
 | [LAY-5](#lay-5-should) | SHOULD | Developer tools go in `[dependency-groups] dev`. Heavy optional features (GPU backends, trackers) are extras, and their imports are lazy (ARC-8). |
-| [LAY-6](#lay-6-must) | MUST | A Makefile runs every routine task and documents itself: `make help` lists the targets from their `##` comments. |
-| [ARC-1](#arc-1-must) | MUST | Dependencies between a package's subpackages point one way, and the direction is declared as import-linter contracts in `pyproject.toml`. |
+| [LAY-6](#lay-6-must) | MUST | A Makefile runs every routine task and documents itself: `make help` lists the targets from their `##` comments. The standard targets are `setup lint format typecheck test check`, plus what the project needs, such as `test-integration` and `configs` in an rnd project or `build` in a library. |
+| [ARC-1](#arc-1-must) | MUST | Dependencies between a package's subpackages point one way, and the direction is declared as import-linter contracts in `pyproject.toml`. A `layers` contract orders the subpackages from the entry points down to the lowest layer (such as `paths`), and it is exhaustive, so a new subpackage fails `make check` until it is placed in a layer. |
 | [ARC-2](#arc-2-must) | MUST | Every seam has a pure half that decides and an effectful half that acts: `plan.py` / `served.py`, `adapter.py` / `runner.py`, `compiler.py` / `harness.py`. |
 | [ARC-3](#arc-3-must) | MUST | Each entry point has one composition root, where objects are built and wired: the `cli/<command>.py` function, or the script itself. |
 | [ARC-4](#arc-4-must) | MUST | Code branches on declared capabilities, not identities. Use a `ClassVar[bool]` such as `requires_hardware`, or a method that returns `None` when a feature is absent; never `if item.kind == "api"` or `isinstance(x, ConcreteItem)`. |
 | [ARC-5](#arc-5-should) | SHOULD | Split the top level by domain (`evaluation/`, `grading/`, `endpoints/`) and split inside a domain by role. |
 | [ARC-6](#arc-6-should) | SHOULD | Abstract on the third repetition, not the second. Until then prefer duplication: "duplication is far cheaper than the wrong abstraction" ([Metz](https://sandimetz.com/blog/2016/1/20/the-wrong-abstraction)). |
-| [ARC-7](#arc-7-should) | SHOULD | Use modules as namespaces: `from <pkg>.evaluation import harness`, then `harness.run(...)`. |
-| [ARC-8](#arc-8-must) | MUST | Heavy or optional third-party modules (torch, vllm, litellm, cloud SDKs, wandb) are imported inside the function that needs them. |
-| [TYP-1](#typ-1-must) | MUST | Every function signature in `src/` is annotated; test functions and fixtures may skip annotations. |
+| [ARC-7](#arc-7-should) | SHOULD | Use modules as namespaces: `from <pkg>.evaluation import harness`, then `harness.run(...)`. Write a class only when there is state or polymorphism; otherwise write functions. |
+| [ARC-8](#arc-8-must) | MUST | Heavy or optional third-party modules (torch, vllm, litellm, cloud SDKs, wandb) are imported inside the function that needs them. Annotations that name them use `if TYPE_CHECKING:` imports. |
+| [TYP-1](#typ-1-must) | MUST | Every function signature in `src/` is annotated; test functions and fixtures may skip annotations. pyright in standard mode passes on `src/` and `tests/`, and strict mode passes on the `src/` of a library other repos import, such as nuikit. |
 | [TYP-2](#typ-2-must) | MUST | Use modern syntax: `X \| None`, builtin generics, `collections.abc` for abstract containers, PEP 695 generics and `type` aliases. |
-| [TYP-3](#typ-3-must) | MUST | While `requires-python` is below 3.14, every module starts with `from __future__ import annotations`. |
-| [TYP-4](#typ-4-must) | MUST | pydantic is only for data parsed from outside: configs, HTTP bodies, files. |
-| [TYP-5](#typ-5-must) | MUST | Mind three attrs behaviours, each verified on attrs 26.1. |
-| [TYP-6](#typ-6-must) | MUST | Family bases are ABCs: the registry checks subclassing, and items inherit `Config` and helpers. |
+| [TYP-3](#typ-3-must) | MUST | While `requires-python` is below 3.14, every module starts with `from __future__ import annotations`. From 3.14 on it is never used: [PEP 649](https://peps.python.org/pep-0649/) makes annotations lazy, and [PEP 749](https://peps.python.org/pep-0749/) schedules the import for deprecation. |
+| [TYP-4](#typ-4-must) | MUST | pydantic is only for data parsed from outside: configs, HTTP bodies, files. Every other class is an attrs class: `@frozen` for values, `@define` for stateful objects, family bases and items included. |
+| [TYP-5](#typ-5-must) | MUST | Mind three attrs behaviours, each verified on attrs 26.1: `@define` builds a new class, so a registering decorator must be the outermost one ([FAM-2](https://github.com/nuinashco/nuikit/blob/main/docs/guide.md#fam-2-must)); `__init_subclass__` runs twice for slotted classes, so hooks in it must be idempotent; Slots stop attribute typos only when every base class is slotted, which is why family bases are attrs classes too. |
+| [TYP-6](#typ-6-must) | MUST | Family bases are ABCs: the registry checks subclassing, and items inherit `Config` and helpers. An injected collaborator that only needs a shape (a clock, an HTTP client, an uploader) is typed as a `Protocol`, so fakes need no inheritance. |
 | [TYP-7](#typ-7-should) | SHOULD | Use `Literal` for small closed sets of config values, and `StrEnum` when code iterates over the set or attaches behaviour to it. |
-| [TYP-8](#typ-8-should) | SHOULD | Avoid `Any` outside JSON-shaped payloads and lazily imported third-party objects. |
-| [TYP-9](#typ-9-must) | MUST | Dicts are for wire payloads only (JSON in, JSON out). |
+| [TYP-8](#typ-8-should) | SHOULD | Avoid `Any` outside JSON-shaped payloads and lazily imported third-party objects. Use `object` for "accepts anything". |
+| [TYP-9](#typ-9-must) | MUST | Dicts are for wire payloads only (JSON in, JSON out). A dict with a fixed set of known keys is a class. |
 | [STY-1](#sty-1-must) | MUST | Format with ruff format: 88 columns, double quotes. |
 | [STY-2](#sty-2-must) | MUST | Lint with the template's curated rule set: `E F W I B UP SIM RET PTH C4 RUF TID FBT N PERF G LOG BLE PL D NPY ERA T20 C90` (plus `FA` below 3.14). |
 | [STY-3](#sty-3-must) | MUST | Imports are absolute. |
-| [STY-4](#sty-4-must) | MUST | Every optional parameter and every boolean parameter is keyword-only (after `*`). |
-| [STY-5](#sty-5-must) | MUST | Modules, functions, classes, constants and private names each have their form. |
+| [STY-4](#sty-4-must) | MUST | Every optional parameter and every boolean parameter is keyword-only (after `*`). Only the one or two obvious subjects of a call are positional. |
+| [STY-5](#sty-5-must) | MUST | Modules, functions, classes, constants and private names each have their form: Modules are short nouns (`harness`, `soundness`). Functions are verbs (`select`, `bind`); Classes are nouns, and family items carry the family suffix (`LiteLLMEndpoint`, `GoldPatches`); Schemas end in `Config`. Acronyms stay capitalised (`HDBSCANClustering`, `BQ2GCSCollector`); Constants are UPPER_SNAKE right after the imports; Anything not used outside its module starts with `_`. |
 | [STY-6](#sty-6-must) | MUST | A name holding a number with a unit ends in a short unit suffix: `_s`, `_ms`, `_mb`, `_gb`, `_tokens`, `_steps`. |
 | [STY-7](#sty-7-must) | MUST | Use pathlib, never `os.path`. |
-| [STY-8](#sty-8-must) | MUST | `.py` files are ASCII: use `;`, `:`, `-` and `->`, never em dashes or Unicode arrows. |
+| [STY-8](#sty-8-must) | MUST | `.py` files are ASCII: use `;`, `:`, `-` and `->`, never em dashes or Unicode arrows. Markdown may use any typography. |
 | [STY-9](#sty-9-should) | SHOULD | Prefer early returns to nesting, comprehensions to `map`/`filter`, and `match` for dispatch on a shape or a file suffix. |
-| [STY-10](#sty-10-should) | SHOULD | Keep within the complexity budget (C901 at 10, pylint's branch and statement limits). |
-| [DOC-1](#doc-1-must) | MUST | Every module starts with a one-line docstring stating its single responsibility. |
-| [DOC-2](#doc-2-must) | MUST | Docstrings are one line where possible. |
+| [STY-10](#sty-10-should) | SHOULD | Keep within the complexity budget (C901 at 10, pylint's branch and statement limits). Split long functions at real seams, not into one-call helpers that are shallow modules ([Ousterhout](https://github.com/johnousterhout/aposd-vs-clean-code)). |
+| [DOC-1](#doc-1-must) | MUST | Every module starts with a one-line docstring stating its single responsibility. A CLI module's or script's docstring is its `--help` text and may add a usage block. |
+| [DOC-2](#doc-2-must) | MUST | Docstrings are one line where possible: a function's is imperative ("Return the run directory for `name`."); `D401` checks this; a class's is a noun phrase saying what an instance represents ("Spacing between requests to one upstream."); every public class has one (`D101`); a function or method gets one when its name and signature don't already say it all. |
 | [DOC-3](#doc-3-should) | SHOULD | Add Google-style `Args:`, `Returns:` or `Raises:` sections only for what types can't express: units, shapes, valid ranges, what `None` or an empty value means, and errors that are part of the contract. |
-| [DOC-4](#doc-4-must) | MUST | A comment explains what the code can't say. |
+| [DOC-4](#doc-4-must) | MUST | A comment explains what the code can't say: an external constraint; a non-obvious reason; a unit; where a value came from (cite the source); what `None` means. |
 | [DOC-5](#doc-5-must) | MUST | Comments are sentences: capitalised and ending with a period. A sentence that opens with a lowercase name puts it in backticks (`` `git` is not installed. ``). |
 | [DOC-6](#doc-6-should) | SHOULD | A `TODO` says why it isn't done now. Code generated without review is marked as such until reviewed. |
 | [DOC-7](#doc-7-must) | MUST | A YAML comment, and so a `Field` description that a mirror turns into one ([CFG-3](https://github.com/nuinashco/nuikit/blob/main/docs/guide.md#cfg-3-must)), lists a setting's options (`auto\|console\|json`) or says what its key and value can't: a unit the name lacks, what `null` or an edge value means, a side effect, a source. |
@@ -94,30 +94,30 @@ IDs are never reused.
 | [ERR-4](#err-4-must) | MUST | Fail fast at the edge: check that paths exist, kinds are registered and credentials work (a one-token ping) before any expensive work starts. |
 | [ERR-5](#err-5-must) | MUST | Translating an exception uses `raise ... from err`. A broad `except Exception` exists only at an isolation point, such as a callback that must not stop training or a best-effort notification, and its `noqa` says why. |
 | [ERR-6](#err-6-may) | MAY | Messages are written at the raise site. Ruff's TRY003 and EM rules, which want them inside the class, are not selected. |
-| [LOG-2](#log-2-must) | MUST | Events are stable snake_case ids with key-value context: `log.info("proxy_started", port=8000)`. |
+| [LOG-2](#log-2-must) | MUST | Events are stable snake_case ids with key-value context: `log.info("proxy_started", port=8000)`. Never build an event with an f-string or `%`. |
 | [LOG-4](#log-4-must) | MUST | Logs record events. Output meant for the user (tables, results) goes to stdout through `click.echo` or rich, never through the logger. |
 | [LOG-5](#log-5-should) | SHOULD | Bind run context once with `structlog.contextvars.bind_contextvars(run=...)` instead of repeating it in every event. |
 | [TST-1](#tst-1-must) | MUST | Tests are pytest functions (no test classes) named as sentences stating a behaviour: `test_sound_selection_never_falls_back_to_every_task`. |
 | [TST-2](#tst-2-must) | MUST | Unit tests come first. Each case covers a distinct branch or behaviour: no cross-product parametrisation, and nothing re-tested at a higher level that a unit test already covers. |
-| [TST-3](#tst-3-must) | MUST | Test doubles are in-process fakes (`ScriptedEndpoint`, `httpx.MockTransport`), `tmp_path` and `monkeypatch`. |
-| [TST-4](#tst-4-must) | MUST | The layout mirrors `src/` module by module: `tests/<pkg>/<sub>/test_<module>.py` for every module with branching logic. |
-| [TST-6](#tst-6-must) | MUST | Child processes, servers and Docker appear only in tests of what can't be measured in process. |
-| [TST-7](#tst-7-should) | SHOULD | Separate arrange, act and assert with blank lines. Compare related values in one tuple assert. |
+| [TST-3](#tst-3-must) | MUST | Test doubles are in-process fakes (`ScriptedEndpoint`, `httpx.MockTransport`), `tmp_path` and `monkeypatch`. `unittest.mock` is banned. Fakes live in `tests/conftest.py` or `tests/fakes.py`; a fake with logic has its own tests. |
+| [TST-4](#tst-4-must) | MUST | The layout mirrors `src/` module by module: `tests/<pkg>/<sub>/test_<module>.py` for every module with branching logic. Exempt modules are those with nothing a unit test could distinguish: schemas whose rules pydantic enforces, error classes, re-exporting `__init__` files, and thin wrappers that only start an external process (a `docker build`). |
+| [TST-6](#tst-6-must) | MUST | Child processes, servers and Docker appear only in tests of what can't be measured in process. Before adding a slow test, check `pytest --durations=10`. |
+| [TST-7](#tst-7-should) | SHOULD | Separate arrange, act and assert with blank lines. Compare related values in one tuple assert. A test module's docstring states the invariant it protects. |
 | [TST-8](#tst-8-should) | SHOULD | Test ML code with tiny real models, not mocks: loss decreases, and a batch can be overfitted ([Yan](https://eugeneyan.com/writing/unit-testing-ml/)). |
-| [RDOC-1](#rdoc-1-must) | MUST | README.md is the user's and operator's view: setup, daily workflow, commands, outputs, caveats. |
+| [RDOC-1](#rdoc-1-must) | MUST | README.md is the user's and operator's view: setup, daily workflow, commands, outputs, caveats. CONTRIBUTING.md is the contributor's view: architecture, layout, families, configs, deviations, the "Extending" table, tests and commits. |
 | [RDOC-2](#rdoc-2-must) | MUST | A standalone subpackage has its own README.md and CONTRIBUTING.md next to its code. |
 | [RDOC-3](#rdoc-3-must) | MUST | Diagrams are mermaid. Flowcharts colour pure components with `classDef pure` and effectful ones with `classDef side`, using the template's palette. |
 | [RDOC-4](#rdoc-4-must) | MUST | AGENTS.md is the entry point for coding agents, at most 60 lines: commands, layout, what this repo asks beyond the conventions, and pointers to CONTRIBUTING. |
-| [RDOC-5](#rdoc-5-must) | MUST | Docs change in the same commit as the code they describe. |
-| [GIT-1](#git-1-must) | MUST | Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/). |
-| [GIT-2](#git-2-must) | MUST | A commit message is one line: no body and no trailers. |
-| [GIT-3](#git-3-must) | MUST | Branches are short-lived and named `<type>/<slug>` (`feat/`, `fix/`, `docs/`, `refactor/`, plus `exp/` for experiments). |
+| [RDOC-5](#rdoc-5-must) | MUST | Docs change in the same commit as the code they describe. A stale doc is a bug. |
+| [GIT-1](#git-1-must) | MUST | Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/): a standard type: `feat fix docs refactor test build ci perf style chore revert`; an optional scope; a lowercase imperative subject, with no period, of at most 72 characters; no articles (`a`, `an`, `the`) and no filler: say what changed in as few words as hold it. |
+| [GIT-2](#git-2-must) | MUST | A commit message is one line: no body and no trailers. A reason worth keeping goes where readers look for it: a code comment for a constraint, the PR description for an alternative that was rejected. |
+| [GIT-3](#git-3-must) | MUST | Branches are short-lived and named `<type>/<slug>` (`feat/`, `fix/`, `docs/`, `refactor/`, plus `exp/` for experiments). Merges are squash-merges, and the PR title is the conventional commit that lands on `main`. |
 | [GIT-5](#git-5-must) | MUST | Secrets, data, run outputs and notebook outputs are never committed. |
 | [GIT-6](#git-6-must) | MUST | A PR description follows `.github/pull_request_template.md`: a summary of why, the changes made with the alternatives rejected, and the checklist; results, how to reproduce them and notes for the reviewer when they apply. |
 | [TOOL-1](#tool-1-must) | MUST | `make check` runs ruff check, ruff format `--check`, pyright, `lint-imports` and pytest, and CI runs it on every pull request. |
 | [TOOL-2](#tool-2-must) | MUST | Tool versions come from `uv.lock`. Hooks for Python tools are local `uv run` hooks, so pre-commit, CI and editors all use the same versions. |
 | [TOOL-4](#tool-4-must) | MUST | The checks this guide adds on top of ruff are the `conventions-hooks` package of nuinashco/conventions: `check-comments`, `check-conventions`, `check-protected`, `check-commit-msg` and `review-comments`. |
-| [TOOL-5](#tool-5-must) | MUST | Files nobody edits by hand are listed in `.gitattributes` with `protected=<why>`. |
+| [TOOL-5](#tool-5-must) | MUST | Files nobody edits by hand are listed in `.gitattributes` with `protected=<why>`: `generated`: config mirrors, `.copier-answers.yml`, and whatever a build step writes; `vendored`: code copied in from another repo and changed only there; `published`: third-party files kept as published, such as `notebooks/reference/`. |
 | [TOOL-6](#tool-6-should) | SHOULD | A check that asks an LLM, such as a `claude -p` hook or a review subagent, is a judge and is built as one: narrow criteria with named verdicts, an "unsure" outcome instead of a guess, a cited line for every finding, a fresh context holding only the artefact and the rules, and structured output wherever code reads the verdict. |
 
 ## 1. Layout and packaging (LAY)

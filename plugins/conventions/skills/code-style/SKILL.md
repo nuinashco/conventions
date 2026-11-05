@@ -37,8 +37,8 @@ Linters, hooks and the template report these; follow them as you write.
 - **STY-1** MUST: Format with ruff format: 88 columns, double quotes. *Check:* `ruff format --check`.
 - **STY-2** MUST: Lint with the template's curated rule set: `E F W I B UP SIM RET PTH C4 RUF TID FBT N PERF G LOG BLE PL D NPY ERA T20 C90` (plus `FA` below 3.14). *Check:* `ruff check`.
 - **STY-3** MUST: Imports are absolute. *Check:* ruff TID252 with `ban-relative-imports = "all"`.
-- **STY-4** MUST: Every optional parameter and every boolean parameter is keyword-only (after `*`). *Check:* ruff FBT for booleans; `check-conventions` flags a positional parameter with a default; review for the rest.
-- **STY-5** MUST: Modules, functions, classes, constants and private names each have their form. *Check:* ruff N; review.
+- **STY-4** MUST: Every optional parameter and every boolean parameter is keyword-only (after `*`). Only the one or two obvious subjects of a call are positional. *Check:* ruff FBT for booleans; `check-conventions` flags a positional parameter with a default; review for the rest.
+- **STY-5** MUST: Modules, functions, classes, constants and private names each have their form: Modules are short nouns (`harness`, `soundness`). Functions are verbs (`select`, `bind`); Classes are nouns, and family items carry the family suffix (`LiteLLMEndpoint`, `GoldPatches`); Schemas end in `Config`. Acronyms stay capitalised (`HDBSCANClustering`, `BQ2GCSCollector`); Constants are UPPER_SNAKE right after the imports; Anything not used outside its module starts with `_`. *Check:* ruff N; review.
 - **STY-7** MUST: Use pathlib, never `os.path`. *Check:* ruff PTH.
-- **STY-8** MUST: `.py` files are ASCII: use `;`, `:`, `-` and `->`, never em dashes or Unicode arrows. *Check:* a pre-commit non-ASCII hook (`ascii-only-python` in the template).
-- **STY-10** SHOULD: Keep within the complexity budget (C901 at 10, pylint's branch and statement limits). *Check:* ruff C901, PLR0912, PLR0915.
+- **STY-8** MUST: `.py` files are ASCII: use `;`, `:`, `-` and `->`, never em dashes or Unicode arrows. Markdown may use any typography. *Check:* a pre-commit non-ASCII hook (`ascii-only-python` in the template).
+- **STY-10** SHOULD: Keep within the complexity budget (C901 at 10, pylint's branch and statement limits). Split long functions at real seams, not into one-call helpers that are shallow modules ([Ousterhout](https://github.com/johnousterhout/aposd-vs-clean-code)). *Check:* ruff C901, PLR0912, PLR0915.

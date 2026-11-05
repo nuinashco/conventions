@@ -41,10 +41,10 @@ tests/
 
 A rule is a `### <ID> <LEVEL>` heading (optionally ` [rnd]`), its body, an optional `*Why:*` paragraph and a final
 `*Check:*` paragraph. Any other heading of level 1 to 3 outside a code fence is an error, so a mistyped heading cannot
-merge two rules. A rule is review-only when every `;`-separated part of its *Check* starts with "review": its
-skill quotes it in full, the reviewer's checklist lists it, and COVERAGE.md counts it when it is a MUST. Every other
-rule appears in its skill as one line under "Checked by tools", with its summary, the opening sentence of its body
-(two when the first is under ten words).
+merge two rules. A rule is review-only when every `;`-separated part of its *Check* starts with "review": its skill
+quotes it in full, the reviewer's checklist lists it, and COVERAGE.md counts it when it is a MUST. Every other rule
+appears in its skill as one line under "Checked by tools", with its summary: the opening sentences of its body until
+they hold twenty words, followed by the items of the list they lead in to when they end in a colon.
 
 ## Tests
 

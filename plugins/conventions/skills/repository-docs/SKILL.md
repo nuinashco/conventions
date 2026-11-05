@@ -29,6 +29,6 @@ Docs change in the same commit as the code they describe. A stale doc is a bug.
 
 Linters, hooks and the template report these; follow them as you write.
 
-- **RDOC-1** MUST: README.md is the user's and operator's view: setup, daily workflow, commands, outputs, caveats. *Check:* template skeletons.
+- **RDOC-1** MUST: README.md is the user's and operator's view: setup, daily workflow, commands, outputs, caveats. CONTRIBUTING.md is the contributor's view: architecture, layout, families, configs, deviations, the "Extending" table, tests and commits. *Check:* template skeletons.
 - **RDOC-3** MUST: Diagrams are mermaid. Flowcharts colour pure components with `classDef pure` and effectful ones with `classDef side`, using the template's palette. *Check:* template.
 - **RDOC-4** MUST: AGENTS.md is the entry point for coding agents, at most 60 lines: commands, layout, what this repo asks beyond the conventions, and pointers to CONTRIBUTING. *Check:* template; review.

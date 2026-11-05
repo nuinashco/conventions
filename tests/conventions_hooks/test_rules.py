@@ -112,25 +112,37 @@ def test_a_rule_is_review_only_when_every_part_of_its_check_is_review(
     ("body", "summary"),
     [
         (
-            "Short one. It takes the next sentence along with it. Not this.",
-            "Short one. It takes the next sentence along with it.",
+            "Short one. Then it takes the next sentence along with it, and stops once "
+            "the summary holds twenty words or more. Not this.",
+            "Short one. Then it takes the next sentence along with it, and stops once "
+            "the summary holds twenty words or more.",
         ),
         (
-            "A sentence of ten words or more stands on its own here. Not this.",
-            "A sentence of ten words or more stands on its own here.",
+            "A sentence of twenty words or more stands on its own here, without the "
+            "one that follows it in the paragraph. Not this.",
+            "A sentence of twenty words or more stands on its own here, without the "
+            "one that follows it in the paragraph.",
         ),
         (
-            "Use `x.y` and [a link. Here](u) or e.g. this; it ends here. No.",
-            "Use `x.y` and [a link. Here](u) or e.g. this; it ends here.",
+            "Use `x.y` and [a link. Here](u) or e.g. this, and keep going until the "
+            "sentence has twenty words; it ends here. No.",
+            "Use `x.y` and [a link. Here](u) or e.g. this, and keep going until the "
+            "sentence has twenty words; it ends here.",
         ),
         (
-            "A lead-in ending with a colon:\n\n- a list",
-            "A lead-in ending with a colon.",
+            "Mind two things:\n\n- one thing;\n- another,\n  wrapped.\n\nNot this.",
+            "Mind two things: one thing; another, wrapped.",
+        ),
+        (
+            "A lead-in to code:\n\n```python\nx = 1\n```",
+            "A lead-in to code.",
         ),
     ],
-    ids=["short", "long", "code-link-abbreviation", "colon"],
+    ids=["short", "long", "code-link-abbreviation", "colon-list", "colon-code"],
 )
-def test_the_summary_is_the_opening_sentence_or_two(body, summary):
+def test_the_summary_is_the_opening_sentences_or_the_lead_in_and_its_list(
+    body, summary
+):
     assert rule(body=body).summary == summary
 
 

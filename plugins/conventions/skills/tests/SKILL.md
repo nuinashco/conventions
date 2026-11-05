@@ -51,5 +51,5 @@ Test ML code with tiny real models, not mocks: loss decreases, and a batch can b
 Linters, hooks and the template report these; follow them as you write.
 
 - **TST-1** MUST: Tests are pytest functions (no test classes) named as sentences stating a behaviour: `test_sound_selection_never_falls_back_to_every_task`. *Check:* `check-conventions` flags test classes; review for the names.
-- **TST-3** MUST: Test doubles are in-process fakes (`ScriptedEndpoint`, `httpx.MockTransport`), `tmp_path` and `monkeypatch`. *Check:* ruff `banned-api`.
-- **TST-4** MUST: The layout mirrors `src/` module by module: `tests/<pkg>/<sub>/test_<module>.py` for every module with branching logic. *Check:* `--strict-markers`; review.
+- **TST-3** MUST: Test doubles are in-process fakes (`ScriptedEndpoint`, `httpx.MockTransport`), `tmp_path` and `monkeypatch`. `unittest.mock` is banned. Fakes live in `tests/conftest.py` or `tests/fakes.py`; a fake with logic has its own tests. *Check:* ruff `banned-api`.
+- **TST-4** MUST: The layout mirrors `src/` module by module: `tests/<pkg>/<sub>/test_<module>.py` for every module with branching logic. Exempt modules are those with nothing a unit test could distinguish: schemas whose rules pydantic enforces, error classes, re-exporting `__init__` files, and thin wrappers that only start an external process (a `docker build`). *Check:* `--strict-markers`; review.

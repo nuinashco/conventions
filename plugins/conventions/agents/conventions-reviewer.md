@@ -62,12 +62,12 @@ Rules whose only check is review, by area:
   - **ARC-3** MUST: Each entry point has one composition root, where objects are built and wired: the `cli/<command>.py` function, or the script itself.
   - **ARC-5** SHOULD: Split the top level by domain (`evaluation/`, `grading/`, `endpoints/`) and split inside a domain by role.
   - **ARC-6** SHOULD: Abstract on the third repetition, not the second. Until then prefer duplication: "duplication is far cheaper than the wrong abstraction" ([Metz](https://sandimetz.com/blog/2016/1/20/the-wrong-abstraction)).
-  - **ARC-7** SHOULD: Use modules as namespaces: `from <pkg>.evaluation import harness`, then `harness.run(...)`.
+  - **ARC-7** SHOULD: Use modules as namespaces: `from <pkg>.evaluation import harness`, then `harness.run(...)`. Write a class only when there is state or polymorphism; otherwise write functions.
 - Types and data (TYP):
-  - **TYP-6** MUST: Family bases are ABCs: the registry checks subclassing, and items inherit `Config` and helpers.
+  - **TYP-6** MUST: Family bases are ABCs: the registry checks subclassing, and items inherit `Config` and helpers. An injected collaborator that only needs a shape (a clock, an HTTP client, an uploader) is typed as a `Protocol`, so fakes need no inheritance.
   - **TYP-7** SHOULD: Use `Literal` for small closed sets of config values, and `StrEnum` when code iterates over the set or attaches behaviour to it.
-  - **TYP-8** SHOULD: Avoid `Any` outside JSON-shaped payloads and lazily imported third-party objects.
-  - **TYP-9** MUST: Dicts are for wire payloads only (JSON in, JSON out).
+  - **TYP-8** SHOULD: Avoid `Any` outside JSON-shaped payloads and lazily imported third-party objects. Use `object` for "accepts anything".
+  - **TYP-9** MUST: Dicts are for wire payloads only (JSON in, JSON out). A dict with a fixed set of known keys is a class.
 - Code style (STY):
   - **STY-6** MUST: A name holding a number with a unit ends in a short unit suffix: `_s`, `_ms`, `_mb`, `_gb`, `_tokens`, `_steps`.
   - **STY-9** SHOULD: Prefer early returns to nesting, comprehensions to `map`/`filter`, and `match` for dispatch on a shape or a file suffix.
@@ -79,28 +79,28 @@ Rules whose only check is review, by area:
   - **LOG-5** SHOULD: Bind run context once with `structlog.contextvars.bind_contextvars(run=...)` instead of repeating it in every event.
 - Tests (TST):
   - **TST-2** MUST: Unit tests come first. Each case covers a distinct branch or behaviour: no cross-product parametrisation, and nothing re-tested at a higher level that a unit test already covers.
-  - **TST-6** MUST: Child processes, servers and Docker appear only in tests of what can't be measured in process.
-  - **TST-7** SHOULD: Separate arrange, act and assert with blank lines. Compare related values in one tuple assert.
+  - **TST-6** MUST: Child processes, servers and Docker appear only in tests of what can't be measured in process. Before adding a slow test, check `pytest --durations=10`.
+  - **TST-7** SHOULD: Separate arrange, act and assert with blank lines. Compare related values in one tuple assert. A test module's docstring states the invariant it protects.
   - **TST-8** SHOULD: Test ML code with tiny real models, not mocks: loss decreases, and a batch can be overfitted ([Yan](https://eugeneyan.com/writing/unit-testing-ml/)).
 - Repository docs (RDOC):
   - **RDOC-2** MUST: A standalone subpackage has its own README.md and CONTRIBUTING.md next to its code.
-  - **RDOC-5** MUST: Docs change in the same commit as the code they describe.
+  - **RDOC-5** MUST: Docs change in the same commit as the code they describe. A stale doc is a bug.
 
 Tools check these only in part; judge what they leave:
 
-- **LAY-3** MUST: `requires-python` starts at the latest stable CPython when the project is created (3.14 as of 2026-10). *Check:* template default; review.
+- **LAY-3** MUST: `requires-python` starts at the latest stable CPython when the project is created (3.14 as of 2026-10). Pin lower only when a dependency or runtime forces it, and say which one in a comment next to the pin. *Check:* template default; review.
 - **ARC-4** MUST: Code branches on declared capabilities, not identities. Use a `ClassVar[bool]` such as `requires_hardware`, or a method that returns `None` when a feature is absent; never `if item.kind == "api"` or `isinstance(x, ConcreteItem)`. *Check:* `check-conventions` flags comparisons with a `kind` attribute; review for `isinstance`.
-- **ARC-8** MUST: Heavy or optional third-party modules (torch, vllm, litellm, cloud SDKs, wandb) are imported inside the function that needs them. *Check:* `check-conventions` flags a module-level import of a known heavy module under `src/`; review for the others; ruff PLC0415 is off on purpose.
-- **TYP-4** MUST: pydantic is only for data parsed from outside: configs, HTTP bodies, files. *Check:* `check-conventions` flags a hand-written `__init__` and dataclasses; review for pydantic inside the boundary.
-- **STY-4** MUST: Every optional parameter and every boolean parameter is keyword-only (after `*`). *Check:* ruff FBT for booleans; `check-conventions` flags a positional parameter with a default; review for the rest.
-- **STY-5** MUST: Modules, functions, classes, constants and private names each have their form. *Check:* ruff N; review.
-- **DOC-2** MUST: Docstrings are one line where possible. *Check:* ruff D101, D401; `check-comments` flags a class docstring that opens with an order; review.
+- **ARC-8** MUST: Heavy or optional third-party modules (torch, vllm, litellm, cloud SDKs, wandb) are imported inside the function that needs them. Annotations that name them use `if TYPE_CHECKING:` imports. *Check:* `check-conventions` flags a module-level import of a known heavy module under `src/`; review for the others; ruff PLC0415 is off on purpose.
+- **TYP-4** MUST: pydantic is only for data parsed from outside: configs, HTTP bodies, files. Every other class is an attrs class: `@frozen` for values, `@define` for stateful objects, family bases and items included. *Check:* `check-conventions` flags a hand-written `__init__` and dataclasses; review for pydantic inside the boundary.
+- **STY-4** MUST: Every optional parameter and every boolean parameter is keyword-only (after `*`). Only the one or two obvious subjects of a call are positional. *Check:* ruff FBT for booleans; `check-conventions` flags a positional parameter with a default; review for the rest.
+- **STY-5** MUST: Modules, functions, classes, constants and private names each have their form: Modules are short nouns (`harness`, `soundness`). Functions are verbs (`select`, `bind`); Classes are nouns, and family items carry the family suffix (`LiteLLMEndpoint`, `GoldPatches`); Schemas end in `Config`. Acronyms stay capitalised (`HDBSCANClustering`, `BQ2GCSCollector`); Constants are UPPER_SNAKE right after the imports; Anything not used outside its module starts with `_`. *Check:* ruff N; review.
+- **DOC-2** MUST: Docstrings are one line where possible: a function's is imperative ("Return the run directory for `name`."); `D401` checks this; a class's is a noun phrase saying what an instance represents ("Spacing between requests to one upstream."); every public class has one (`D101`); a function or method gets one when its name and signature don't already say it all. *Check:* ruff D101, D401; `check-comments` flags a class docstring that opens with an order; review.
 - **DOC-6** SHOULD: A `TODO` says why it isn't done now. Code generated without review is marked as such until reviewed. *Check:* ruff TD004 to TD007 (a `TODO:` with a description); review for the why.
 - **ERR-3** MUST: A message is lowercase with no trailing period. It states what is wrong, then `; ` and the remedy, naming the command or config key. *Check:* `check-conventions` flags a capitalised first word and a trailing period; review for the remedy.
 - **TST-1** MUST: Tests are pytest functions (no test classes) named as sentences stating a behaviour: `test_sound_selection_never_falls_back_to_every_task`. *Check:* `check-conventions` flags test classes; review for the names.
-- **TST-4** MUST: The layout mirrors `src/` module by module: `tests/<pkg>/<sub>/test_<module>.py` for every module with branching logic. *Check:* `--strict-markers`; review.
+- **TST-4** MUST: The layout mirrors `src/` module by module: `tests/<pkg>/<sub>/test_<module>.py` for every module with branching logic. Exempt modules are those with nothing a unit test could distinguish: schemas whose rules pydantic enforces, error classes, re-exporting `__init__` files, and thin wrappers that only start an external process (a `docker build`). *Check:* `--strict-markers`; review.
 - **RDOC-4** MUST: AGENTS.md is the entry point for coding agents, at most 60 lines: commands, layout, what this repo asks beyond the conventions, and pointers to CONTRIBUTING. *Check:* template; review.
-- **GIT-3** MUST: Branches are short-lived and named `<type>/<slug>` (`feat/`, `fix/`, `docs/`, `refactor/`, plus `exp/` for experiments). *Check:* `make github`; review.
+- **GIT-3** MUST: Branches are short-lived and named `<type>/<slug>` (`feat/`, `fix/`, `docs/`, `refactor/`, plus `exp/` for experiments). Merges are squash-merges, and the PR title is the conventional commit that lands on `main`. *Check:* `make github`; review.
 - **GIT-6** MUST: A PR description follows `.github/pull_request_template.md`: a summary of why, the changes made with the alternatives rejected, and the checklist; results, how to reproduce them and notes for the reviewer when they apply. *Check:* template; review.
 - **TOOL-6** SHOULD: A check that asks an LLM, such as a `claude -p` hook or a review subagent, is a judge and is built as one: narrow criteria with named verdicts, an "unsure" outcome instead of a guess, a cited line for every finding, a fresh context holding only the artefact and the rules, and structured output wherever code reads the verdict. *Check:* review; the plugin's judges are measured by `make test-judges` in nuinashco/conventions.
 
