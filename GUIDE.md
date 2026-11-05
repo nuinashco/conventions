@@ -116,7 +116,7 @@ IDs are never reused.
 | [GIT-6](#git-6-must) | MUST | A PR description follows `.github/pull_request_template.md`: a summary of why, the changes made with the alternatives rejected, and the checklist; results, how to reproduce them and notes for the reviewer when they apply. |
 | [TOOL-1](#tool-1-must) | MUST | `make check` runs ruff check, ruff format `--check`, pyright, `lint-imports` and pytest, and CI runs it on every pull request. |
 | [TOOL-2](#tool-2-must) | MUST | Tool versions come from `uv.lock`. Hooks for Python tools are local `uv run` hooks, so pre-commit, CI and editors all use the same versions. |
-| [TOOL-4](#tool-4-must) | MUST | The checks this guide adds on top of ruff are the `conventions-hooks` package of nuinashco/conventions: `check-comments`, `check-conventions`, `check-protected`, `check-commit-msg` and `review-comments`. |
+| [TOOL-4](#tool-4-must) | MUST | The checks this guide adds on top of ruff are the `conventions-hooks` package of nuinashco/conventions. A repo opts in with a `[tool.conventions]` table in its root `pyproject.toml`, where `ignore = ["STY-4"]` turns rules off for that repo, and adds the package as a dev dependency pinned by `uv.lock`. |
 | [TOOL-5](#tool-5-must) | MUST | Files nobody edits by hand are listed in `.gitattributes` with `protected=<why>`: `generated`: config mirrors, `.copier-answers.yml`, and whatever a build step writes; `vendored`: code copied in from another repo and changed only there; `published`: third-party files kept as published, such as `notebooks/reference/`. |
 | [TOOL-6](#tool-6-should) | SHOULD | A check that asks an LLM, such as a `claude -p` hook or a review subagent, is a judge and is built as one: narrow criteria with named verdicts, an "unsure" outcome instead of a guess, a cited line for every finding, a fresh context holding only the artefact and the rules, and structured output wherever code reads the verdict. |
 
@@ -774,14 +774,14 @@ use the same versions.
 
 ### TOOL-4 MUST
 
-The checks this guide adds on top of ruff are the `conventions-hooks` package of nuinashco/conventions:
-`check-comments`, `check-conventions`, `check-protected`, `check-commit-msg` and `review-comments`. A repo opts in with
-a `[tool.conventions]` table in its root `pyproject.toml`, where `ignore = ["STY-4"]` turns rules off for that repo,
-and adds the package as a dev dependency pinned by `uv.lock`. The checks run in two layers with the same code:
-pre-commit gates every commit by anyone, and the `conventions` Claude Code plugin gives Claude the findings while it
-works (`PreToolUse` before an edit, `PostToolUse` after it, `Stop` before it hands back). The plugin runs the
-project's own `.venv/bin/<command>`, so each project gets the version its lock pins, and does nothing in a repo that
-has not opted in.
+The checks this guide adds on top of ruff are the `conventions-hooks` package of nuinashco/conventions. A repo opts in
+with a `[tool.conventions]` table in its root `pyproject.toml`, where `ignore = ["STY-4"]` turns rules off for that
+repo, and adds the package as a dev dependency pinned by `uv.lock`. The package's commands are `check-comments`,
+`check-conventions`, `check-protected`, `check-commit-msg` and `review-comments`. The checks run in two layers with the
+same code: pre-commit gates every commit by anyone, and the `conventions` Claude Code plugin gives Claude the findings
+while it works (`PreToolUse` before an edit, `PostToolUse` after it, `Stop` before it hands back). The plugin runs the
+project's own `.venv/bin/<command>`, so each project gets the version its lock pins, and does nothing in a repo that has
+not opted in.
 
 *Why:* only pre-commit sees every author, but feedback during the edit is cheaper than at commit time. One plugin,
 enabled once per machine, serves every repo without copying hook settings into each.
