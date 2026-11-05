@@ -31,6 +31,7 @@ from pathlib import Path, PurePath
 from attrs import frozen
 
 from conventions_hooks.findings import Finding, check_edit, check_paths
+from conventions_hooks.settings import project_root
 
 GRAB_BAGS = frozenset({"utils", "util", "common", "core", "helpers", "misc"})
 HEAVY = frozenset(
@@ -59,18 +60,28 @@ def claude_hook(payload: str) -> int:
 
 
 def check_file(path: Path) -> list[Finding]:
-    """Return the findings for one Python file."""
-    return check_source(path.read_text(encoding="utf-8"), path=str(path))
+    """Return the findings for one Python file, judged by its place in its project."""
+    root = project_root(path.parent)
+    inside = path.absolute().relative_to(root) if root else path
+    return check_source(
+        path.read_text(encoding="utf-8"), path=str(path), relative=str(inside)
+    )
 
 
-def check_source(source: str, *, path: str = "<string>") -> list[Finding]:
-    """Return the convention findings for one Python source at `path`."""
+def check_source(
+    source: str, *, path: str = "<string>", relative: str | None = None
+) -> list[Finding]:
+    """Return the convention findings for one Python source, reported at `path`.
+
+    The file's path from its project's root, `relative` (`path` when not given),
+    decides which rules apply: a folder above the project says nothing about it.
+    """
     try:
         tree = ast.parse(source)
     except SyntaxError:
         return []  # Ruff reports the syntax error itself.
-    where = _Where.of(path)
-    findings = list(_module_name(where, path))
+    where = _Where.of(relative or path)
+    findings = list(_module_name(where, relative or path, report=path))
     if where.package:
         findings += _heavy_imports(tree, path)
     for node in ast.walk(tree):
@@ -117,15 +128,15 @@ def _check_node(node: ast.AST, where: _Where, path: str) -> Iterator[Finding]:
         yield from _error_message(node, path)
 
 
-def _module_name(where: _Where, path: str) -> Iterator[Finding]:
+def _module_name(where: _Where, relative: str, *, report: str) -> Iterator[Finding]:
     if not where.package:
         return
-    pure = PurePath(path)
+    pure = PurePath(relative)
     names = [*pure.parent.parts[pure.parts.index("src") + 1 :], pure.stem]
     for name in names:
         if name in GRAB_BAGS:
             yield Finding(
-                path,
+                report,
                 1,
                 "LAY-2",
                 f"`{name}` is a grab-bag module; name it after its one responsibility",

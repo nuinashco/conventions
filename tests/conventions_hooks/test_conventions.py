@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from conventions_hooks.conventions import check_source, claude_hook, main
+from conventions_hooks.conventions import check_file, check_source, claude_hook, main
 
 PACKAGE = "src/demo/endpoints/runner.py"
 
@@ -126,6 +126,21 @@ def test_grab_bag_modules_are_reported_inside_the_package():
 
 def test_eager_heavy_imports_are_allowed_outside_the_package():
     assert rules("import torch\n", "scripts/train_once.py") == []
+
+
+def test_folders_above_the_project_do_not_change_which_rules_apply(tmp_path):
+    project = tmp_path / "tests" / "src" / "core"
+    (project / "src" / "demo").mkdir(parents=True)
+    (project / "scripts").mkdir()
+    (project / "pyproject.toml").write_text("[tool.conventions]\n")
+    module = project / "src" / "demo" / "mod.py"
+    module.write_text("import torch\n\n\nclass TestThing:\n    x = 1\n")
+    script = project / "scripts" / "once.py"
+    script.write_text("import torch\n")
+
+    found = [[(f.line, f.rule) for f in check_file(path)] for path in (module, script)]
+
+    assert found == [[(1, "ARC-8")], []]
 
 
 def test_the_claude_hook_reports_an_edited_python_file(opted_in, capsys):

@@ -30,12 +30,8 @@ class Settings:
         Raises:
             SettingsError: the file is not TOML, or the table is malformed.
         """
-        start = path.absolute()
-        for directory in (start, *start.parents):
-            pyproject = directory / "pyproject.toml"
-            if pyproject.is_file():
-                return cls.parse(pyproject)
-        return cls(enabled=False)
+        root = project_root(path)
+        return cls.parse(root / "pyproject.toml") if root else cls(enabled=False)
 
     @classmethod
     def parse(cls, pyproject: Path) -> Settings:
@@ -67,3 +63,12 @@ class Settings:
     def keeps(self, rule: str) -> bool:
         """Return whether this repo checks `rule`."""
         return rule not in self.ignore
+
+
+def project_root(path: Path) -> Path | None:
+    """Return the nearest directory at or above `path` with a pyproject.toml, if any."""
+    start = path.absolute()
+    for directory in (start, *start.parents):
+        if (directory / "pyproject.toml").is_file():
+            return directory
+    return None
