@@ -38,7 +38,7 @@ The IDs below belong to the repos that implement them, with the same shape.
 | rules | repo | about |
 |---|---|---|
 | FAM-1 to FAM-5, CFG-1 to CFG-8, ERR-1, ERR-2, LOG-1, LOG-3, RUN-1, RUN-2 | [nuinashco/nuikit](https://github.com/nuinashco/nuikit/blob/main/docs/guide.md) | the shared library: families, configs, errors, logging, run directories, seeding |
-| LAY-4, LAY-7, ENV-1 to ENV-3, TST-5, RUN-3 to RUN-7, TOOL-3 | [nuinashco/rnd-template](https://github.com/nuinashco/rnd-template) | the project template: top-level layout, entry points, paths, invariant tests, reproducibility and data, `copier update` |
+| LAY-4, LAY-7, ENV-1 to ENV-3, TST-5, RUN-3 to RUN-7, TOOL-3 | [nuinashco/rnd-template](https://github.com/nuinashco/rnd-template/tree/main/template/.claude/rules) | the project template: top-level layout, entry points, paths, invariant tests, reproducibility and data, `copier update` |
 
 ## Retired rules
 
@@ -123,7 +123,7 @@ IDs are never reused.
 ## 1. Layout and packaging (LAY)
 
 Which top-level folders a project has (LAY-4) and where its entry points live (LAY-7) are rules of
-[nuinashco/rnd-template](https://github.com/nuinashco/rnd-template).
+nuinashco/rnd-template, in the [`.claude/rules/`](https://github.com/nuinashco/rnd-template/tree/main/template/.claude/rules) it gives every project.
 
 ### LAY-1 MUST
 
@@ -595,8 +595,8 @@ Bind run context once with `structlog.contextvars.bind_contextvars(run=...)` ins
 
 ## 8. Tests (TST)
 
-TST-5, the invariant tests every rnd project carries, is a rule of
-[nuinashco/rnd-template](https://github.com/nuinashco/rnd-template).
+TST-5, the invariant tests every rnd project carries, is a rule of nuinashco/rnd-template, in the
+[`.claude/rules/`](https://github.com/nuinashco/rnd-template/tree/main/template/.claude/rules) it gives every project.
 
 ### TST-1 MUST
 
@@ -752,8 +752,8 @@ rejected, and the checklist; results, how to reproduce them and notes for the re
 
 ## 11. Tooling (TOOL)
 
-TOOL-3, keeping a generated project on its template with `copier update`, is a rule of
-[nuinashco/rnd-template](https://github.com/nuinashco/rnd-template).
+TOOL-3, keeping a generated project on its template with `copier update`, is a rule of nuinashco/rnd-template, in the
+[`.claude/rules/`](https://github.com/nuinashco/rnd-template/tree/main/template/.claude/rules) it gives every project.
 
 ### TOOL-1 MUST
 

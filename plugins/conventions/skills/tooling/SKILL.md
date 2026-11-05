@@ -16,8 +16,8 @@ paths:
 
 The tooling rules of nuinashco/conventions: a tool checks every one; follow them as you write.
 
-TOOL-3, keeping a generated project on its template with `copier update`, is a rule of
-[nuinashco/rnd-template](https://github.com/nuinashco/rnd-template).
+TOOL-3, keeping a generated project on its template with `copier update`, is a rule of nuinashco/rnd-template, in the
+[`.claude/rules/`](https://github.com/nuinashco/rnd-template/tree/main/template/.claude/rules) it gives every project.
 
 ## Checked by tools
 

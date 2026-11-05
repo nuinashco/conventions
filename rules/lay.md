@@ -12,7 +12,7 @@ paths:
 ---
 
 Which top-level folders a project has (LAY-4) and where its entry points live (LAY-7) are rules of
-[nuinashco/rnd-template](https://github.com/nuinashco/rnd-template).
+nuinashco/rnd-template, in the [`.claude/rules/`](https://github.com/nuinashco/rnd-template/tree/main/template/.claude/rules) it gives every project.
 
 ### LAY-1 MUST
 

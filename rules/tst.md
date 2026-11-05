@@ -8,8 +8,8 @@ paths:
   - tests/**
 ---
 
-TST-5, the invariant tests every rnd project carries, is a rule of
-[nuinashco/rnd-template](https://github.com/nuinashco/rnd-template).
+TST-5, the invariant tests every rnd project carries, is a rule of nuinashco/rnd-template, in the
+[`.claude/rules/`](https://github.com/nuinashco/rnd-template/tree/main/template/.claude/rules) it gives every project.
 
 ### TST-1 MUST
 

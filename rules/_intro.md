@@ -36,7 +36,7 @@ The IDs below belong to the repos that implement them, with the same shape.
 | rules | repo | about |
 |---|---|---|
 | FAM-1 to FAM-5, CFG-1 to CFG-8, ERR-1, ERR-2, LOG-1, LOG-3, RUN-1, RUN-2 | [nuinashco/nuikit](https://github.com/nuinashco/nuikit/blob/main/docs/guide.md) | the shared library: families, configs, errors, logging, run directories, seeding |
-| LAY-4, LAY-7, ENV-1 to ENV-3, TST-5, RUN-3 to RUN-7, TOOL-3 | [nuinashco/rnd-template](https://github.com/nuinashco/rnd-template) | the project template: top-level layout, entry points, paths, invariant tests, reproducibility and data, `copier update` |
+| LAY-4, LAY-7, ENV-1 to ENV-3, TST-5, RUN-3 to RUN-7, TOOL-3 | [nuinashco/rnd-template](https://github.com/nuinashco/rnd-template/tree/main/template/.claude/rules) | the project template: top-level layout, entry points, paths, invariant tests, reproducibility and data, `copier update` |
 
 ## Retired rules
 

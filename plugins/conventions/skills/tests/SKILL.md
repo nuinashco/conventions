@@ -11,8 +11,8 @@ paths:
 
 The tests rules of nuinashco/conventions: first the ones only judgement checks, in full, then the ones a tool checks.
 
-TST-5, the invariant tests every rnd project carries, is a rule of
-[nuinashco/rnd-template](https://github.com/nuinashco/rnd-template).
+TST-5, the invariant tests every rnd project carries, is a rule of nuinashco/rnd-template, in the
+[`.claude/rules/`](https://github.com/nuinashco/rnd-template/tree/main/template/.claude/rules) it gives every project.
 
 ## Apply with judgement
 
