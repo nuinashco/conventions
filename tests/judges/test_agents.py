@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -22,6 +23,12 @@ VERDICTS = {"KEEP", "TRIM", "DROP", "ADD", "FIX", "RENAME", "UNSURE"}
 # import layer also breaks TST-4, RDOC-5 and ARC-1, rightly.
 PLANTED = {"ARC-4", "TYP-4", "LOG-2", "ERR-3", "DOC-7"}
 CONSEQUENT = {"TST-4", "RDOC-5", "ARC-1"}
+# The reviewer fixture enables the nuinashco plugins as every project does; the judges
+# run the subagents of this checkout, offline, rather than those on GitHub.
+SETTINGS = {
+    "disableAllHooks": True,
+    "enabledPlugins": {"conventions@nuinashco": False, "nuikit@nuinashco": False},
+}
 WORKER = '''"""Worker that processes queue items."""
 
 from typing import Protocol
@@ -110,7 +117,7 @@ def ask_agent(project: Path, name: str, prompt: str) -> str:
             name,
             "--no-session-persistence",
             "--settings",
-            '{"disableAllHooks": true}',
+            json.dumps(SETTINGS),
             "--allowedTools",
             "Read,Grep,Glob,Bash",
             "--disallowedTools",
