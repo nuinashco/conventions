@@ -59,6 +59,9 @@ Fakes, not mocks. The judge tests seed projects from `tests/judges/fixtures/` an
 
 ## Releases
 
+Pull requests are squash-merged with their title as the commit (GIT-3), and their description follows
+`.github/pull_request_template.md` (GIT-6); `make github` sets the GitHub repo up that way once.
+
 Tag `vMAJOR.MINOR.PATCH` on `main` once CI passes. Projects pin the tag in `[tool.uv.sources]`; the plugin's skills,
 subagents and hook wiring follow the default branch, so a hook command's name and flags never change without a
 major version.
