@@ -12,11 +12,12 @@ Rules listed in that table's `ignore` are skipped in both modes.
 
 Each check stands in for a rule whose *Check* used to be review alone: no grab-bag
 modules (LAY-2), heavy imports kept lazy (ARC-8), no branching on `kind` (ARC-4),
-registration outermost (FAM-2), repo paths and environment through `paths.py` (ENV-1,
-ENV-3), attrs instead of `__init__` and dataclasses (TYP-4), options keyword-only
-(STY-4), lowercase error messages (ERR-3), snake_case log events (LOG-2) and test
-functions rather than classes (TST-1). A justified exception is a comment naming the
-rule with its reason, on the flagged line or alone on the line above it:
+registration outermost (FAM-2), attrs instead of `__init__` and dataclasses (TYP-4),
+options keyword-only (STY-4), lowercase error messages (ERR-3), snake_case log events
+(LOG-2) and test functions rather than classes (TST-1). In a project with a
+`src/<pkg>/paths.py`, repo paths and environment go through it (ENV-1, ENV-3). A
+justified exception is a comment naming the rule with its reason, on the flagged line
+or alone on the line above it:
 `# conventions: TYP-4 - the base class from httpx needs __init__.`
 """
 
@@ -64,23 +65,32 @@ def check_file(path: Path) -> list[Finding]:
     root = project_root(path.parent)
     inside = path.absolute().relative_to(root) if root else path
     return check_source(
-        path.read_text(encoding="utf-8"), path=str(path), relative=str(inside)
+        path.read_text(encoding="utf-8"),
+        path=str(path),
+        relative=str(inside),
+        paths_module=bool(root and any(root.glob("src/*/paths.py"))),
     )
 
 
 def check_source(
-    source: str, *, path: str = "<string>", relative: str | None = None
+    source: str,
+    *,
+    path: str = "<string>",
+    relative: str | None = None,
+    paths_module: bool = True,
 ) -> list[Finding]:
     """Return the convention findings for one Python source, reported at `path`.
 
     The file's path from its project's root, `relative` (`path` when not given),
     decides which rules apply: a folder above the project says nothing about it.
+    ENV-1 and ENV-3 apply only when `paths_module` says the project has a
+    `src/<pkg>/paths.py`.
     """
     try:
         tree = ast.parse(source)
     except SyntaxError:
         return []  # Ruff reports the syntax error itself.
-    where = _Where.of(relative or path)
+    where = _Where.of(relative or path, env=paths_module)
     findings = list(_module_name(where, relative or path, report=path))
     if where.package:
         findings += _heavy_imports(tree, path)
@@ -93,19 +103,23 @@ def check_source(
 
 @frozen
 class _Where:
-    """What a file's path says about which rules apply to it."""
+    """What a file's path and its project say about which rules apply to it."""
 
     test: bool
     package: bool
     paths: bool
+    env: bool
 
     @classmethod
-    def of(cls, path: str) -> _Where:
+    def of(cls, path: str, *, env: bool) -> _Where:
         parts = PurePath(path).parts
         name = PurePath(path).name
         test = "tests" in parts or name.startswith("test_") or name == "conftest.py"
         return cls(
-            test=test, package="src" in parts and not test, paths=name == "paths.py"
+            test=test,
+            package="src" in parts and not test,
+            paths=name == "paths.py",
+            env=env,
         )
 
 
@@ -263,6 +277,8 @@ def _kind_comparison(node: ast.Compare, path: str) -> Iterator[Finding]:
 
 
 def _attribute(node: ast.Attribute, where: _Where, path: str) -> Iterator[Finding]:
+    if not where.env:
+        return
     if _from_dunder_file(node):
         yield Finding(
             path,

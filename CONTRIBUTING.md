@@ -65,5 +65,4 @@ major version.
 
 ## Deviations
 
-- **ENV-1, ENV-3**: ignored in `[tool.conventions]`. They are rnd-template's rules for projects with a `paths.py`;
-  the tests find the repo from their own location, and `review-comments` reads `REVIEW_COMMENTS_MODEL`.
+None.

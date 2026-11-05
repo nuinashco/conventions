@@ -777,11 +777,12 @@ use the same versions.
 The checks this guide adds on top of ruff are the `conventions-hooks` package of nuinashco/conventions. A repo opts in
 with a `[tool.conventions]` table in its root `pyproject.toml`, where `ignore = ["STY-4"]` turns rules off for that
 repo, and adds the package as a dev dependency pinned by `uv.lock`. The package's commands are `check-comments`,
-`check-conventions`, `check-protected`, `check-commit-msg` and `review-comments`. The checks run in two layers with the
-same code: pre-commit gates every commit by anyone, and the `conventions` Claude Code plugin gives Claude the findings
-while it works (`PreToolUse` before an edit, `PostToolUse` after it, `Stop` before it hands back). The plugin runs the
-project's own `.venv/bin/<command>`, so each project gets the version its lock pins, and does nothing in a repo that has
-not opted in.
+`check-conventions`, `check-protected`, `check-commit-msg` and `review-comments`; `check-conventions` also checks
+nuikit's FAM-2 and, in a project with a `src/<pkg>/paths.py`, rnd-template's ENV-1 and ENV-3. The checks run in two
+layers with the same code: pre-commit gates every commit by anyone, and the `conventions` Claude Code plugin gives
+Claude the findings while it works (`PreToolUse` before an edit, `PostToolUse` after it, `Stop` before it hands back).
+The plugin runs the project's own `.venv/bin/<command>`, so each project gets the version its lock pins, and does
+nothing in a repo that has not opted in.
 
 *Why:* only pre-commit sees every author, but feedback during the edit is cheaper than at commit time. One plugin,
 enabled once per machine, serves every repo without copying hook settings into each.

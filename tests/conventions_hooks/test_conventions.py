@@ -101,6 +101,19 @@ def test_paths_module_may_read_the_environment():
     assert rules(source, "src/demo/paths.py") == []
 
 
+def test_paths_rules_apply_only_in_a_project_with_a_paths_module(tmp_path):
+    (tmp_path / "pyproject.toml").write_text("[project]\n")
+    module = tmp_path / "src" / "demo" / "runner.py"
+    module.parent.mkdir(parents=True)
+    module.write_text("ROOT = Path(__file__).parents[2]\nTOKEN = os.environ['T']\n")
+
+    before = [f.rule for f in check_file(module)]
+    (module.parent / "paths.py").write_text("ROOT = 1\n")
+    after = [f.rule for f in check_file(module)]
+
+    assert (before, after) == ([], ["ENV-1", "ENV-3"])
+
+
 def test_tests_may_use_kinds_environ_and_positional_defaults():
     source = (
         "def helper(x, y=1): ...\n"

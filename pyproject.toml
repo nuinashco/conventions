@@ -37,8 +37,6 @@ build-backend = "uv_build"
 module-name = "conventions_hooks"
 
 [tool.conventions]
-# The paths rules are for rnd projects (nuinashco/rnd-template); hooks have no paths.py.
-ignore = ["ENV-1", "ENV-3"]
 
 [tool.ruff]
 line-length = 88
