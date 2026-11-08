@@ -12,13 +12,13 @@ Rules listed in that table's `ignore` are skipped in both modes.
 
 Each check stands in for a rule whose *Check* used to be review alone: no grab-bag
 modules (LAY-2), heavy imports kept lazy (ARC-8), no branching on `kind` (ARC-4), a
-variant name switched on in one place (ARC-9), registration outermost (FAM-2), attrs
-instead of `__init__` and dataclasses (TYP-4), options keyword-only (STY-4), lowercase
-error messages (ERR-3), snake_case log events (LOG-2) and test functions rather than
-classes (TST-1). In a project with a
-`src/<pkg>/paths.py`, repo paths and environment go through it (ENV-1, ENV-3). A
-justified exception is a comment naming the rule with its reason, on the flagged line
-or alone on the line above it:
+variant name switched on in one place of the package (ARC-9), no functions that only
+forward (ARC-10), registration outermost (FAM-2), attrs instead of `__init__` and
+dataclasses (TYP-4), options keyword-only (STY-4), lowercase error messages (ERR-3),
+snake_case log events (LOG-2) and test functions rather than classes (TST-1). In a
+project with a `src/<pkg>/paths.py`, repo paths and environment go through it (ENV-1,
+ENV-3). A justified exception is a comment naming the rule with its reason, on the
+flagged line or alone on the line above it:
 `# conventions: TYP-4 - the base class from httpx needs __init__.`
 """
 
@@ -32,7 +32,7 @@ from pathlib import Path, PurePath
 
 from attrs import frozen
 
-from conventions_hooks import switches
+from conventions_hooks import forwarders, package, switches
 from conventions_hooks.findings import Finding, check_edit, check_paths
 from conventions_hooks.settings import project_root
 
@@ -66,11 +66,14 @@ def check_file(path: Path) -> list[Finding]:
     """Return the findings for one Python file, judged by its place in its project."""
     root = project_root(path.parent)
     inside = path.absolute().relative_to(root) if root else path
+    top = package.top_package(path)
     return check_source(
         path.read_text(encoding="utf-8"),
         path=str(path),
         relative=str(inside),
         paths_module=bool(root and any(root.glob("src/*/paths.py"))),
+        package_name=top.name if top else "",
+        elsewhere=package.switches_elsewhere(path),
     )
 
 
@@ -80,13 +83,16 @@ def check_source(
     path: str = "<string>",
     relative: str | None = None,
     paths_module: bool = True,
+    package_name: str = "",
+    elsewhere: Sequence[switches.Elsewhere] = (),
 ) -> list[Finding]:
     """Return the convention findings for one Python source, reported at `path`.
 
     The file's path from its project's root, `relative` (`path` when not given),
     decides which rules apply: a folder above the project says nothing about it.
     ENV-1 and ENV-3 apply only when `paths_module` says the project has a
-    `src/<pkg>/paths.py`.
+    `src/<pkg>/paths.py`. `package_name` and `elsewhere`, the switches in the other
+    modules of the package, let ARC-9 and ARC-10 look past the file.
     """
     try:
         tree = ast.parse(source)
@@ -99,7 +105,9 @@ def check_source(
     for node in ast.walk(tree):
         findings += _check_node(node, where, path)
     if not where.test:
-        findings += switches.check(tree, path)
+        findings += switches.check(tree, path, elsewhere=elsewhere)
+    if where.package and package_name:
+        findings += forwarders.check(tree, path, package_name)
     allowed = _allowed(source)
     kept = [f for f in findings if f.rule not in allowed.get(f.line, ())]
     return sorted(set(kept), key=lambda f: (f.line, f.rule))

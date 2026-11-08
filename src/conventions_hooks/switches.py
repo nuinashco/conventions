@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import ast
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 
 from attrs import frozen
 
@@ -37,15 +37,40 @@ class Switch:
         return frozenset().union(*(arm.values for arm in self.arms))
 
 
-def check(tree: ast.Module, path: str) -> list[Finding]:
-    """Return the ARC-9 findings for one module."""
-    switches = [
+@frozen
+class Elsewhere:
+    """A switch in another module of the same package, and where to point at it."""
+
+    path: str
+    switch: Switch
+
+
+def check(
+    tree: ast.Module, path: str, *, elsewhere: Sequence[Elsewhere] = ()
+) -> list[Finding]:
+    """Return the ARC-9 findings for one module.
+
+    `elsewhere` holds the switches of the package's other modules: a variant name
+    switched on here and there is reported here, in each module that has it. Across
+    modules one of the two must have two arms or more, since a lone `if suffix ==
+    ".py"` in two modules is a test, not a switch.
+    """
+    switches = switches_of(tree)
+    return [
+        *_chains(switches, path),
+        *_repeated(switches, path),
+        *_repeated_elsewhere(switches, path, elsewhere),
+    ]
+
+
+def switches_of(tree: ast.Module) -> list[Switch]:
+    """Return the switches on a variant name in the functions of one module."""
+    return [
         switch
         for function in _functions(tree)
         for switch in _switches(function)
         if switch.key not in SKIPPED
     ]
-    return [*_chains(switches, path), *_repeated(switches, path)]
 
 
 def _chains(switches: list[Switch], path: str) -> Iterator[Finding]:
@@ -86,6 +111,34 @@ def _repeated(switches: list[Switch], path: str) -> Iterator[Finding]:
                 "ARC-9",
                 f"`{switch.key}` is also switched on in `{seen.function}` (line "
                 f"{seen.line}); make each value a class chosen once in a factory",
+            )
+
+
+def _repeated_elsewhere(
+    switches: list[Switch], path: str, elsewhere: Sequence[Elsewhere]
+) -> Iterator[Finding]:
+    others = [other for other in elsewhere if not _factory(other.switch)]
+    for switch in switches:
+        if _factory(switch) or (len(switch.arms) >= MIN_ARMS and not switch.closed):
+            continue
+        other = next(
+            (
+                other
+                for other in others
+                if other.switch.key == switch.key
+                and other.switch.values & switch.values
+                and max(len(other.switch.arms), len(switch.arms)) > 1
+            ),
+            None,
+        )
+        if other:
+            yield Finding(
+                path,
+                switch.line,
+                "ARC-9",
+                f"`{switch.key}` is also switched on in `{other.switch.function}` "
+                f"({other.path}:{other.switch.line}); make each value a class chosen "
+                "once in a factory",
             )
 
 
