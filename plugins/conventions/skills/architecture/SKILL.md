@@ -1,6 +1,6 @@
 ---
 name: architecture
-description: Use when adding, splitting or moving a module or subpackage, deciding where logic goes, wiring objects together in an entry point, choosing between a class and functions, or importing a heavy or optional library.
+description: Use when adding, splitting or moving a module or subpackage, deciding where logic goes, wiring objects together in an entry point, choosing between a class and functions, adding a variant (a kind, mode or backend), or importing a heavy or optional library.
 paths:
 - src/**/*.py
 - scripts/**/*.py
@@ -12,6 +12,10 @@ paths:
 # Architecture (ARC)
 
 The architecture rules of nuinashco/conventions: first the ones only judgement checks, in full, then the ones a tool checks.
+
+Before writing new code, answer one question in the plan: when one more variant of what this code handles arrives (a
+fifth metric, a second backend), which files change? Aim for one new file: a family item or a class beside the others.
+Say which layer (ARC-1) and which seam half (ARC-2) each new module belongs to.
 
 ## Apply with judgement
 
@@ -47,17 +51,26 @@ Split the top level by domain (`evaluation/`, `grading/`, `endpoints/`) and spli
 
 *Check:* review.
 
-### ARC-6 SHOULD
+### ARC-7 SHOULD
 
-Abstract on the third repetition, not the second. Until then prefer duplication: "duplication is far cheaper than the
-wrong abstraction" ([Metz](https://sandimetz.com/blog/2016/1/20/the-wrong-abstraction)).
+Use modules as namespaces: `from <pkg>.evaluation import harness`, then `harness.run(...)`. Write a class when there is
+state, or when behaviour varies by variant: interchangeable implementations of one role are classes behind one base or
+`Protocol` (ARC-9), each small enough to read alone. Otherwise write functions; a class with only static methods, or
+with one method and a constructor, is a function.
+
+*Why:* functions are the cheapest unit until a second implementation appears; from then on the classes keep callers
+from branching ([Hynek](https://hynek.me/articles/python-subclassing-redux/)).
 
 *Check:* review.
 
-### ARC-7 SHOULD
+### ARC-10 SHOULD
 
-Use modules as namespaces: `from <pkg>.evaluation import harness`, then `harness.run(...)`. Write a class only when
-there is state or polymorphism; otherwise write functions.
+A module, class or layer hides something its caller would otherwise know. Do not add a function or class that only
+forwards its arguments, an interface with one implementation and no fake, or a layer whose names mirror the one below.
+
+*Why:* deep modules have an interface much simpler than their implementation, and pass-through methods add no
+functionality ([Ousterhout](https://github.com/johnousterhout/aposd-vs-clean-code)); ARC-9 must not turn into
+abstraction for its own sake.
 
 *Check:* review.
 
@@ -67,4 +80,6 @@ Linters, hooks and the template report these; follow them as you write.
 
 - **ARC-1** MUST [rnd]: Dependencies between a package's subpackages point one way, and the direction is declared as import-linter contracts in `pyproject.toml`. A `layers` contract orders the subpackages from the entry points down to the lowest layer (such as `paths`), and it is exhaustive, so a new subpackage fails `make check` until it is placed in a layer. *Check:* `lint-imports` in `make check`.
 - **ARC-4** MUST: Code branches on declared capabilities, not identities. Use a `ClassVar[bool]` such as `requires_hardware`, or a method that returns `None` when a feature is absent; never `if item.kind == "api"` or `isinstance(x, ConcreteItem)`. *Check:* `check-conventions` flags comparisons with a `kind` attribute; review for `isinstance`.
+- **ARC-6** SHOULD: Extract shared code on the third repetition, not the second. Until then prefer duplication: "duplication is far cheaper than the wrong abstraction" ([Metz](https://sandimetz.com/blog/2016/1/20/the-wrong-abstraction)). *Check:* review; `check-conventions` for the switches (ARC-9).
 - **ARC-8** MUST: Heavy or optional third-party modules (torch, vllm, litellm, cloud SDKs, wandb) are imported inside the function that needs them. Annotations that name them use `if TYPE_CHECKING:` imports. *Check:* `check-conventions` flags a module-level import of a known heavy module under `src/`; review for the others; ruff PLC0415 is off on purpose.
+- **ARC-9** MUST: Behaviour that varies by variant is chosen in one place. A value that names a variant (a `kind`, `mode`, `backend` or `strategy`, as a `str`, `Literal` or `StrEnum`) selects behaviour in at most one function: the factory that builds the object for it. *Check:* `check-conventions` flags a variant name switched on with the same values in two functions of a module, and a chain of three arms on one name, unless every arm returns a new object (the factory) or the `match` ends in `assert_never`; review for switches across modules.

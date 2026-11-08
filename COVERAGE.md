@@ -2,7 +2,7 @@
 
 # Coverage
 
-MUST rules whose only *Check* is review: 10 of 53. Each is a candidate for a hook or a test (TOOL-1). When a tool takes one over, name it in the rule's *Check* under `rules/`, run `make build`, and the rule leaves this list.
+MUST rules whose only *Check* is review: 10 of 54. Each is a candidate for a hook or a test (TOOL-1). When a tool takes one over, name it in the rule's *Check* under `rules/`, run `make build`, and the rule leaves this list.
 
 ## Architecture (ARC): 2
 

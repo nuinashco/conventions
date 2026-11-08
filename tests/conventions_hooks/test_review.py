@@ -143,6 +143,18 @@ def test_the_stop_hook_hands_findings_to_claude_once_per_turn(repo, capsys):
     assert "DOC-4" in capsys.readouterr().err
 
 
+def test_the_stop_hook_hands_the_same_findings_to_claude_only_once(repo):
+    calls: list[str] = []
+    (repo / "new.py").write_text("# Add one.\nx = 1 + 1\n")
+    ask = answering(verdict(FINDING), calls)
+
+    assert (claude_hook(stop(), repo, ask=ask), claude_hook(stop(), repo, ask=ask)) == (
+        2,
+        0,
+    )
+    assert len(calls) == 1
+
+
 def test_the_stop_hook_does_not_review_a_passed_diff_again(repo):
     calls: list[str] = []
     (repo / "module.py").write_text("x = 2  # Seconds, as the scorer counts them.\n")

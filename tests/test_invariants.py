@@ -46,6 +46,27 @@ def test_plugin_hooks_run_console_scripts_of_this_package_on_their_events():
     assert {script for *_, script in wired} <= set(scripts)
 
 
+def test_only_the_stop_hook_runs_in_the_background():
+    hooks = json.loads((PLUGIN / "hooks" / "hooks.json").read_text())["hooks"]
+
+    background = {
+        (event, hook_script(hook["command"])): hook.get("asyncRewake", False)
+        for event, groups in hooks.items()
+        for group in groups
+        for hook in group["hooks"]
+    }
+
+    assert {key for key, rewakes in background.items() if rewakes} == {
+        ("Stop", "review-comments")
+    }
+    assert not any(
+        hook.get("async")
+        for groups in hooks.values()
+        for g in groups
+        for hook in g["hooks"]
+    )
+
+
 def test_marketplace_lists_both_plugins_with_sources_that_resolve():
     marketplace = json.loads((REPO / ".claude-plugin" / "marketplace.json").read_text())
     plugins = {plugin["name"]: plugin["source"] for plugin in marketplace["plugins"]}

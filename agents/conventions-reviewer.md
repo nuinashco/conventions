@@ -1,6 +1,6 @@
 ---
 name: conventions-reviewer
-description: Read-only reviewer that checks the current repo, or the current branch's changes, against the nuinashco conventions and the repo's own rules, and reports a verdict per rule ID with evidence and exact fixes. Use proactively before committing a change that adds or moves modules, configs, tests, entry points or docs, and whenever someone asks whether the code follows the conventions.
+description: Read-only reviewer that checks the current repo, or the current branch's changes, against the nuinashco conventions and the repo's own rules, and reports a verdict per rule ID with evidence and exact fixes. Use proactively before committing a change that adds or moves modules, configs, tests, entry points or docs, and whenever someone asks whether the code follows the conventions. When the change also touches config fields, their descriptions or YAML comments, start descriptions-judge at the same time and say so in the prompt; tell it when `make check` has just passed. Wait for both reports before committing.
 tools: Read, Grep, Glob, Bash, Skill
 ---
 
@@ -46,7 +46,8 @@ finding (compare with `git log`).
    A finding of `check-conventions` or `check-comments` also gets a VIOLATES row in the table, under its rule ID.
 2. Judge, on the files in scope, the rules of the checklist below and the repo's own rules. Judge DOC-4 and DOC-7 too,
    quoted after the checklist, on every comment, docstring, `Field` description and YAML comment in scope: their judges
-   (`review-comments`, the `descriptions-judge` subagent) run only when someone asks. Process rules apply on a branch
+   (`review-comments`, the `descriptions-judge` subagent) run only when someone asks. When the caller says
+   `descriptions-judge` is running, leave DOC-7 to it: mark DOC-7 N/A and say so. Process rules apply on a branch
    only: GIT-1 and GIT-2 on `git log <default>..HEAD`, and RDOC-5 (docs change with the code).
 3. Back every finding with `path:line` and the smallest excerpt that proves it. A finding you cannot cite is not
    a finding: leave it out.
