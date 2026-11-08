@@ -39,8 +39,8 @@
           {
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/run-check\" review-comments --claude-hook",
-            "timeout": 300,
-            "statusMessage": "Reviewing new comments"
+            "statusMessage": "Reviewing new comments in the background",
+            "asyncRewake": true
           }
         ]
       }

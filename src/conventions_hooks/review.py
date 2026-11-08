@@ -4,16 +4,17 @@ Usage:
 
     pre-commit run review-comments --hook-stage manual    # the staged diff
 
-    review-comments --claude-hook    # Claude Code Stop hook: the working tree's diff
+    review-comments --claude-hook    # async Stop hook: the working tree's diff
 
 Sends the diff and the guide's comment rules (DOC, shipped with this package) to
 `claude -p` with every tool and hook disabled, and fails when its structured verdict is
 FAIL. Comments, docstrings and `Field` descriptions are judged (DOC-2 to DOC-7). As a
 Stop hook it skips repos without a `[tool.conventions]` table, turns that add no comment
 lines and diffs it has already passed, and reports findings to Claude with exit code 2.
-Findings under a rule the table's `ignore` lists are dropped in both modes. Set
-REVIEW_COMMENTS_MODEL to choose a model. Needs the Claude Code CLI, logged in. The
-labelled cases in the conventions repo (`make test-judges`) measure it.
+The plugin runs it with `asyncRewake`: Claude hands back at once and is woken only when
+there are findings. Findings under a rule the table's `ignore` lists are dropped in both
+modes. Set REVIEW_COMMENTS_MODEL to choose a model. Needs the Claude Code CLI, logged
+in. The labelled cases in the conventions repo (`make test-judges`) measure it.
 """
 
 from __future__ import annotations

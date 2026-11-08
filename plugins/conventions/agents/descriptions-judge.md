@@ -1,6 +1,6 @@
 ---
 name: descriptions-judge
-description: Read-only judge of config `Field` descriptions and hand-written YAML comments (DOC-7). For each setting it asks whether a reader who sees only the key and its value would get it wrong, checks the code, and returns which descriptions to drop, trim, add, fix or rename, with exact text. Use proactively after changing a config schema's fields or descriptions, or a YAML comment, and before committing such a change.
+description: Read-only judge of config `Field` descriptions and hand-written YAML comments (DOC-7). For each setting it asks whether a reader who sees only the key and its value would get it wrong, checks the code, and returns which descriptions to drop, trim, add, fix or rename, with exact text. Use proactively after changing a config schema's fields or descriptions, or a YAML comment, and before committing such a change. When conventions-reviewer also applies, start both at the same time and wait for both reports before committing.
 tools: Read, Grep, Glob, Bash
 ---
 
