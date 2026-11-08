@@ -6,12 +6,14 @@ Usage:
 
     review-comments --claude-hook    # Claude Code Stop hook: the working tree's diff
 
-Sends the diff and the guide's comment rules to `claude -p` with every tool and hook
-disabled, and fails when its structured verdict is FAIL. Comments, docstrings and
-`Field` descriptions are judged (DOC-2 to DOC-7). As a Stop hook it skips turns that add
-no comment lines and diffs it has already passed, and reports findings to Claude with
-exit code 2. Set REVIEW_COMMENTS_MODEL to choose a model. Needs the Claude Code CLI,
-logged in. The labelled cases in the conventions repo (`make test-judges`) measure it.
+Sends the diff and the guide's comment rules (DOC, shipped with this package) to
+`claude -p` with every tool and hook disabled, and fails when its structured verdict is
+FAIL. Comments, docstrings and `Field` descriptions are judged (DOC-2 to DOC-7). As a
+Stop hook it skips repos without a `[tool.conventions]` table, turns that add no comment
+lines and diffs it has already passed, and reports findings to Claude with exit code 2.
+Findings under a rule the table's `ignore` lists are dropped in both modes. Set
+REVIEW_COMMENTS_MODEL to choose a model. Needs the Claude Code CLI, logged in. The
+labelled cases in the conventions repo (`make test-judges`) measure it.
 """
 
 from __future__ import annotations
@@ -19,26 +21,20 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import re
 import shutil
 import subprocess
 import sys
 from collections.abc import Callable
+from importlib import resources
 from pathlib import Path
 from typing import Any
 
-GUIDE_FILES = ("CONVENTIONS.md", "GUIDE.md")
-SECTION = re.compile(
-    r"^## 8\. Comments and docstrings.*?(?=^## )", re.DOTALL | re.MULTILINE
-)
-FALLBACK_RULES = """\
-- A comment explains what the code cannot say: an external constraint, a non-obvious
-  reason, a unit, where a value came from, what None means. It never restates the code,
-  never narrates the next lines, and there are no section banners.
-- Docstrings are one line where possible: imperative for functions, a noun phrase for
-  classes. Args/Returns/Raises sections only for what types cannot express.
-- Comments are sentences: a capital letter first, a period last.
-"""
+from conventions_hooks.settings import Settings, SettingsError
+
+# Written by `build-rules` from rules/doc.md, so the judge applies the rules of the
+# version a project pins.
+RULES_FILE = "doc_rules.md"
+JUDGED = frozenset({"DOC-2", "DOC-3", "DOC-4", "DOC-5", "DOC-6", "DOC-7"})
 INSTRUCTIONS = """\
 Review only the comments, docstrings and pydantic `Field(description=...)` strings that
 the diff on stdin adds or changes, against the rules on stdin. Flag:
@@ -84,9 +80,15 @@ class ReviewError(Exception):
     """The review could not run: no `claude` CLI, or it failed."""
 
 
-def review(diff: str, rules: str, *, ask: Ask) -> tuple[bool, str]:
-    """Return whether the diff's comments pass, and the findings as text."""
-    if not diff.strip():
+def review(
+    diff: str, rules: str, *, ask: Ask, ignore: frozenset[str] = frozenset()
+) -> tuple[bool, str]:
+    """Return whether the diff's comments pass, and the findings as text.
+
+    Findings under a rule in `ignore` are dropped; with every judged rule ignored the
+    judge is not asked.
+    """
+    if not diff.strip() or ignore >= JUDGED:
         return True, ""
     answer = ask(command(), f"# Rules\n\n{rules}\n\n# Diff\n\n{diff}")
     verdict = parse(answer)
@@ -94,9 +96,13 @@ def review(diff: str, rules: str, *, ask: Ask) -> tuple[bool, str]:
         f"{f['path']}:{f['line']}: {f['rule']} {f['problem']} ({f['quote']!r}); "
         f"{f['fix']}"
         for f in verdict["findings"]
+        if f["rule"] not in ignore
     ]
-    passed = verdict["verdict"] == "PASS" and not findings
-    return passed, "\n".join([verdict["verdict"], *findings])
+    # A FAIL whose every finding is ignored passes; a FAIL without findings does not.
+    passed = not findings and (
+        verdict["verdict"] == "PASS" or bool(verdict["findings"])
+    )
+    return passed, "\n".join(["PASS" if passed else "FAIL", *findings])
 
 
 def parse(answer: str) -> dict[str, Any]:
@@ -129,20 +135,17 @@ def command() -> list[str]:
         "--json-schema",
         json.dumps(SCHEMA),
     ]
+    # conventions: ENV-3 - a hook has no paths.py; its one setting is this variable.
     if model := os.environ.get("REVIEW_COMMENTS_MODEL"):
         args += ["--model", model]
     return [*args, INSTRUCTIONS]
 
 
-def rules(root: Path) -> str:
-    """Return the guide's comment section from the repo, or a built-in summary."""
-    for name in GUIDE_FILES:
-        path = root / name
-        if path.is_file() and (
-            match := SECTION.search(path.read_text(encoding="utf-8"))
-        ):
-            return match.group(0).strip()
-    return FALLBACK_RULES
+def comment_rules() -> str:
+    """Return the guide's comment and docstring rules (DOC) as markdown."""
+    text = resources.files(__package__).joinpath(RULES_FILE).read_text(encoding="utf-8")
+    header, _, rest = text.partition("\n")
+    return rest.strip() if header.startswith("<!--") else text.strip()
 
 
 def ask_claude(args: list[str], stdin: str) -> str:
@@ -163,13 +166,19 @@ def main(argv: list[str] | None = None) -> int:
     if args and args != ["--claude-hook"]:
         print(__doc__)
         return 0 if args in (["-h"], ["--help"]) else 2
-    root = Path(_git("rev-parse", "--show-toplevel"))
+    toplevel = _git("rev-parse", "--show-toplevel", check=False)
     if args == ["--claude-hook"]:
-        return claude_hook(sys.stdin.read(), root, ask=ask_claude)
+        if not toplevel:
+            return 0
+        return claude_hook(sys.stdin.read(), Path(toplevel), ask=ask_claude)
+    if not toplevel:
+        print("error: not inside a git repository; run it from one", file=sys.stderr)
+        return 2
     diff = _git("diff", "--cached", "--unified=3", "--", "*.py")
     try:
-        passed, answer = review(diff, rules(root), ask=ask_claude)
-    except ReviewError as e:
+        ignore = Settings.of(Path(toplevel)).ignore
+        passed, answer = review(diff, comment_rules(), ask=ask_claude, ignore=ignore)
+    except (SettingsError, ReviewError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
     if answer:
@@ -179,8 +188,10 @@ def main(argv: list[str] | None = None) -> int:
 
 def claude_hook(payload: str, root: Path, *, ask: Ask) -> int:
     """Review the comments the working tree adds; exit 2 hands findings to Claude."""
-    if json.loads(payload).get("stop_hook_active"):
-        return 0  # Claude is answering an earlier review; one round per turn.
+    settings = _opted_in(root)
+    # An active stop hook means Claude is answering an earlier review: one per turn.
+    if settings is None or json.loads(payload).get("stop_hook_active"):
+        return 0
     diff = working_diff(root)
     if not adds_comments(diff):
         return 0
@@ -189,7 +200,7 @@ def claude_hook(payload: str, root: Path, *, ask: Ask) -> int:
     if marker.is_file() and marker.read_text() == digest:
         return 0
     try:
-        passed, answer = review(diff, rules(root), ask=ask)
+        passed, answer = review(diff, comment_rules(), ask=ask, ignore=settings.ignore)
     except ReviewError as e:
         print(f"review-comments: {e}", file=sys.stderr)
         return 1
@@ -220,6 +231,15 @@ def adds_comments(diff: str) -> bool:
     return any(
         any(m in text for m in markers) for text in added if not text.startswith("++")
     )
+
+
+def _opted_in(root: Path) -> Settings | None:
+    """Return the settings of the repo at `root`, or None when the hook skips it."""
+    try:
+        settings = Settings.of(root)
+    except SettingsError:
+        return None  # The command line reports a broken table; the hook fails open.
+    return settings if settings.enabled else None
 
 
 def _git(*args: str, cwd: Path | None = None, check: bool = True) -> str:

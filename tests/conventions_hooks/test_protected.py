@@ -11,21 +11,21 @@ from conventions_hooks.protected import claude_hook, main, reason
 
 
 @pytest.fixture
-def repo(tmp_path):
-    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
-    (tmp_path / ".gitattributes").write_text(
-        "src/nuikit/** linguist-vendored protected=vendored\n"
+def repo(opted_in):
+    subprocess.run(["git", "init", "-q"], cwd=opted_in, check=True)
+    (opted_in / ".gitattributes").write_text(
+        "vendor/** linguist-vendored protected=vendored\n"
         "configs/defaults/** linguist-generated protected=generated\n"
         "notes/** protected\n",
         encoding="utf-8",
     )
-    return tmp_path
+    return opted_in
 
 
 @pytest.mark.parametrize(
     ("path", "expected"),
     [
-        ("src/nuikit/config.py", "conventions template"),
+        ("vendor/lib/core.py", "vendored from another repo"),
         ("configs/defaults/new/run.yaml", "generated"),
         ("notes/todo.md", "marked protected"),
         ("src/pkg/config.py", None),
@@ -67,19 +67,44 @@ def test_path_outside_any_repo_is_not_protected(tmp_path):
 
 
 def test_claude_edit_to_protected_file_is_denied_with_reason(repo, capsys):
-    payload = {"cwd": str(repo), "tool_input": {"file_path": "src/nuikit/errors.py"}}
+    payload = {"cwd": str(repo), "tool_input": {"file_path": "vendor/lib/core.py"}}
 
     assert claude_hook(json.dumps(payload)) == 0
     decision = json.loads(capsys.readouterr().out)["hookSpecificOutput"]
     assert decision["permissionDecision"] == "deny"
-    assert "nuinashco/conventions" in decision["permissionDecisionReason"]
+    assert "change it there" in decision["permissionDecisionReason"]
+
+
+@pytest.mark.parametrize(
+    "pyproject",
+    ['[project]\nname = "x"\n', '[tool.conventions]\nignore = ["TOOL-5"]\n'],
+    ids=["not-opted-in", "ignores-tool-5"],
+)
+def test_claude_edit_is_allowed_where_the_repo_does_not_protect(
+    repo, capsys, pyproject
+):
+    (repo / "pyproject.toml").write_text(pyproject)
+    payload = {"cwd": str(repo), "tool_input": {"file_path": "vendor/lib/core.py"}}
+
+    assert claude_hook(json.dumps(payload)) == 0
+    assert capsys.readouterr().out == ""
 
 
 def test_command_line_lists_only_protected_paths(repo, capsys, monkeypatch):
     monkeypatch.chdir(repo)
 
-    assert main(["src/nuikit/config.py", "src/pkg/config.py"]) == 1
+    assert main(["vendor/lib/core.py", "src/pkg/config.py"]) == 1
     assert capsys.readouterr().out.splitlines() == [
-        "src/nuikit/config.py: it comes from the conventions template; change it in "
-        "nuinashco/conventions, then run `copier update`"
+        "vendor/lib/core.py: it is vendored from another repo; change it there and "
+        "copy it in again"
     ]
+
+
+def test_command_line_protects_nothing_in_a_repo_that_ignores_tool_5(
+    repo, capsys, monkeypatch
+):
+    (repo / "pyproject.toml").write_text('[tool.conventions]\nignore = ["TOOL-5"]\n')
+    monkeypatch.chdir(repo)
+
+    assert main(["vendor/lib/core.py"]) == 0
+    assert capsys.readouterr().out == ""

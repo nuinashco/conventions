@@ -1,1 +1,1 @@
-"""pre-commit hooks that check the conventions in GUIDE.md."""
+"""Checks of the nuinashco conventions, and the generator of their docs."""

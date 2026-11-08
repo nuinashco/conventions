@@ -1,5 +1,5 @@
 # Labelled diffs for the review-comments judge (tests/judges/test_review_comments.py).
-# Each case adds one comment or docstring; `label` is the verdict GUIDE section 8 requires.
+# Each case adds one comment or docstring; `label` is the verdict the DOC rules (rules/doc.md) require.
 # Keep cases unambiguous under the guide: a case reviewers disagree on measures nothing.
 
 - id: restates-increment

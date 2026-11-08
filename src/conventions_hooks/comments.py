@@ -7,7 +7,8 @@ Usage:
     check-comments --claude-hook    # Claude Code PostToolUse hook: reads its JSON
 
 In hook mode the edited file's findings go to stderr with exit code 2, which Claude
-Code hands back to Claude.
+Code hands back to Claude; a repo without a `[tool.conventions]` table is skipped.
+Rules listed in that table's `ignore` are skipped in both modes.
 
 Comments read as sentences (a capital letter or a `name` first, end punctuation last,
 DOC-5), section banners are not allowed (DOC-4), and a class docstring is a noun phrase,
@@ -19,7 +20,6 @@ from __future__ import annotations
 
 import ast
 import io
-import json
 import re
 import sys
 import tokenize
@@ -28,7 +28,19 @@ from pathlib import Path
 
 from attrs import frozen
 
-DIRECTIVES = ("noqa", "type:", "pyright:", "pragma", "fmt:", "isort:", "ruff:", "mypy:")
+from conventions_hooks.findings import Finding, check_edit, check_paths
+
+DIRECTIVES = (
+    "noqa",
+    "type:",
+    "pyright:",
+    "pragma",
+    "fmt:",
+    "isort:",
+    "ruff:",
+    "mypy:",
+    "conventions:",
+)
 BANNER = re.compile(r"^#|-{3,}|={3,}|\*{3,}|~{3,}|_{3,}|\+{3,}|#{3,}")
 CLOSERS = ")]}\"'`"
 # Base-form verbs that open an order, not a noun phrase; words that are also common
@@ -43,19 +55,6 @@ ORDERS = frozenset(_ORDER_VERBS.split())
 
 
 @frozen
-class Finding:
-    """One broken rule at one place in a file."""
-
-    path: str
-    line: int
-    rule: str
-    message: str
-
-    def __str__(self) -> str:
-        return f"{self.path}:{self.line}: {self.rule} {self.message}"
-
-
-@frozen
 class Block:
     """Consecutive comment lines read as one text; `inline` when it follows code."""
 
@@ -64,7 +63,7 @@ class Block:
     inline: bool
 
 
-def check_source(source: str, path: str = "<string>") -> list[Finding]:
+def check_source(source: str, *, path: str = "<string>") -> list[Finding]:
     """Return the comment and docstring findings for one Python source."""
     findings = [
         finding for block in _blocks(source) for finding in _check_block(block, path)
@@ -75,33 +74,18 @@ def check_source(source: str, path: str = "<string>") -> list[Finding]:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Check the files named on the command line, or the file a Claude edit wrote."""
-    args = sys.argv[1:] if argv is None else list(argv)
-    if args == ["--claude-hook"]:
-        return claude_hook(sys.stdin.read())
-    if any(arg.startswith("-") for arg in args):
-        print(__doc__)
-        return 0 if args in (["-h"], ["--help"]) else 2
-    findings = [finding for path in args for finding in check_file(Path(path))]
-    for finding in findings:
-        print(finding)
-    return 1 if findings else 0
+    args = sys.argv[1:] if argv is None else argv
+    return check_paths(args, check_file=check_file, usage=__doc__ or "")
 
 
 def check_file(path: Path) -> list[Finding]:
     """Return the findings for one Python file."""
-    return check_source(path.read_text(encoding="utf-8"), str(path))
+    return check_source(path.read_text(encoding="utf-8"), path=str(path))
 
 
 def claude_hook(payload: str) -> int:
     """Check the Python file a Claude Code tool call wrote; exit code 2 reports back."""
-    tool_input = json.loads(payload).get("tool_input") or {}
-    path = Path(tool_input.get("file_path") or "")
-    if path.suffix != ".py" or not path.is_file():
-        return 0
-    findings = check_file(path)
-    for finding in findings:
-        print(finding, file=sys.stderr)
-    return 2 if findings else 0
+    return check_edit(payload, check_file=check_file)
 
 
 def _blocks(source: str) -> Iterator[Block]:
@@ -184,7 +168,9 @@ def _class_docstrings(source: str, path: str) -> Iterator[Finding]:
     except SyntaxError:
         return
     for node in ast.walk(tree):
-        docstring = ast.get_docstring(node) if isinstance(node, ast.ClassDef) else None
+        if not isinstance(node, ast.ClassDef):
+            continue
+        docstring = ast.get_docstring(node)
         if docstring and docstring.split()[0].lower() in ORDERS:
             yield Finding(
                 path,

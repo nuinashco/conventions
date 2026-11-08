@@ -8,9 +8,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from conventions_hooks.review import ask_claude, review, rules
+from conventions_hooks.review import ask_claude, comment_rules, review
 
-REPO = Path(__file__).resolve().parents[2]
 CASES = yaml.safe_load(
     Path(__file__).with_name("review_comments_cases.yaml").read_text()
 )
@@ -20,7 +19,7 @@ pytestmark = pytest.mark.judges
 
 @pytest.fixture(scope="module")
 def answers() -> dict[str, tuple[bool, str]]:
-    guide = rules(REPO)
+    guide = comment_rules()
     with ThreadPoolExecutor(max_workers=6) as pool:
         results = pool.map(lambda c: review(c["diff"], guide, ask=ask_claude), CASES)
         return {case["id"]: result for case, result in zip(CASES, results, strict=True)}

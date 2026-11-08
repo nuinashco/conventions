@@ -1,0 +1,6 @@
+# Entry config of `demo-run`: values set below change every run of this repo.
+# Every setting with its default: defaults/run.yaml (generated).
+defaults:
+  - defaults/run@_here_
+  - hydra: default
+  - _self_
