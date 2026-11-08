@@ -61,9 +61,11 @@ IDs are never reused.
 | [ARC-3](#arc-3-must) | MUST | Each entry point has one composition root, where objects are built and wired: the `cli/<command>.py` function, or the script itself. |
 | [ARC-4](#arc-4-must) | MUST | Code branches on declared capabilities, not identities. Use a `ClassVar[bool]` such as `requires_hardware`, or a method that returns `None` when a feature is absent; never `if item.kind == "api"` or `isinstance(x, ConcreteItem)`. |
 | [ARC-5](#arc-5-should) | SHOULD | Split the top level by domain (`evaluation/`, `grading/`, `endpoints/`) and split inside a domain by role. |
-| [ARC-6](#arc-6-should) | SHOULD | Abstract on the third repetition, not the second. Until then prefer duplication: "duplication is far cheaper than the wrong abstraction" ([Metz](https://sandimetz.com/blog/2016/1/20/the-wrong-abstraction)). |
-| [ARC-7](#arc-7-should) | SHOULD | Use modules as namespaces: `from <pkg>.evaluation import harness`, then `harness.run(...)`. Write a class only when there is state or polymorphism; otherwise write functions. |
+| [ARC-6](#arc-6-should) | SHOULD | Extract shared code on the third repetition, not the second. Until then prefer duplication: "duplication is far cheaper than the wrong abstraction" ([Metz](https://sandimetz.com/blog/2016/1/20/the-wrong-abstraction)). |
+| [ARC-7](#arc-7-should) | SHOULD | Use modules as namespaces: `from <pkg>.evaluation import harness`, then `harness.run(...)`. Write a class when there is state, or when behaviour varies by variant: interchangeable implementations of one role are classes behind one base or `Protocol` (ARC-9), each small enough to read alone. |
 | [ARC-8](#arc-8-must) | MUST | Heavy or optional third-party modules (torch, vllm, litellm, cloud SDKs, wandb) are imported inside the function that needs them. Annotations that name them use `if TYPE_CHECKING:` imports. |
+| [ARC-9](#arc-9-must) | MUST | Behaviour that varies by variant is chosen in one place. A value that names a variant (a `kind`, `mode`, `backend` or `strategy`, as a `str`, `Literal` or `StrEnum`) selects behaviour in at most one function: the factory that builds the object for it. |
+| [ARC-10](#arc-10-should) | SHOULD | A module, class or layer hides something its caller would otherwise know. Do not add a function or class that only forwards its arguments, an interface with one implementation and no fake, or a layer whose names mirror the one below. |
 | [TYP-1](#typ-1-must) | MUST | Every function signature in `src/` is annotated; test functions and fixtures may skip annotations. pyright in standard mode passes on `src/` and `tests/`, and strict mode passes on the `src/` of a library other repos import, such as nuikit. |
 | [TYP-2](#typ-2-must) | MUST | Use modern syntax: `X \| None`, builtin generics, `collections.abc` for abstract containers, PEP 695 generics and `type` aliases. |
 | [TYP-3](#typ-3-must) | MUST | While `requires-python` is below 3.14, every module starts with `from __future__ import annotations`. From 3.14 on it is never used: [PEP 649](https://peps.python.org/pep-0649/) makes annotations lazy, and [PEP 749](https://peps.python.org/pep-0749/) schedules the import for deprecation. |
@@ -176,6 +178,10 @@ standard targets are `setup lint format typecheck test check`, plus what the pro
 
 ## 2. Architecture (ARC)
 
+Before writing new code, answer one question in the plan: when one more variant of what this code handles arrives (a
+fifth metric, a second backend), which files change? Aim for one new file: a family item or a class beside the others.
+Say which layer (ARC-1) and which seam half (ARC-2) each new module belongs to.
+
 ### ARC-1 MUST [rnd]
 
 Dependencies between a package's subpackages point one way, and the direction is declared as import-linter contracts
@@ -234,15 +240,23 @@ Split the top level by domain (`evaluation/`, `grading/`, `endpoints/`) and spli
 
 ### ARC-6 SHOULD
 
-Abstract on the third repetition, not the second. Until then prefer duplication: "duplication is far cheaper than the
-wrong abstraction" ([Metz](https://sandimetz.com/blog/2016/1/20/the-wrong-abstraction)).
+Extract shared code on the third repetition, not the second. Until then prefer duplication: "duplication is far cheaper
+than the wrong abstraction" ([Metz](https://sandimetz.com/blog/2016/1/20/the-wrong-abstraction)). This counts copies of
+code, not variants of behaviour: a second switch on the same variant already calls for classes (ARC-9). A shared function
+that needs one more parameter or branch to serve one more caller is the wrong abstraction: inline it back into its
+callers, or split it per variant.
 
-*Check:* review.
+*Check:* review; `check-conventions` for the switches (ARC-9).
 
 ### ARC-7 SHOULD
 
-Use modules as namespaces: `from <pkg>.evaluation import harness`, then `harness.run(...)`. Write a class only when
-there is state or polymorphism; otherwise write functions.
+Use modules as namespaces: `from <pkg>.evaluation import harness`, then `harness.run(...)`. Write a class when there is
+state, or when behaviour varies by variant: interchangeable implementations of one role are classes behind one base or
+`Protocol` (ARC-9), each small enough to read alone. Otherwise write functions; a class with only static methods, or
+with one method and a constructor, is a function.
+
+*Why:* functions are the cheapest unit until a second implementation appears; from then on the classes keep callers
+from branching ([Hynek](https://hynek.me/articles/python-subclassing-redux/)).
 
 *Check:* review.
 
@@ -255,6 +269,56 @@ needs them. Annotations that name them use `if TYPE_CHECKING:` imports.
 
 *Check:* `check-conventions` flags a module-level import of a known heavy module under `src/`; review for the others;
 ruff PLC0415 is off on purpose.
+
+### ARC-9 MUST
+
+Behaviour that varies by variant is chosen in one place. A value that names a variant (a `kind`, `mode`, `backend` or
+`strategy`, as a `str`, `Literal` or `StrEnum`) selects behaviour in at most one function: the factory that builds the
+object for it. When a second function would branch on the same value, or one chain reaches three arms that run
+different code, make each variant a class: a family item when a config selects it, otherwise a `Protocol` and one attrs
+class per variant, chosen in the composition root (ARC-3). A chain that only maps values to constants is a dict. A
+closed set that gains operations rather than variants (AST nodes, config shapes) stays a `match` that ends in
+`assert_never`.
+
+```python
+# Bad: every new backend edits every function.
+def start(cfg: RunConfig) -> None:
+    if cfg.backend == "modal":
+        ...
+    elif cfg.backend == "local":
+        ...
+
+
+def cost_usd(cfg: RunConfig) -> float:
+    return 0.3 if cfg.backend == "modal" else 0.0
+
+
+# Good: a new backend is one new class.
+class Backend(Protocol):
+    def start(self) -> None: ...
+    def cost_usd(self) -> float: ...
+```
+
+*Why:* every repeated switch is edited when a variant is added ("Repeated Switches",
+[Fowler](https://martinfowler.com/books/refactoring.html)). Classes make new variants cheap and functions make new
+operations cheap ([the expression problem](https://eli.thegreenplace.net/2016/the-expression-problem-and-its-solutions/)),
+and research code mostly gains variants. Coding agents grow conditional chains rather than classes
+([Zhu et al.](https://arxiv.org/html/2605.02741), [SlopCodeBench](https://arxiv.org/html/2603.24755v1)).
+
+*Check:* `check-conventions` flags a variant name switched on with the same values in two functions of a module, and a
+chain of three arms on one name, unless every arm returns a new object (the factory) or the `match` ends in
+`assert_never`; review for switches across modules.
+
+### ARC-10 SHOULD
+
+A module, class or layer hides something its caller would otherwise know. Do not add a function or class that only
+forwards its arguments, an interface with one implementation and no fake, or a layer whose names mirror the one below.
+
+*Why:* deep modules have an interface much simpler than their implementation, and pass-through methods add no
+functionality ([Ousterhout](https://github.com/johnousterhout/aposd-vs-clean-code)); ARC-9 must not turn into
+abstraction for its own sake.
+
+*Check:* review.
 
 ## 3. Types and data (TYP)
 

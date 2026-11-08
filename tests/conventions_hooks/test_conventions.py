@@ -174,3 +174,99 @@ def test_the_claude_hook_reports_an_edited_python_file(opted_in, capsys):
 def test_flags_print_the_usage_instead_of_reading_files(capsys):
     assert (main(["--help"]), main(["--bogus"])) == (0, 2)
     assert "Usage:" in capsys.readouterr().out
+
+
+SHOTGUN = """
+def start(cfg):
+    if cfg.backend == "modal":
+        launch_modal()
+    elif cfg.backend == "local":
+        launch_local()
+
+
+def cost(cfg):
+    if cfg.backend == "modal":
+        return price_modal()
+    return 0.0
+"""
+
+LONG_CHAIN = """
+def score(pred, gold, *, metric):
+    if metric == "f1":
+        return f1(pred, gold)
+    elif metric == "em":
+        return exact(pred, gold)
+    elif metric == "bleu":
+        return bleu(pred, gold)
+    raise UnknownMetricError(metric)
+"""
+
+GUARDS = """
+def render(rows, *, fmt):
+    if fmt == "csv":
+        return to_csv(rows)
+    if fmt == "json":
+        return to_json(rows)
+    if fmt == "md":
+        return to_markdown(rows)
+    raise UnknownFormatError(fmt)
+"""
+
+CONSTANTS = """
+def fraction(split):
+    match split:
+        case "train":
+            return 0.8
+        case "val":
+            return 0.1
+        case "test":
+            return 0.1
+"""
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        (SHOTGUN, [(10, "ARC-9")]),
+        (LONG_CHAIN, [(3, "ARC-9")]),
+        (GUARDS, [(3, "ARC-9")]),
+        (CONSTANTS, [(3, "ARC-9")]),
+    ],
+    ids=[
+        "same-variant-in-two-functions",
+        "three-arms-run-code",
+        "three-guard-clauses",
+        "three-arms-map-constants",
+    ],
+)
+def test_switches_on_a_variant_name_are_reported(source, expected):
+    assert rules(source) == expected
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        # The factory: every arm builds and returns an object.
+        "def build(name):\n"
+        "    if name == 'a':\n        return A()\n"
+        "    elif name == 'b':\n        return B()\n"
+        "    elif name == 'c':\n        return C()\n",
+        # A closed set that gains operations stays a match ending in `assert_never`.
+        "def describe(shape):\n    match shape.form:\n"
+        "        case 'circle':\n            draw()\n"
+        "        case 'square':\n            fill()\n"
+        "        case 'line':\n            stroke()\n"
+        "        case _:\n            assert_never(shape.form)\n",
+        # Two arms in one function, different variant names elsewhere.
+        "def a(x):\n    if x.mode == 'fast':\n        go()\n\n\n"
+        "def b(x):\n    if x.split == 'fast':\n        go()\n",
+        "if __name__ == '__main__':\n    main()\n",
+    ],
+    ids=["factory", "closed-match", "different-names", "main-guard"],
+)
+def test_one_switch_in_one_place_passes(source):
+    assert rules(source) == []
+
+
+def test_tests_may_switch_on_variants():
+    assert rules(LONG_CHAIN, "tests/demo/test_metrics.py") == []

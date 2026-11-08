@@ -11,10 +11,11 @@ Code hands back to Claude; a repo without a `[tool.conventions]` table is skippe
 Rules listed in that table's `ignore` are skipped in both modes.
 
 Each check stands in for a rule whose *Check* used to be review alone: no grab-bag
-modules (LAY-2), heavy imports kept lazy (ARC-8), no branching on `kind` (ARC-4),
-registration outermost (FAM-2), attrs instead of `__init__` and dataclasses (TYP-4),
-options keyword-only (STY-4), lowercase error messages (ERR-3), snake_case log events
-(LOG-2) and test functions rather than classes (TST-1). In a project with a
+modules (LAY-2), heavy imports kept lazy (ARC-8), no branching on `kind` (ARC-4), a
+variant name switched on in one place (ARC-9), registration outermost (FAM-2), attrs
+instead of `__init__` and dataclasses (TYP-4), options keyword-only (STY-4), lowercase
+error messages (ERR-3), snake_case log events (LOG-2) and test functions rather than
+classes (TST-1). In a project with a
 `src/<pkg>/paths.py`, repo paths and environment go through it (ENV-1, ENV-3). A
 justified exception is a comment naming the rule with its reason, on the flagged line
 or alone on the line above it:
@@ -31,6 +32,7 @@ from pathlib import Path, PurePath
 
 from attrs import frozen
 
+from conventions_hooks import switches
 from conventions_hooks.findings import Finding, check_edit, check_paths
 from conventions_hooks.settings import project_root
 
@@ -96,6 +98,8 @@ def check_source(
         findings += _heavy_imports(tree, path)
     for node in ast.walk(tree):
         findings += _check_node(node, where, path)
+    if not where.test:
+        findings += switches.check(tree, path)
     allowed = _allowed(source)
     kept = [f for f in findings if f.rule not in allowed.get(f.line, ())]
     return sorted(set(kept), key=lambda f: (f.line, f.rule))

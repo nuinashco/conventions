@@ -64,8 +64,8 @@ Rules whose only check is review, by area:
   - **ARC-2** MUST: Every seam has a pure half that decides and an effectful half that acts: `plan.py` / `served.py`, `adapter.py` / `runner.py`, `compiler.py` / `harness.py`.
   - **ARC-3** MUST: Each entry point has one composition root, where objects are built and wired: the `cli/<command>.py` function, or the script itself.
   - **ARC-5** SHOULD: Split the top level by domain (`evaluation/`, `grading/`, `endpoints/`) and split inside a domain by role.
-  - **ARC-6** SHOULD: Abstract on the third repetition, not the second. Until then prefer duplication: "duplication is far cheaper than the wrong abstraction" ([Metz](https://sandimetz.com/blog/2016/1/20/the-wrong-abstraction)).
-  - **ARC-7** SHOULD: Use modules as namespaces: `from <pkg>.evaluation import harness`, then `harness.run(...)`. Write a class only when there is state or polymorphism; otherwise write functions.
+  - **ARC-7** SHOULD: Use modules as namespaces: `from <pkg>.evaluation import harness`, then `harness.run(...)`. Write a class when there is state, or when behaviour varies by variant: interchangeable implementations of one role are classes behind one base or `Protocol` (ARC-9), each small enough to read alone.
+  - **ARC-10** SHOULD: A module, class or layer hides something its caller would otherwise know. Do not add a function or class that only forwards its arguments, an interface with one implementation and no fake, or a layer whose names mirror the one below.
 - Types and data (TYP):
   - **TYP-6** MUST: Family bases are ABCs: the registry checks subclassing, and items inherit `Config` and helpers. An injected collaborator that only needs a shape (a clock, an HTTP client, an uploader) is typed as a `Protocol`, so fakes need no inheritance.
   - **TYP-7** SHOULD: Use `Literal` for small closed sets of config values, and `StrEnum` when code iterates over the set or attaches behaviour to it.
@@ -109,6 +109,16 @@ that returns `None` when a feature is absent; never `if item.kind == "api"` or `
 
 *Check:* `check-conventions` flags comparisons with a `kind` attribute; review for `isinstance`.
 
+### ARC-6 SHOULD
+
+Extract shared code on the third repetition, not the second. Until then prefer duplication: "duplication is far cheaper
+than the wrong abstraction" ([Metz](https://sandimetz.com/blog/2016/1/20/the-wrong-abstraction)). This counts copies of
+code, not variants of behaviour: a second switch on the same variant already calls for classes (ARC-9). A shared function
+that needs one more parameter or branch to serve one more caller is the wrong abstraction: inline it back into its
+callers, or split it per variant.
+
+*Check:* review; `check-conventions` for the switches (ARC-9).
+
 ### ARC-8 MUST
 
 Heavy or optional third-party modules (torch, vllm, litellm, cloud SDKs, wandb) are imported inside the function that
@@ -118,6 +128,45 @@ needs them. Annotations that name them use `if TYPE_CHECKING:` imports.
 
 *Check:* `check-conventions` flags a module-level import of a known heavy module under `src/`; review for the others;
 ruff PLC0415 is off on purpose.
+
+### ARC-9 MUST
+
+Behaviour that varies by variant is chosen in one place. A value that names a variant (a `kind`, `mode`, `backend` or
+`strategy`, as a `str`, `Literal` or `StrEnum`) selects behaviour in at most one function: the factory that builds the
+object for it. When a second function would branch on the same value, or one chain reaches three arms that run
+different code, make each variant a class: a family item when a config selects it, otherwise a `Protocol` and one attrs
+class per variant, chosen in the composition root (ARC-3). A chain that only maps values to constants is a dict. A
+closed set that gains operations rather than variants (AST nodes, config shapes) stays a `match` that ends in
+`assert_never`.
+
+```python
+# Bad: every new backend edits every function.
+def start(cfg: RunConfig) -> None:
+    if cfg.backend == "modal":
+        ...
+    elif cfg.backend == "local":
+        ...
+
+
+def cost_usd(cfg: RunConfig) -> float:
+    return 0.3 if cfg.backend == "modal" else 0.0
+
+
+# Good: a new backend is one new class.
+class Backend(Protocol):
+    def start(self) -> None: ...
+    def cost_usd(self) -> float: ...
+```
+
+*Why:* every repeated switch is edited when a variant is added ("Repeated Switches",
+[Fowler](https://martinfowler.com/books/refactoring.html)). Classes make new variants cheap and functions make new
+operations cheap ([the expression problem](https://eli.thegreenplace.net/2016/the-expression-problem-and-its-solutions/)),
+and research code mostly gains variants. Coding agents grow conditional chains rather than classes
+([Zhu et al.](https://arxiv.org/html/2605.02741), [SlopCodeBench](https://arxiv.org/html/2603.24755v1)).
+
+*Check:* `check-conventions` flags a variant name switched on with the same values in two functions of a module, and a
+chain of three arms on one name, unless every arm returns a new object (the factory) or the `match` ends in
+`assert_never`; review for switches across modules.
 
 ### TYP-4 MUST
 
