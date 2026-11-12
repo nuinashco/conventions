@@ -39,7 +39,13 @@ from pathlib import Path, PurePath
 from attrs import frozen
 
 from conventions_hooks import forwarders, package, switches, waivers
-from conventions_hooks.findings import UNREADABLE, Finding, check_edit, check_paths
+from conventions_hooks.findings import (
+    UNREADABLE,
+    Finding,
+    check_edit,
+    check_paths,
+    merged,
+)
 from conventions_hooks.settings import project_root
 
 GRAB_BAGS = frozenset({"utils", "util", "common", "core", "helpers", "misc"})
@@ -59,7 +65,8 @@ PLAIN_BASES = frozenset({"Protocol", "Enum", "StrEnum", "IntEnum", "NamedTuple"}
 # Bases that say nothing about who owns a class: the project's family bases have them,
 # nuikit's `Configurable` among them.
 UNOWNED_BASES = frozenset({"ABC", "Configurable", "Generic", "object"})
-DATACLASS_MAKERS = frozenset({"dataclass", "field", "make_dataclass"})
+DATACLASS_CALLS = frozenset({"field", "make_dataclass"})
+DATACLASS_MAKERS = DATACLASS_CALLS | {"dataclass"}
 PYTHON_NAMES = frozenset({"None", "True", "False"})
 
 
@@ -135,6 +142,9 @@ def check_source(
     if where.package:
         findings += _heavy_imports(tree, path)
     findings += _hand_written_inits(tree, path, own_packages)
+    # A dataclass and the import that brings it in are one defect, reported where the
+    # dataclass is made; a waiver there is enough.
+    findings += list(_dataclasses(tree, path)) or _dataclass_imports(tree, path)
     for node in ast.walk(tree):
         findings += _check_node(node, where, path)
     waived = waivers.waived(source, tree)
@@ -148,9 +158,7 @@ def check_source(
     if where.package and top:
         findings += forwarders.check(tree, path, top)
     kept = [f for f in findings if f.rule not in waived.get(f.line, ())]
-    # A dict keeps findings in the order they were met; a set shuffles those that
-    # share a line and a rule from one run to the next.
-    return sorted(dict.fromkeys(kept), key=lambda f: (f.line, f.rule))
+    return sorted(merged(kept), key=lambda f: (f.line, f.rule))
 
 
 @frozen
@@ -183,8 +191,6 @@ def _check_node(node: ast.AST, where: _Where, path: str) -> Iterator[Finding]:
         yield from _registration_order(node.decorator_list, path)
         if not where.test:
             yield from _keyword_only(node, path)
-    elif isinstance(node, ast.ImportFrom):
-        yield from _dataclass_import(node, path)
     elif isinstance(node, ast.Compare | ast.Match) and not where.test:
         yield from _kind_branch(node, path)
     elif isinstance(node, ast.Call):
@@ -433,16 +439,6 @@ def _class(node: ast.ClassDef, where: _Where, path: str) -> Iterator[Finding]:
             "tests are plain functions named as sentences, not classes",
         )
     yield from _registration_order(node.decorator_list, path)
-    if _stays_plain(node):
-        return
-    for decorator in node.decorator_list:
-        if _name(decorator) == "dataclass":
-            yield Finding(
-                path,
-                decorator.lineno,
-                "TYP-4",
-                "classes are attrs (`@frozen` or `@define`), not dataclasses",
-            )
 
 
 def _is_test_class(node: ast.ClassDef) -> bool:
@@ -453,11 +449,44 @@ def _is_test_class(node: ast.ClassDef) -> bool:
     )
 
 
-def _dataclass_import(node: ast.ImportFrom, path: str) -> Iterator[Finding]:
+def _dataclasses(tree: ast.Module, path: str) -> Iterator[Finding]:
+    """Yield a finding for each dataclass the module makes, and each field it declares.
+
+    A class decorated `@dataclass` is one, unless it stays a plain class; so is a call
+    of `make_dataclass` or `field` on the module `dataclasses` imported whole.
+    """
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and not _stays_plain(node):
+            for decorator in node.decorator_list:
+                if _name(decorator) == "dataclass":
+                    yield Finding(
+                        path,
+                        decorator.lineno,
+                        "TYP-4",
+                        "classes are attrs (`@frozen` or `@define`), not dataclasses",
+                    )
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr in DATACLASS_CALLS
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "dataclasses"
+        ):
+            yield Finding(
+                path, node.lineno, "TYP-4", "use attrs instead of `dataclasses`"
+            )
+
+
+def _dataclass_imports(tree: ast.Module, path: str) -> list[Finding]:
     # Reading a dataclass of a library (`asdict`, `fields`) defines none.
-    names = {alias.name for alias in node.names}
-    if node.module == "dataclasses" and not node.level and names & DATACLASS_MAKERS:
-        yield Finding(path, node.lineno, "TYP-4", "use attrs instead of `dataclasses`")
+    return [
+        Finding(path, node.lineno, "TYP-4", "use attrs instead of `dataclasses`")
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom)
+        and node.module == "dataclasses"
+        and not node.level
+        and {alias.name for alias in node.names} & DATACLASS_MAKERS
+    ]
 
 
 def _registration_order(decorators: list[ast.expr], path: str) -> Iterator[Finding]:
@@ -493,12 +522,21 @@ def _keyword_only(
     # before `/`, so that one stays as it is.
     named = node.args.args
     optional = min(len(named), len(node.args.defaults))
+    lines: dict[int, list[str]] = {}
     for arg in named[len(named) - optional :]:
+        lines.setdefault(arg.lineno, []).append(f"`{arg.arg}`")
+    for line, names in lines.items():
+        subject = (
+            f"optional parameter {names[0]} goes"
+            if len(names) == 1
+            else f"optional parameters {', '.join(names)} go"
+        )
         yield Finding(
             path,
-            arg.lineno,
+            line,
             "STY-4",
-            f"optional parameter `{arg.arg}` goes after `*`, keyword-only",
+            f"{subject} after `*`, keyword-only, unless a caller outside the project "
+            "fixes the signature: then waive it",
         )
 
 

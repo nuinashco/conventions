@@ -13,10 +13,11 @@ Rules listed in that table's `ignore` are skipped in both modes.
 Comments read as sentences (a capital letter or a `name` first, end punctuation last,
 DOC-5), section banners are not allowed (DOC-4), and a class docstring is a noun phrase,
 not an order (DOC-2). Comments that a tool reads are skipped: directives (`# noqa`,
-`# type:`, `# pylint:`, ...), `# %%` cell markers, `#:` attribute comments and PEP 723
-blocks, and so is any comment on a line that also carries `# noqa`. A justified
-exception is a comment naming the rule with its reason, on the flagged line or alone
-above the flagged statement or comment: `# conventions: DOC-5 - the unit of the column.`
+`# type:`, `# pylint:`, `# SPDX-`, ...), `# %%` cell markers and the text of a jupytext
+markdown cell, `#:` attribute comments and PEP 723 blocks, and so is any comment on a
+line that also carries `# noqa`. A justified exception is a comment naming the rule
+with its reason, on the flagged line or alone above the flagged statement or comment:
+`# conventions: DOC-5 - the unit of the column.`
 A file that Python cannot decode or parse gets no findings; ruff reports a syntax error.
 """
 
@@ -33,12 +34,17 @@ from pathlib import Path
 from attrs import frozen
 
 from conventions_hooks import waivers
-from conventions_hooks.findings import UNREADABLE, Finding, check_edit, check_paths
+from conventions_hooks.findings import (
+    UNREADABLE,
+    Finding,
+    check_edit,
+    check_paths,
+    merged,
+)
 
 DIRECTIVES = (
     "type:",
     "pyright:",
-    "pragma",
     "fmt:",
     "isort:",
     "ruff:",
@@ -46,7 +52,6 @@ DIRECTIVES = (
     "conventions:",
     "%%",
     "In[",
-    "nosec",
     "pylint:",
     "flake8:",
     "ty:",
@@ -57,10 +62,15 @@ DIRECTIVES = (
     "yapf:",
     "codespell:",
     "cspell:",
-    "region",
-    "endregion",
-    "SPDX-License-Identifier:",
+    "SPDX-",
 )
+# Directives that are words count only as whole words: `# regions without ...` is prose.
+WORD_DIRECTIVE = re.compile(r"(pragma|nosec|region|endregion)\b")
+# Jupytext's cell markers; the text of a markdown cell follows its marker as comments.
+CELL = re.compile(r"#\s*%%")
+MARKDOWN_CELL = re.compile(r"#\s*%%.*\[(markdown|md)\]")
+# Tokens that are no code: a markdown cell runs on past them.
+LAYOUT = frozenset({tokenize.NL, tokenize.NEWLINE, tokenize.INDENT, tokenize.DEDENT})
 # A Markdown heading, or a run of rule characters where the comment starts or ends.
 BANNER = re.compile(r"^(#([ #]|$)|[-=*~_+#]{3,})|[-=*~_+#]{3,}$")
 PEP_723_OPENING = re.compile(r"# /// [A-Za-z0-9-]+")
@@ -110,7 +120,7 @@ def check_source(source: str, *, path: str = "<string>") -> list[Finding]:
     findings += _class_docstrings(tree, path)
     waived = waivers.waived(source, tree)
     kept = [f for f in findings if f.rule not in waived.get(f.line, ())]
-    return sorted(kept, key=lambda f: (f.line, f.rule))
+    return sorted(merged(kept), key=lambda f: (f.line, f.rule))
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -135,8 +145,22 @@ def claude_hook(payload: str) -> int:
 
 
 def _comments(source: str) -> list[tokenize.TokenInfo]:
-    tokens = tokenize.generate_tokens(io.StringIO(source).readline)
-    return [token for token in tokens if token.type == tokenize.COMMENT]
+    """Return the comment tokens of a source, but the text of jupytext markdown cells.
+
+    A markdown cell runs from its `# %% [markdown]` marker at the margin to the next
+    line of code or the next `# %%` marker, blank lines included.
+    """
+    comments: list[tokenize.TokenInfo] = []
+    markdown = False
+    for token in tokenize.generate_tokens(io.StringIO(source).readline):
+        if token.type != tokenize.COMMENT:
+            markdown = markdown and token.type in LAYOUT
+        elif token.start[1] == 0 and CELL.match(token.string):
+            markdown = bool(MARKDOWN_CELL.match(token.string))
+            comments.append(token)
+        elif not markdown:
+            comments.append(token)
+    return comments
 
 
 def _blocks(comments: Sequence[tokenize.TokenInfo]) -> Iterator[Block]:
@@ -194,7 +218,8 @@ def _skipped(token: tokenize.TokenInfo) -> bool:
     # Linters read `noqa` in any case, also after other text on its line.
     noqa = text.lower().startswith("noqa") or "# noqa" in token.line.lower()
     attribute = token.string.startswith("#:")
-    return shebang or encoding or noqa or attribute or text.startswith(DIRECTIVES)
+    directive = text.startswith(DIRECTIVES) or WORD_DIRECTIVE.match(text)
+    return shebang or encoding or noqa or attribute or bool(directive)
 
 
 def _check_block(block: Block, path: str) -> Iterator[Finding]:

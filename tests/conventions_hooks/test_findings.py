@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from conventions_hooks.findings import Finding, check_edit, check_paths
+from conventions_hooks.findings import Finding, check_edit, check_paths, merged
 
 
 def two_findings(path: Path) -> list[Finding]:
@@ -100,3 +100,21 @@ def test_the_hook_skips_files_that_are_not_python(opted_in, capsys):
 
     assert check_edit(edit(notes), check_file=two_findings) == 0
     assert capsys.readouterr() == ("", "")
+
+
+def test_findings_of_one_rule_on_one_line_become_one_with_every_remedy_once():
+    found = [
+        Finding("a.py", 3, "ERR-3", "start lowercase"),
+        Finding("a.py", 1, "DOC-5", "end with a period"),
+        Finding("a.py", 3, "ERR-3", "drop the period"),
+        Finding("a.py", 3, "ERR-8", "name the command"),
+        Finding("b.py", 3, "ERR-3", "start lowercase"),
+        Finding("a.py", 3, "ERR-3", "start lowercase"),
+    ]
+
+    assert merged(found) == [
+        Finding("a.py", 3, "ERR-3", "start lowercase; drop the period"),
+        Finding("a.py", 1, "DOC-5", "end with a period"),
+        Finding("a.py", 3, "ERR-8", "name the command"),
+        Finding("b.py", 3, "ERR-3", "start lowercase"),
+    ]

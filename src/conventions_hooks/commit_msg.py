@@ -13,8 +13,10 @@ type, and its text starts in lowercase and ends without a period (GIT-1); the
 The message is cleaned first, as git cleans it: the scissors line of `git commit -v`
 and everything below it are dropped, then the comment lines (`#`, or the prefix git is
 configured with), the blank lines around the message and the whitespace that ends the
-subject. A subject that starts with `Merge ` is git's own and is not judged. Rules
-listed in `ignore` of the repo's `[tool.conventions]` table are not checked.
+subject. A message whose subject git wrote is not judged: one that starts with `Merge `,
+or with the `fixup! `, `amend! ` or `squash! ` of `git commit --fixup` and `--squash`,
+which `git rebase --autosquash` folds away. Rules listed in `ignore` of the repo's
+`[tool.conventions]` table are not checked.
 """
 
 from __future__ import annotations
@@ -34,6 +36,8 @@ from conventions_hooks.settings import Settings, SettingsError
 ARTICLES = re.compile(r"""(?<![\w/.'"*-])(a|an|the|An|The)(?![\w/.'"*-])""")
 CODE = re.compile(r"`[^`]*`")
 CONVENTIONAL = re.compile(r"(?P<type>\w+)(\([^()]*\))?!?:\s+(?P<text>.+)")
+# Subjects that git writes itself, from the names of branches or from another subject.
+GIT_WRITES = re.compile(r"Merge |(fixup|amend|squash)! ")
 MAX_LENGTH = 72
 DEFAULT_COMMENT = "#"
 # Git writes this line, after its comment prefix, above the diff of `git commit -v`.
@@ -61,8 +65,8 @@ def problems(message: str, *, comment: str = DEFAULT_COMMENT) -> list[Problem]:
     if not lines:
         return [Problem("", "empty message")]
     subject = lines[0]
-    if subject.startswith("Merge "):
-        return []  # Git wrote this subject itself, from the names of the branches.
+    if GIT_WRITES.match(subject):
+        return []
     found = []
     if len(lines) > 1:
         found.append(Problem("GIT-2", "more than one line; drop the body and trailers"))

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -83,7 +84,7 @@ def test_conforming_code_passes(source):
         ("if item.kind == 'api':\n    pass\n", [(1, "ARC-4")]),
         ("log.info(f'started on {port}')\n", [(1, "LOG-2")]),
         ("log.info('Proxy started')\n", [(1, "LOG-2")]),
-        ("raise UserError('Missing data.')\n", [(1, "ERR-3"), (1, "ERR-3")]),
+        ("raise UserError('Missing data.')\n", [(1, "ERR-3")]),
         ("import torch\n", [(1, "ARC-8")]),
         ("from google.cloud import bigquery\n", [(1, "ARC-8")]),
         ("ROOT = Path(__file__).resolve().parents[2]\n", [(1, "ENV-1")]),
@@ -114,12 +115,48 @@ def test_broken_rules_are_reported_where_they_happen(source, expected):
     assert rules(source) == expected
 
 
-def test_findings_on_one_line_keep_the_order_they_were_met_in():
-    source = "def handle(item, h=1, g=2, f=3, e=4, d=5, c=6, b=7, a=8): ...\n"
+def test_an_optional_parameter_is_told_to_go_after_the_star_or_be_waived():
+    (finding,) = check_source("def env_or(name, default=''): ...\n", path=PACKAGE)
 
-    named = [f.message.split("`")[1] for f in check_source(source, path=PACKAGE)]
+    assert finding.message == (
+        "optional parameter `default` goes after `*`, keyword-only, unless a caller "
+        "outside the project fixes the signature: then waive it"
+    )
 
-    assert named == list("hgfedcba")
+
+def test_optional_parameters_on_one_line_are_one_finding_in_their_order():
+    source = (
+        "def handle(\n    item, h=1, g=2, f=3, e=4, d=5, c=6, b=7,\n    a=8,\n): ...\n"
+    )
+
+    found = check_source(source, path=PACKAGE)
+
+    assert [(f.line, f.message) for f in found] == [
+        (
+            2,
+            "optional parameters `h`, `g`, `f`, `e`, `d`, `c`, `b` go after `*`, "
+            "keyword-only, unless a caller outside the project fixes the signature: "
+            "then waive it",
+        ),
+        (
+            3,
+            "optional parameter `a` goes after `*`, keyword-only, unless a caller "
+            "outside the project fixes the signature: then waive it",
+        ),
+    ]
+
+
+def test_two_findings_of_one_rule_on_one_line_are_one_with_both_remedies(
+    tmp_path, capsys
+):
+    module = tmp_path / "loader.py"
+    module.write_text("def load():\n    raise UserError('Missing data.')\n")
+
+    assert main([str(module)]) == 1
+    assert capsys.readouterr().out == (
+        f"{module}:2: ERR-3 error messages start lowercase; "
+        "error messages have no trailing period\n"
+    )
 
 
 def test_a_character_outside_ascii_is_reported_once_per_line_by_its_code_point():
@@ -549,6 +586,42 @@ def test_the_top_package_of_a_file_is_the_projects_own_without_a_src_folder(tmp_
             "import dataclasses\n\n\n@dataclasses.dataclass\nclass A:\n    x: int\n",
             [(4, "TYP-4")],
         ),
+        (
+            "import dataclasses\n\n\n@dataclasses.dataclass(frozen=True)\n"
+            "class A:\n    x: int\n",
+            [(4, "TYP-4")],
+        ),
+        (
+            "import dataclasses\n\n"
+            "Row = dataclasses.make_dataclass('Row', [('name', str)])\n",
+            [(3, "TYP-4")],
+        ),
+        (
+            "import dataclasses\n\n\n@define\nclass Row:\n"
+            "    names: list[str] = dataclasses.field(default_factory=list)\n",
+            [(6, "TYP-4")],
+        ),
+        (
+            "from dataclasses import dataclass, field\n\n\n@dataclass\nclass A:\n"
+            "    x: list[int] = field(default_factory=list)\n",
+            [(4, "TYP-4")],
+        ),
+        (
+            "from dataclasses import dataclass\nimport dataclasses\n\n"
+            "Row = dataclasses.make_dataclass('Row', [('name', str)])\n",
+            [(4, "TYP-4")],
+        ),
+        (
+            "from dataclasses import dataclass\n\n\n"
+            "@dataclass  # conventions: TYP-4 - HfArgumentParser reads dataclasses.\n"
+            "class Arguments:\n    seed: int\n",
+            [],
+        ),
+        (
+            "from dataclasses import dataclass\n\n\n@dataclass\n"
+            "class LoadError(Exception):\n    path: str\n",
+            [(1, "TYP-4")],
+        ),
     ],
     ids=[
         "module-read-for-asdict",
@@ -556,6 +629,13 @@ def test_the_top_package_of_a_file_is_the_projects_own_without_a_src_folder(tmp_
         "field",
         "make-dataclass-among-readers",
         "dotted-decorator",
+        "dotted-decorator-called",
+        "make-dataclass-on-the-module",
+        "field-on-the-module",
+        "import-of-a-decorated-class",
+        "import-of-a-made-class",
+        "import-of-a-waived-class",
+        "import-of-an-exception",
     ],
 )
 def test_only_what_defines_a_dataclass_is_reported(source, expected):
@@ -756,8 +836,8 @@ def test_a_signature_fixed_elsewhere_keeps_its_positional_defaults(source):
 def test_a_positional_default_is_reported_where_the_caller_may_name_it(source, named):
     found = check_source(source, path=PACKAGE)
 
-    assert [(f.rule, f.message.split("`")[1]) for f in found] == [
-        ("STY-4", name) for name in named
+    assert [(f.rule, re.findall(r"`(\w+)`", f.message)) for f in found] == [
+        ("STY-4", named)
     ]
 
 
@@ -1064,7 +1144,7 @@ def test_a_module_named_after_one_thing_is_no_grab_bag(path):
             ") -> str:\n"
             "    return separator.join([variable, default])\n",
             PACKAGE,
-            [(2, "STY-4"), (2, "STY-4")],
+            [(2, "STY-4")],
         ),
         (
             "# conventions: TST-1 - pytest-benchmark groups rounds by class.\n",

@@ -9,6 +9,15 @@ import pytest
 
 from conventions_hooks.comments import check_file, check_source, claude_hook, main
 
+# Jupytext writes the text of a markdown cell as comments, blank lines included.
+MARKDOWN = (
+    "# %% [markdown]\n"
+    "# # Label balance\n"
+    "#\n"
+    "# share of each label in the training split\n"
+    "\n"
+    "# - train: 80%\n"
+)
 PEP_723 = (
     "# /// script\n"
     '# requires-python = ">=3.12"\n'
@@ -69,6 +78,10 @@ def test_conforming_comments_pass(source):
         ("# Override points ====\nx = 1\n", [(1, "DOC-4")]),
         ("# Loading.\n##\n# Saving.\nx = 1\n", [(2, "DOC-4")]),
         ("x = 1  # ---- seconds ----\n", [(1, "DOC-5")]),
+        ("# regions without labels are dropped\nx = 1\n", [(1, "DOC-5")]),
+        ("# nosecond pass is needed\nx = 1\n", [(1, "DOC-5")]),
+        ("# pragmatic choice\nx = 1\n", [(1, "DOC-5")]),
+        ("# endregions are closed\nx = 1\n", [(1, "DOC-5")]),
         ('class A:\n    """Return the rate limit."""\n', [(1, "DOC-2")]),
         ('class A:\n    """Run `make check`."""\n', [(1, "DOC-2")]),
         ('class A:\n    """Serve."""\n', [(1, "DOC-2")]),
@@ -82,6 +95,10 @@ def test_conforming_comments_pass(source):
         "rule-at-the-end",
         "empty-heading",
         "rule-after-code",
+        "word-that-starts-like-region",
+        "word-that-starts-like-nosec",
+        "word-that-starts-like-pragma",
+        "word-that-starts-like-endregion",
         "class-order",
         "class-order-on-a-name",
         "class-order-alone",
@@ -89,6 +106,15 @@ def test_conforming_comments_pass(source):
 )
 def test_broken_rules_are_reported_where_they_happen(source, expected):
     assert rules(source) == expected
+
+
+def test_a_comment_that_is_no_sentence_at_either_end_is_one_finding():
+    (finding,) = check_source("TIMEOUT = 30  # seconds\n")
+
+    assert str(finding) == (
+        "<string>:1: DOC-5 start with a capital letter or a `name`; "
+        "end the sentence with a period"
+    )
 
 
 def test_an_order_is_named_without_its_punctuation():
@@ -199,6 +225,10 @@ def test_a_sentence_that_holds_rule_characters_is_no_banner(source):
         "# region imports",
         "# endregion",
         "# SPDX-License-Identifier: MIT",
+        "# SPDX-FileCopyrightText: 2026 Acme Research",
+        "# pragma: no cover",
+        "#region",
+        "# nosec: B404",
         "# NOQA",
         "#NoQA: E501",
         "# seconds  # NOQA: E501",
@@ -222,6 +252,10 @@ def test_a_sentence_that_holds_rule_characters_is_no_banner(source):
         "region",
         "endregion",
         "spdx",
+        "spdx-copyright",
+        "pragma",
+        "region-without-a-space",
+        "nosec-with-a-colon",
         "noqa-in-capitals",
         "noqa-in-mixed-case",
         "noqa-after-text",
@@ -260,9 +294,39 @@ def test_a_pep_723_block_may_follow_an_opening_line_that_code_ended():
     ids=["code", "blank-line", "comment-after-code", "indented-comment"],
 )
 def test_a_line_that_is_no_comment_at_the_margin_ends_a_pep_723_block(between):
-    source = f'# /// script\n# requires-python = ">=3.12"\n{between}# ///\n'
+    source = f'# /// script\n# requires-python = ">=3.12"\n{between}# seconds\n# ///\n'
 
-    assert rules(source) == [(2, "DOC-5"), (4, "DOC-5")]
+    assert rules(source) == [(2, "DOC-5"), (4, "DOC-5"), (5, "DOC-5")]
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        (f"{MARKDOWN}# %%\nx = 1  # seconds\n", [(8, "DOC-5")]),
+        (f"{MARKDOWN}x = 1\n# seconds\n", [(8, "DOC-5")]),
+        (f"{MARKDOWN}# %%\n# # Label balance\nx = 1\n", [(8, "DOC-4")]),
+        (f"{MARKDOWN}{MARKDOWN}# %%\nx = 1\n", []),
+        (f"x = 1\n{MARKDOWN}", []),
+        ("# %% Label balance [markdown]\n# # Label balance\n", []),
+        ("# %% [md]\n# # Label balance\n", []),
+        (
+            "def f():\n    # %% [markdown]\n    # # Heading\n    return 1\n",
+            [(3, "DOC-4")],
+        ),
+    ],
+    ids=[
+        "up-to-the-next-cell",
+        "up-to-code",
+        "code-cell-after-it",
+        "two-markdown-cells",
+        "after-code",
+        "cell-with-a-title",
+        "short-name",
+        "marker-inside-a-function",
+    ],
+)
+def test_the_text_of_a_jupytext_markdown_cell_is_not_judged(source, expected):
+    assert rules(source) == expected
 
 
 @pytest.mark.parametrize(

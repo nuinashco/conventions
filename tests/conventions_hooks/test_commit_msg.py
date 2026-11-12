@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
@@ -32,6 +33,8 @@ index 1c3d2a7..8d9f3b2 100644
 +note
 """
 SUBJECT = "docs: describe demo usage"
+# Within the limit alone, past it behind the `fixup! ` or `amend! ` that git adds.
+LONG = "feat: add loader that reads sharded parquet files from object storage"
 EDITOR = f"""\
 #!/bin/sh
 {{ echo '{SUBJECT}'; cat "$1"; }} > "$1.new" && mv "$1.new" "$1"
@@ -48,34 +51,32 @@ def git_repo(tmp_path, monkeypatch):
     return tmp_path
 
 
-def commit_in_an_editor(repo: Path) -> str:
-    """Commit a file with `check-commit-msg` as the hook; return the subject kept.
-
-    The editor writes the subject above the template that git put in the message.
-    """
+def commit(repo: Path, options: Sequence[str], *, editor: str = "true") -> None:
+    """Commit a change to a file, with `check-commit-msg` as the commit-msg hook."""
     hook = repo / ".git" / "hooks" / "commit-msg"
     hook.parent.mkdir(exist_ok=True)  # A git without a template folder makes none.
     command = Path(sys.executable).with_name("check-commit-msg")
     hook.write_text(f'#!/bin/sh\nexec "{command}" "$1"\n')
-    editor = repo / ".git" / "editor"
-    editor.write_text(EDITOR)
-    for script in (hook, editor):
-        script.chmod(0o755)
-    (repo / "notes.txt").write_text("note\n")
+    hook.chmod(0o755)
+    with (repo / "notes.txt").open("a") as notes:
+        notes.write("note\n")
     identity = {
         f"GIT_{role}_{field}": value
         for role in ("AUTHOR", "COMMITTER")
         for field, value in (("NAME", "Tester"), ("EMAIL", "tester@example.com"))
     }
-    env = {**os.environ, **identity, "GIT_EDITOR": str(editor)}
+    env = {**os.environ, **identity, "GIT_EDITOR": editor}
     subprocess.run(["git", "add", "notes.txt"], cwd=repo, check=True)
     subprocess.run(
-        ["git", "commit", "-q", "-v"],
+        ["git", "commit", "-q", *options],
         cwd=repo,
         env=env,
         capture_output=True,
         check=False,
     )
+
+
+def subjects(repo: Path) -> str:
     log = subprocess.run(
         ["git", "log", "--format=%s"],
         cwd=repo,
@@ -84,6 +85,18 @@ def commit_in_an_editor(repo: Path) -> str:
         check=False,
     )
     return log.stdout
+
+
+def commit_in_an_editor(repo: Path) -> str:
+    """Commit with `git commit -v` in an editor; return the subjects in the log.
+
+    The editor writes the subject above the template that git put in the message.
+    """
+    editor = repo / ".git" / "editor"
+    editor.write_text(EDITOR)
+    editor.chmod(0o755)
+    commit(repo, ["-v"], editor=str(editor))
+    return subjects(repo)
 
 
 @pytest.mark.parametrize(
@@ -144,11 +157,30 @@ def test_article_letters_in_a_name_or_a_path_are_not_articles(subject):
         "Merge branch 'fix/the-thing'\n",
         "Merge branch 'fix/the-thing' into a-b\n\n* fix/the-thing:\n  docs: add t\n",
         "Merge tag 'v1.0' of the origin\n",
+        f"fixup! {LONG}\n",
+        f"amend! {LONG}\n\n{LONG}\n",
+        "squash! feat: add loader\n\nRead the shards in order.\n",
+        f"fixup! fixup! {LONG}\n",
     ],
-    ids=["subject", "with-log-of-merge", "tag"],
+    ids=[
+        "merge",
+        "with-log-of-merge",
+        "tag",
+        "fixup",
+        "amend",
+        "squash",
+        "fixup-twice",
+    ],
 )
-def test_merge_subject_that_git_writes_is_not_judged(message):
+def test_subject_that_git_writes_is_not_judged(message):
     assert problems(message) == []
+
+
+def test_commits_that_git_writes_for_autosquash_pass_the_hook(git_repo):
+    for options in (["-m", LONG], ["--fixup", "HEAD"], ["--fixup=amend:HEAD~1"]):
+        commit(git_repo, options)
+
+    assert subjects(git_repo) == f"amend! {LONG}\nfixup! {LONG}\n{LONG}\n"
 
 
 def test_subject_of_another_shape_is_left_to_conventional_pre_commit():
