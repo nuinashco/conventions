@@ -37,7 +37,7 @@ make test-judges  # live `claude` runs of the judges on tests/judges/ (costs tok
 rules/                    the rules: one file per area, plus _intro, _decisions, _sources
 agents/                   sources of the plugin's subagents
 src/conventions_hooks/    the hooks, settings.py ([tool.conventions]), rules.py (build-rules)
-plugins/conventions/      the plugin: .claude-plugin/plugin.json, hooks/, bin/run-check, generated skills/ and agents/
+plugins/conventions/      the plugin: .claude-plugin/plugin.json, hooks/, scripts/run-check, generated skills/ and agents/
 .claude-plugin/           marketplace.json of the nuinashco marketplace
 tests/                    conventions_hooks/: unit tests; test_invariants.py, test_run_check.py; judges/: cases
 ```
