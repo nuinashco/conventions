@@ -95,6 +95,14 @@ def test_broken_rules_are_reported_where_they_happen(source, expected):
     assert rules(source) == expected
 
 
+def test_findings_on_one_line_keep_the_order_they_were_met_in():
+    source = "def handle(item, h=1, g=2, f=3, e=4, d=5, c=6, b=7, a=8): ...\n"
+
+    named = [f.message.split("`")[1] for f in check_source(source, path=PACKAGE)]
+
+    assert named == list("hgfedcba")
+
+
 def test_paths_module_may_read_the_environment():
     source = "DATA_DIR = Path(os.environ['DATA_DIR'])\n"
 
