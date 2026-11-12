@@ -6,7 +6,7 @@ How I structure, write, test and document Python and ML projects. These are the 
 `conventions` Claude Code plugin carries them to Claude, one skill per area, and the `conventions-hooks` package checks
 what a tool can.
 
-Version 0.1.0 · last reviewed 2026-11-05 · owner: nuinashco
+Version 0.1.0 · last reviewed 2026-11-12 · owner: nuinashco
 
 - [How to read](#how-to-read) · [Where the other rules live](#where-the-other-rules-live) · [Retired rules](#retired-rules) · [Quick reference](#quick-reference)
 - [Layout and packaging](#1-layout-and-packaging-lay) · [Architecture](#2-architecture-arc) · [Types and data](#3-types-and-data-typ) · [Code style](#4-code-style-sty) · [Comments and docstrings](#5-comments-and-docstrings-doc) · [Errors](#6-errors-err) · [Logging](#7-logging-log) · [Tests](#8-tests-tst) · [Repository docs](#9-repository-docs-rdoc) · [Git](#10-git-git) · [Tooling](#11-tooling-tool)
@@ -18,18 +18,19 @@ Version 0.1.0 · last reviewed 2026-11-05 · owner: nuinashco
   [RFC 8174](https://www.rfc-editor.org/rfc/rfc8174): they carry their meaning only in capitals.
   - **MUST**: checked by a tool or test where possible. A justified exception gets a comment at the site naming the
     rule (`# noqa: BLE001 - a failing callback must not stop training`, or
-    `# conventions: TYP-4 - the base class from httpx needs __init__.` for `check-conventions`).
+    `# conventions: STY-4 - OmegaConf calls this resolver by position.` for `check-comments` and `check-conventions`).
   - **SHOULD**: the default. Deviate when you can say why.
   - **MAY**: a matter of taste, written down so it is consistent.
-- Every rule has an ID (`STY-4`) for reviews and commit bodies, a *Why*, and a *Check*: a ruff rule, pyright, a hook
-  of this repo, a test, `template` when [nuinashco/rnd-template](https://github.com/nuinashco/rnd-template) sets it
-  up, or `review` when no tool can tell. [COVERAGE.md](COVERAGE.md) lists the MUST rules only review checks.
+- Every rule has an ID (`STY-4`) for reviews and PR descriptions, a *Why* where the reason needs saying, and a
+  *Check*: a ruff rule, pyright, a hook of this repo, a test, `template` when
+  [nuinashco/rnd-template](https://github.com/nuinashco/rnd-template) sets it up, or `review` when no tool can tell.
+  [COVERAGE.md](COVERAGE.md) lists the MUST rules only review checks.
 - Rules apply to every project unless tagged **[rnd]** (research and development: tools, pipelines, training).
 - A repo that can't follow a rule yet lists it under "Deviations" in its CONTRIBUTING.md, with the reason. A rule that
   does not apply to the repo at all goes in `ignore` of its `[tool.conventions]` table (TOOL-4), and the hooks skip it.
 - Changing a rule means editing it under `rules/` in nuinashco/conventions, regenerating this file and the plugin with
-  `make build`, and changing the checks and templates it affects in the same commit, then tagging a new version.
-  Projects pick it up through the plugin and by upgrading `conventions-hooks`.
+  `make build`, and changing the checks it affects in the same commit, then tagging a new version; the template
+  follows in its own repo. Projects pick it up through the plugin and by upgrading `conventions-hooks`.
 
 ## Where the other rules live
 
@@ -76,7 +77,7 @@ IDs are never reused.
 | [TYP-8](#typ-8-should) | SHOULD | Avoid `Any` outside JSON-shaped payloads and lazily imported third-party objects. Use `object` for "accepts anything". |
 | [TYP-9](#typ-9-must) | MUST | Dicts are for wire payloads only (JSON in, JSON out). A dict with a fixed set of known keys is a class. |
 | [STY-1](#sty-1-must) | MUST | Format with ruff format: 88 columns, double quotes. |
-| [STY-2](#sty-2-must) | MUST | Lint with the template's curated rule set: `E F W I B UP SIM RET PTH C4 RUF TID FBT N PERF G LOG BLE PL D NPY ERA T20 C90` (plus `FA` below 3.14). |
+| [STY-2](#sty-2-must) | MUST | Lint with the template's curated rule set: `E F W I B UP SIM RET PTH C4 RUF TID FBT N PERF G LOG BLE PL D NPY ERA T20 C90` (plus `FA` below 3.14), with `ANN` for the signatures in `src/` (TYP-1), `PGH004` for a bare `# noqa` and `TD004` to `TD007` for TODO comments (DOC-6). |
 | [STY-3](#sty-3-must) | MUST | Imports are absolute. |
 | [STY-4](#sty-4-must) | MUST | Every optional parameter and every boolean parameter is keyword-only (after `*`). Only the one or two obvious subjects of a call are positional. |
 | [STY-5](#sty-5-must) | MUST | Naming: Modules are short nouns (`harness`, `soundness`). Functions are verbs (`select`, `bind`); Classes are nouns, and family items carry the family suffix (`LiteLLMEndpoint`, `GoldPatches`); Schemas end in `Config`. Acronyms stay capitalised (`HDBSCANClustering`, `BQ2GCSCollector`); Constants are UPPER_SNAKE right after the imports; Anything not used outside its module starts with `_`. |
@@ -114,7 +115,7 @@ IDs are never reused.
 | [GIT-1](#git-1-must) | MUST | Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/): a standard type: `feat fix docs refactor test build ci perf style chore revert`; an optional scope; a lowercase imperative subject, with no period, of at most 72 characters; no articles (`a`, `an`, `the`) and no filler: say what changed in as few words as hold it. |
 | [GIT-2](#git-2-must) | MUST | A commit message is one line: no body and no trailers. A reason worth keeping goes where readers look for it: a code comment for a constraint, the PR description for an alternative that was rejected. |
 | [GIT-3](#git-3-must) | MUST | Branches are short-lived and named `<type>/<slug>` (`feat/`, `fix/`, `docs/`, `refactor/`, plus `exp/` for experiments). Merges are squash-merges, and the PR title is the conventional commit that lands on `main`. |
-| [GIT-5](#git-5-must) | MUST | Secrets, data, run outputs and notebook outputs are never committed. |
+| [GIT-5](#git-5-must) | MUST | Secrets, data, run outputs and notebook outputs are never committed. A third-party notebook kept as published (TOOL-5) is the exception: it keeps its outputs. |
 | [GIT-6](#git-6-must) | MUST | A PR description follows `.github/pull_request_template.md`: a summary of why, the changes made with the alternatives rejected, and the checklist; results, how to reproduce them and notes for the reviewer when they apply. |
 | [TOOL-1](#tool-1-must) | MUST | `make check` runs ruff check, ruff format `--check`, `check-comments` and `check-conventions` on every Python file git does not ignore (TOOL-4), pyright, `lint-imports` and pytest, and CI runs it on every pull request. |
 | [TOOL-2](#tool-2-must) | MUST | Tool versions come from `uv.lock`. Hooks for Python tools are local `uv run` hooks, so pre-commit, CI and editors all use the same versions. |
@@ -148,7 +149,8 @@ only when a second repo depends on it.
 structure"](https://docs.astral.sh/uv/concepts/build-backend/) because generic names like `common` collide in
 site-packages; a distinctive name avoids that.
 
-*Check:* `module-name = "<pkg>"` in the template; `check-conventions` flags grab-bag module names under `src/`.
+*Check:* `module-name = "<pkg>"` in the template; `check-conventions` flags grab-bag module names under `src/`, also
+when private (`_utils.py`) or suffixed (`string_utils.py`).
 
 ### LAY-3 MUST
 
@@ -227,7 +229,8 @@ that returns `None` when a feature is absent; never `if item.kind == "api"` or `
 
 *Why:* adding an item never edits its callers.
 
-*Check:* `check-conventions` flags comparisons with a `kind` attribute; review for `isinstance`.
+*Check:* `check-conventions` flags a `kind` attribute compared with a string, by `==`, `!=`, `in` or a `match` case;
+review for `isinstance`.
 
 ### ARC-5 SHOULD
 
@@ -263,12 +266,14 @@ from branching ([Hynek](https://hynek.me/articles/python-subclassing-redux/)).
 ### ARC-8 MUST
 
 Heavy or optional third-party modules (torch, vllm, litellm, cloud SDKs, wandb) are imported inside the function that
-needs them. Annotations that name them use `if TYPE_CHECKING:` imports.
+needs them. Annotations that name them use `if TYPE_CHECKING:` imports. A module whose classes need one at import time,
+as a model does for its `nn.Module` base, imports it at the top, and the code that uses that module imports it inside a
+function in turn.
 
 *Why:* CLI start-up time, test runtime, and optional extras.
 
-*Check:* `check-conventions` flags a module-level import of a known heavy module under `src/`; review for the others;
-ruff PLC0415 is off on purpose.
+*Check:* `check-conventions` flags a module-level import of a known heavy module under `src/`, unless a class base or a
+decorator in the module uses it; review for the others; ruff PLC0415 is off on purpose.
 
 ### ARC-9 MUST
 
@@ -306,10 +311,15 @@ and research code mostly gains variants. Coding agents grow conditional chains r
 ([Zhu et al.](https://arxiv.org/html/2605.02741), [SlopCodeBench](https://arxiv.org/html/2603.24755v1)).
 
 *Check:* `check-conventions` flags a variant name switched on with the same values in two functions of a package, and a
-chain of three arms on one name, unless every arm returns a new object (the factory) or the `match` ends in
-`assert_never`. Across modules it reads the package's folders that have an `__init__.py`, tests aside: one of the two
-switches has two arms or more, and a switch waived by its comment does not count against the others; review for
-switches on `StrEnum` members, on `isinstance`, and through dicts of functions.
+chain of three arms on one name. It does not report the factory itself, whose every arm builds an object, but a second
+function that branches on one of its values is reported. It leaves alone a `match` that ends in `assert_never`, a value
+that does not read as a name (a file suffix, an empty string), any call (`platform.system()`, `cfg.backend.lower()`),
+and only these names that Python or a library owns: a dunder such as `__name__`, `os.name`, `sys.platform`,
+`sys.implementation.name`, `device.type` and a `dtype`; any other `name`, even a `Path.name`, counts as the project's. A
+waiver above any `if` of a run of guard clauses waives the run, and a waived switch does not count against the others.
+Across modules it reads the package's folders that have an `__init__.py`, tests aside, and one of the two switches is
+the factory or has two arms or more; review for switches on `StrEnum` members, on `isinstance`, and through dicts of
+functions.
 
 ### ARC-10 SHOULD
 
@@ -335,7 +345,7 @@ nuikit.
 
 *Why:* the code relies on types (generics, `ClassVar`, `Config` bindings) that only a checker verifies.
 
-*Check:* `make typecheck`.
+*Check:* ruff ANN on `src/`; `make typecheck`.
 
 ### TYP-2 MUST
 
@@ -356,8 +366,9 @@ is never used: [PEP 649](https://peps.python.org/pep-0649/) makes annotations la
 
 pydantic is only for data parsed from outside: configs, HTTP bodies, files. Every other class is an attrs class:
 `@frozen` for values, `@define` for stateful objects, family bases and items included. Exceptions, factories (classes
-that are never instantiated) and subclasses of third-party classes stay plain classes. Classes have no hand-written
-`__init__`. Construction logic goes into a classmethod constructor, or into `__attrs_post_init__` when it only derives
+that are never instantiated) and subclasses of classes from outside the project (an `nn.Module`, a `logging.Handler`)
+stay plain classes, and such a subclass keeps the `__init__` its base needs. No other class has a hand-written
+`__init__`: construction logic goes into a classmethod constructor, or into `__attrs_post_init__` when it only derives
 private state.
 
 ```python
@@ -384,7 +395,9 @@ class RateLimiter:
 *Why:* validation libraries belong at the boundary; inside, a class should only hold already-valid data
 ([attrs](https://www.attrs.org/en/stable/why.html), [Hynek](https://speakerdeck.com/hynek/design-pressure)).
 
-*Check:* `check-conventions` flags a hand-written `__init__` and dataclasses; review for pydantic inside the boundary.
+*Check:* `check-conventions` flags dataclasses and a hand-written `__init__`, unless a base of the class is imported
+from outside the project (nuikit's `Configurable` counts as the project's own base); review for pydantic inside the
+boundary.
 
 ### TYP-5 MUST
 
@@ -440,13 +453,14 @@ Format with ruff format: 88 columns, double quotes.
 ### STY-2 MUST
 
 Lint with the template's curated rule set: `E F W I B UP SIM RET PTH C4 RUF TID FBT N PERF G LOG BLE PL D NPY ERA T20
-C90` (plus `FA` below 3.14). `D401` is selected explicitly, because the google docstring convention silently drops it.
-Ignored on purpose: `PLR2004`, `PLR0913`, `PLC0415`, `D102`, `D103`, `D105`, `D106`, `D107`. The set changes only by
-changing this guide. A `# noqa` names the rule and gives a reason.
+C90` (plus `FA` below 3.14), with `ANN` for the signatures in `src/` (TYP-1), `PGH004` for a bare `# noqa` and `TD004`
+to `TD007` for TODO comments (DOC-6). `D401` is selected explicitly, because the google docstring convention silently
+drops it. Ignored on purpose: `PLR2004`, `PLR0913`, `PLC0415`, `ANN401`, `D102`, `D103`, `D105`, `D106`, `D107`. The
+set changes only by changing this guide. A `# noqa` names the rule and gives a reason.
 
 *Why:* an explicit select keeps upgrades from changing the rules silently ([ruff](https://docs.astral.sh/ruff/linter/)).
 
-*Check:* `ruff check`.
+*Check:* `ruff check`, with PGH004 for the rule a `# noqa` names; review for its reason.
 
 ### STY-3 MUST
 
@@ -457,9 +471,11 @@ Imports are absolute.
 ### STY-4 MUST
 
 Every optional parameter and every boolean parameter is keyword-only (after `*`). Only the one or two obvious subjects
-of a call are positional.
+of a call are positional. A signature that a base class fixes is marked `@override` and keeps its shape.
 
-*Check:* ruff FBT for booleans; `check-conventions` flags a positional parameter with a default; review for the rest.
+*Check:* ruff FBT for booleans; `check-conventions` flags a positional parameter with a default, except in an
+`@override` method and before `/`; review for the rest; a signature that a caller outside the project fixes (a
+resolver, a signal handler) waives it with its reason: `# conventions: STY-4 - <who calls it>.`
 
 ### STY-5 MUST
 
@@ -494,7 +510,7 @@ Use pathlib, never `os.path`.
 
 *Why:* greppable and terminal-safe.
 
-*Check:* a pre-commit non-ASCII hook (`ascii-only-python` in the template).
+*Check:* `check-conventions` reports each line that has a character outside ASCII.
 
 ### STY-9 SHOULD
 
@@ -532,7 +548,8 @@ Docstrings are one line where possible:
 - every public class has one (`D101`);
 - a function or method gets one when its name and signature don't already say it all.
 
-*Check:* ruff D101, D401; `check-comments` flags a class docstring that opens with an order; review.
+*Check:* ruff D101, D401; `check-comments` flags a class docstring that opens with an order (`Return the ...`);
+review.
 
 ### DOC-3 SHOULD
 
@@ -568,12 +585,13 @@ Information that code can't express still needs writing down
 ([Ousterhout](https://github.com/johnousterhout/aposd-vs-clean-code)).
 
 *Check:* ruff ERA001; `check-comments` flags banners; `review-comments` asks Claude whether new comments say anything
-the code doesn't (the plugin's `Stop` hook, and on demand with `pre-commit run review-comments --hook-stage manual`).
+the code doesn't (the plugin's `Stop` hook, and `uv run review-comments` for the staged diff).
 
 ### DOC-5 MUST
 
 Comments are sentences: capitalised and ending with a period. A sentence that opens with a lowercase name puts it in
-backticks (`` `git` is not installed. ``).
+backticks (`` `git` is not installed. ``). A comment a tool reads is not one: `# noqa`, `# type:`, an `SPDX-` line, a
+`# %%` cell marker and the text of a jupytext markdown cell, a PEP 723 block.
 
 *Check:* `check-comments`, in pre-commit and as a Claude Code `PostToolUse` hook on every edited `.py` file.
 
@@ -611,7 +629,8 @@ error: no soundness data; run `g4swe-grade controls` first
 error: unknown endpoint kind 'gemni'; registered: gemini, litellm, passthrough
 ```
 
-*Check:* `check-conventions` flags a capitalised first word and a trailing period; review for the remedy.
+*Check:* `check-conventions` flags a capitalised first word and a trailing period in a message of two words or more;
+review for the remedy.
 
 ### ERR-4 MUST
 
@@ -647,7 +666,8 @@ with an f-string or `%`.
 
 *Why:* events stay queryable in JSON logs and in BigQuery.
 
-*Check:* `check-conventions` flags formatted events and events that are not snake_case.
+*Check:* `check-conventions` flags formatted events and events that are not snake_case, on a logger named `log` or
+`logger` in any case and on the functions of `logging`.
 
 ### LOG-4 MUST
 
@@ -672,7 +692,7 @@ TST-5, the invariant tests every rnd project carries, is a rule of nuinashco/rnd
 Tests are pytest functions (no test classes) named as sentences stating a behaviour:
 `test_sound_selection_never_falls_back_to_every_task`.
 
-*Check:* `check-conventions` flags test classes; review for the names.
+*Check:* `check-conventions` flags a class with test methods or a `TestCase` base in a test file; review for the names.
 
 ### TST-2 MUST
 
@@ -732,7 +752,9 @@ Test ML code with tiny real models, not mocks: loss decreases, and a batch can b
 
 README.md is the user's and operator's view: setup, daily workflow, commands, outputs, caveats. It opens by saying
 in a sentence or two what the project is and who it is for, then shows how to install it and one command or snippet
-to copy, with its output where that helps. It stays short, about 100 lines, and links to what is longer.
+to copy, with its output where that helps. A command block holds only what is typed: an interactive zsh hands a
+trailing `# comment` to the command, so the explanation goes in the sentence beside the block. The README stays
+short, about 100 lines, and links to what is longer.
 CONTRIBUTING.md is the contributor's view: architecture, layout, families, configs, deviations, the "Extending"
 table, tests, commits and releases.
 
@@ -792,7 +814,9 @@ Example: `fix(proxy): retry on 429 from upstream`, not `fix(proxy): add a retry 
 *Why:* the default tooling accepts exactly these types, and the imperative matches git's own convention
 ([Beams](https://cbea.ms/git-commit/)).
 
-*Check:* the `conventional-pre-commit` and `check-commit-msg` commit-msg hooks.
+*Check:* the `conventional-pre-commit` and `check-commit-msg` commit-msg hooks, for the type, the lowercase start, the
+period, the length and the articles, except in a subject that git writes (`Merge `, `fixup! `, `amend! `, `squash! `);
+review for the imperative and for filler.
 
 ### GIT-2 MUST
 
@@ -813,7 +837,8 @@ deleted. GitHub appends ` (#N)` to the title, so PR titles stay within 65 charac
 
 ### GIT-5 MUST
 
-Secrets, data, run outputs and notebook outputs are never committed.
+Secrets, data, run outputs and notebook outputs are never committed. A third-party notebook kept as published
+(TOOL-5) is the exception: it keeps its outputs.
 
 *Check:* gitleaks, nbstripout, `.gitignore`.
 
@@ -876,12 +901,14 @@ Files nobody edits by hand are listed in `.gitattributes` with `protected=<why>`
 - `vendored`: code copied in from another repo and changed only there;
 - `published`: third-party files kept as published, such as `notebooks/reference/`.
 
-The same lines carry `linguist-generated` or `linguist-vendored`, so GitHub folds those diffs in pull requests. A
-family item's mirror sits beside hand-written presets, so no path pattern can mark it: a leading comment line starting
-`# Generated by` marks it instead. The `check-protected` Claude Code `PreToolUse` hook refuses edits to all of them with
-the reason and the right place to make the change; the commands that own them (`make configs`, `copier update`) still
-write them. The hook fails open: a broken environment lets edits through instead of blocking every one. Names carry
-no marker (no `_` prefix): `_` means private in Python.
+The same lines carry `linguist-generated` or `linguist-vendored`, so GitHub folds those diffs in pull requests;
+`.copier-answers.yml` alone stays unfolded, because a changed `_src_path` there changes which template the next update
+runs. A family item's mirror sits beside hand-written presets, so no path pattern can mark it: a leading comment line
+starting `# Generated by` marks it instead. The `check-protected` Claude Code `PreToolUse` hook refuses an edit Claude
+makes to any of them with its edit tools, giving the reason and the right place to make the change. It does not see
+shell commands, so the commands that own the files (`make configs`, `copier update`) still write them. The hook fails
+open: a broken environment lets edits through instead of blocking every one. Names carry no marker (no `_` prefix): `_`
+means private in Python.
 
 *Why:* agents fix whatever file is in front of them, and a refusal that names the source is the cheapest redirect.
 
@@ -924,6 +951,7 @@ holds. The choices behind the shared library (families, the config bridge, confi
 | commits | standard types, imperative, one line, no articles | custom `doc`/`ref`; behaviour-as-fact subjects; bodies with the why | default tooling accepts them; git convention; terse history you can scan |
 | merging | squash | rebase-merge; commit to main | messy branch history is fine; `main` stays one commit per change |
 | Python | latest stable | 3.12 floor | newest language features; pin lower per project when forced |
+| this repo's README length | about 150 lines, the pre-commit snippet folded in it | about 100 lines (RDOC-1), the snippet in a linked file | a reader adding the conventions to an existing repo copies the hooks from the page they are reading; folded, the page shows about 120 lines |
 
 ## Sources
 

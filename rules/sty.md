@@ -22,13 +22,14 @@ Format with ruff format: 88 columns, double quotes.
 ### STY-2 MUST
 
 Lint with the template's curated rule set: `E F W I B UP SIM RET PTH C4 RUF TID FBT N PERF G LOG BLE PL D NPY ERA T20
-C90` (plus `FA` below 3.14). `D401` is selected explicitly, because the google docstring convention silently drops it.
-Ignored on purpose: `PLR2004`, `PLR0913`, `PLC0415`, `D102`, `D103`, `D105`, `D106`, `D107`. The set changes only by
-changing this guide. A `# noqa` names the rule and gives a reason.
+C90` (plus `FA` below 3.14), with `ANN` for the signatures in `src/` (TYP-1), `PGH004` for a bare `# noqa` and `TD004`
+to `TD007` for TODO comments (DOC-6). `D401` is selected explicitly, because the google docstring convention silently
+drops it. Ignored on purpose: `PLR2004`, `PLR0913`, `PLC0415`, `ANN401`, `D102`, `D103`, `D105`, `D106`, `D107`. The
+set changes only by changing this guide. A `# noqa` names the rule and gives a reason.
 
 *Why:* an explicit select keeps upgrades from changing the rules silently ([ruff](https://docs.astral.sh/ruff/linter/)).
 
-*Check:* `ruff check`.
+*Check:* `ruff check`, with PGH004 for the rule a `# noqa` names; review for its reason.
 
 ### STY-3 MUST
 
@@ -39,9 +40,11 @@ Imports are absolute.
 ### STY-4 MUST
 
 Every optional parameter and every boolean parameter is keyword-only (after `*`). Only the one or two obvious subjects
-of a call are positional.
+of a call are positional. A signature that a base class fixes is marked `@override` and keeps its shape.
 
-*Check:* ruff FBT for booleans; `check-conventions` flags a positional parameter with a default; review for the rest.
+*Check:* ruff FBT for booleans; `check-conventions` flags a positional parameter with a default, except in an
+`@override` method and before `/`; review for the rest; a signature that a caller outside the project fixes (a
+resolver, a signal handler) waives it with its reason: `# conventions: STY-4 - <who calls it>.`
 
 ### STY-5 MUST
 
@@ -76,7 +79,7 @@ Use pathlib, never `os.path`.
 
 *Why:* greppable and terminal-safe.
 
-*Check:* a pre-commit non-ASCII hook (`ascii-only-python` in the template).
+*Check:* `check-conventions` reports each line that has a character outside ASCII.
 
 ### STY-9 SHOULD
 

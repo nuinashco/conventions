@@ -2,16 +2,23 @@
 
 from __future__ import annotations
 
+import inspect
 import json
+import os
+import re
 import subprocess
+from pathlib import Path
 
 import pytest
 
 from conventions_hooks.review import (
+    JUDGED,
     ReviewError,
+    ask_claude,
     claude_hook,
     command,
     comment_rules,
+    main,
     review,
 )
 
@@ -23,6 +30,9 @@ FINDING = {
     "problem": "restates the code",
     "fix": "delete it",
 }
+PLUGIN_HOOKS = (
+    Path(__file__).resolve().parents[2] / "plugins/conventions/hooks/hooks.json"
+)
 
 
 def verdict(*findings: dict[str, object]) -> str:
@@ -37,6 +47,11 @@ def answering(text: str, calls: list[str]):
         return text
 
     return ask
+
+
+def sent(stdin: str) -> str:
+    """Return the diff in what the judge was sent, without the rules before it."""
+    return stdin.partition("# Diff\n\n")[2]
 
 
 def test_an_empty_diff_passes_without_asking():
@@ -84,11 +99,30 @@ def test_an_answer_without_a_structured_verdict_is_an_error():
         review("+# Add one.", "rules", ask=answering('{"result": "FAIL"}', []))
 
 
-def test_the_review_runs_with_hooks_off_so_it_cannot_trigger_itself():
+def test_a_diff_over_200000_characters_is_an_error_and_is_not_sent():
+    calls: list[str] = []
+    ask = answering(verdict(), calls)
+    at_limit = "+#" + "x" * 199_998
+
+    assert review(at_limit, "rules", ask=ask) == (True, "PASS")
+    with pytest.raises(
+        ReviewError,
+        match="span 200001 characters of diff, over the limit of 200000; not reviewed",
+    ):
+        review(at_limit + "x", "rules", ask=ask)
+    assert len(calls) == 1
+
+
+def test_the_review_runs_with_hooks_tools_and_mcp_servers_off():
     args = command()
 
     settings = json.loads(args[args.index("--settings") + 1])
     assert settings == {"disableAllHooks": True}
+    assert (args[args.index("--tools") + 1], "--strict-mcp-config" in args) == (
+        "",
+        True,
+    )
+    assert "--mcp-config" not in args
 
 
 def test_the_judge_gets_the_comment_rules_shipped_with_the_package():
@@ -99,15 +133,53 @@ def test_the_judge_gets_the_comment_rules_shipped_with_the_package():
     assert "### DOC-7 MUST" in rules
 
 
+def test_a_judge_that_gives_no_answer_in_time_is_an_error_saying_how_long(
+    tmp_path, monkeypatch
+):
+    (tmp_path / "claude").write_text("#!/bin/sh\nexec sleep 5\n")
+    (tmp_path / "claude").chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path), prepend=os.pathsep)
+
+    with pytest.raises(ReviewError, match=r"claude gave no answer in 0\.2 seconds"):
+        ask_claude(["claude", "-p"], "diff", timeout_s=0.2)
+
+
+def test_the_judge_gives_up_before_the_plugin_ends_its_stop_hook():
+    (group,) = json.loads(PLUGIN_HOOKS.read_text())["hooks"]["Stop"]
+    (hook,) = group["hooks"]
+    waits = inspect.signature(ask_claude).parameters["timeout_s"].default
+
+    assert waits < hook["timeout"]
+
+
+def test_a_cli_that_refuses_to_start_is_an_error_saying_why(tmp_path, monkeypatch):
+    refusal = (
+        "You cannot use --strict-mcp-config when an enterprise MCP config is present"
+    )
+    (tmp_path / "claude").write_text(f"#!/bin/sh\necho '{refusal}' >&2\nexit 1\n")
+    (tmp_path / "claude").chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path))
+
+    with pytest.raises(ReviewError, match=f"claude failed: {refusal}"):
+        ask_claude(command(), "diff")
+
+
+def git(repo: Path, *args: str) -> None:
+    subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True)
+
+
+def commit(repo: Path) -> None:
+    identity = ("-c", "user.email=t@t", "-c", "user.name=t")
+    git(repo, "add", "-A")
+    # A developer who signs commits has no key for this identity.
+    git(repo, *identity, "-c", "commit.gpgsign=false", "commit", "-qm", "init")
+
+
 @pytest.fixture
 def repo(opted_in):
-    def git(*args: str) -> None:
-        subprocess.run(["git", *args], cwd=opted_in, check=True, capture_output=True)
-
-    git("init", "-q")
+    git(opted_in, "init", "-q")
     (opted_in / "module.py").write_text("x = 1\n")
-    git("add", "-A")
-    git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "init")
+    commit(opted_in)
     return opted_in
 
 
@@ -162,3 +234,395 @@ def test_the_stop_hook_does_not_review_a_passed_diff_again(repo):
     assert claude_hook(stop(), repo, ask=answering(verdict(), calls)) == 0
     assert claude_hook(stop(), repo, ask=answering(verdict(), calls)) == 0
     assert len(calls) == 1
+
+
+def test_a_finding_left_in_place_is_not_reviewed_again_after_a_code_only_edit(repo):
+    calls: list[str] = []
+    ask = answering(verdict(FINDING), calls)
+    (repo / "new.py").write_text("# Add one.\nx = 1 + 1\n")
+    first = claude_hook(stop(), repo, ask=ask)
+    (repo / "module.py").write_text("x = 2\n")
+
+    second = claude_hook(stop(), repo, ask=ask)
+
+    assert (first, second, len(calls)) == (2, 0, 1)
+
+
+def test_a_new_comment_elsewhere_is_sent_alone_and_the_old_finding_is_not_repeated(
+    repo, capsys
+):
+    calls: list[str] = []
+    (repo / "new.py").write_text("# Add one.\nx = 1 + 1\n")
+    claude_hook(stop(), repo, ask=answering(verdict(FINDING), calls))
+    capsys.readouterr()
+    (repo / "other.py").write_text("# Add two.\ny = 1 + 2\n")
+    other = {**FINDING, "path": "other.py", "quote": "# Add two."}
+
+    code = claude_hook(stop(), repo, ask=answering(verdict(FINDING, other), calls))
+
+    assert (code, len(calls)) == (2, 2)
+    assert ("new.py" in sent(calls[1]), "+++ b/other.py" in sent(calls[1])) == (
+        False,
+        True,
+    )
+    assert capsys.readouterr().err == (
+        "FAIL\nother.py:1: DOC-4 restates the code ('# Add two.'); delete it\n"
+    )
+
+
+def test_a_finding_is_not_repeated_when_its_hunk_is_sent_again(repo, capsys):
+    calls: list[str] = []
+    ask = answering(verdict(FINDING), calls)
+    (repo / "new.py").write_text("# Add one.\nx = 1 + 1\n")
+    first = claude_hook(stop(), repo, ask=ask)
+    capsys.readouterr()
+    (repo / "new.py").write_text("# Add one.\nx = 1 + 1\nwait = 5  # Seconds.\n")
+
+    second = claude_hook(stop(), repo, ask=ask)
+
+    assert (first, second, len(calls), capsys.readouterr().err) == (2, 0, 2, "")
+
+
+def test_a_finding_that_quotes_unchanged_lines_too_is_not_repeated_with_its_hunk(
+    repo,
+):
+    calls: list[str] = []
+    docstring = ['    """Return one.', "", "    Calls the helper.", '    """']
+    (repo / "module.py").write_text("\n".join(["def f():", *docstring, "    1"]) + "\n")
+    commit(repo)
+    docstring[0] = '    """Return the value.'
+    quote = "\n".join(docstring).strip()
+    ask = answering(verdict({**FINDING, "path": "module.py", "quote": quote}), calls)
+    (repo / "module.py").write_text("\n".join(["def f():", *docstring, "    1"]) + "\n")
+    first = claude_hook(stop(), repo, ask=ask)
+    (repo / "module.py").write_text(
+        "\n".join(["def f():", *docstring, "    # Why not two.", "    1"]) + "\n"
+    )
+
+    second = claude_hook(stop(), repo, ask=ask)
+
+    assert (first, second, len(calls)) == (2, 0, 2)
+
+
+def test_only_the_hunk_with_a_new_comment_is_sent_under_its_file_header(repo):
+    calls: list[str] = []
+    ask = answering(verdict(), calls)
+    body = [f"v{n} = {n}" for n in range(20)]
+    (repo / "module.py").write_text("\n".join(body) + "\n")
+    commit(repo)
+    (repo / "module.py").write_text("\n".join(["# First.", *body]) + "\n")
+    claude_hook(stop(), repo, ask=ask)
+    (repo / "module.py").write_text("\n".join(["# First.", *body, "# Last."]) + "\n")
+
+    claude_hook(stop(), repo, ask=ask)
+
+    header, hunk = sent(calls[1]).split("\n@@ ")
+    assert header.endswith("\n--- a/module.py\n+++ b/module.py")
+    assert hunk.startswith("-18,3 +19,4 @@")
+    assert hunk.endswith("\n v17 = 17\n v18 = 18\n v19 = 19\n+# Last.")
+
+
+@pytest.mark.parametrize(
+    ("answer", "codes"),
+    [(verdict(), (0, 0, 0)), (verdict(FINDING), (2, 0, 2))],
+    ids=["passed", "flagged"],
+)
+def test_a_comment_removed_and_written_again_is_sent_again(repo, answer, codes):
+    calls: list[str] = []
+    ask = answering(answer, calls)
+    (repo / "new.py").write_text("# Add one.\nx = 1 + 1\n")
+    first = claude_hook(stop(), repo, ask=ask)
+    (repo / "new.py").write_text("x = 1 + 1\n")
+    second = claude_hook(stop(), repo, ask=ask)
+    (repo / "new.py").write_text("# Add one.\nx = 1 + 1\n")
+
+    third = claude_hook(stop(), repo, ask=ask)
+
+    assert (first, second, third) == codes
+    assert ["+# Add one." in sent(call) for call in calls] == [True, True]
+
+
+def test_a_finding_is_forgotten_once_its_file_has_left_the_diff(repo):
+    calls: list[str] = []
+    ask = answering(verdict(FINDING), calls)
+    (repo / "new.py").write_text("# Add one.\nx = 1 + 1\n")
+    claude_hook(stop(), repo, ask=ask)
+    commit(repo)
+    claude_hook(stop(), repo, ask=ask)
+    (repo / "new.py").write_text("# Add one.\nx = 1 + 1\n# Add one.\ny = 1 + 1\n")
+
+    assert (claude_hook(stop(), repo, ask=ask), len(calls)) == (2, 2)
+
+
+def test_a_reviewed_comment_that_is_only_indented_is_not_sent_again(repo):
+    calls: list[str] = []
+    ask = answering(verdict(), calls)
+    (repo / "new.py").write_text("# Add one.\nx = 1 + 1\n")
+    claude_hook(stop(), repo, ask=ask)
+    (repo / "new.py").write_text("if True:\n    # Add one.\n    x = 1 + 1\n")
+
+    claude_hook(stop(), repo, ask=ask)
+
+    assert len(calls) == 1
+
+
+def test_a_file_moved_with_git_is_not_new_text(repo):
+    calls: list[str] = []
+    (repo / "old.py").write_text("# Add one.\nx = 1 + 1\n")
+    commit(repo)
+    git(repo, "mv", "old.py", "moved.py")
+
+    code = claude_hook(stop(), repo, ask=answering(verdict(FINDING), calls))
+
+    assert (code, calls) == (0, [])
+
+
+def test_an_untracked_file_named_with_a_space_and_a_non_ascii_letter_is_reviewed(
+    repo,
+):
+    calls: list[str] = []
+    (repo / "my caf\u00e9.py").write_text("# Add one.\nx = 1 + 1\n")
+
+    claude_hook(stop(), repo, ask=answering(verdict(), calls))
+
+    assert "+++ b/my caf\u00e9.py" in sent(calls[0])
+    assert "+# Add one." in sent(calls[0])
+
+
+def test_a_file_that_is_not_utf8_is_reviewed_with_its_odd_bytes_replaced(repo):
+    calls: list[str] = []
+    (repo / "latin.py").write_bytes(b"# Caf\xe9 hours.\nx = 1\n")
+
+    code = claude_hook(stop(), repo, ask=answering(verdict(), calls))
+
+    assert (code, "+# Caf\ufffd hours." in sent(calls[0])) == (0, True)
+
+
+@pytest.mark.parametrize(
+    "pyproject",
+    [
+        '[project]\nname = "member"\n',
+        f"[tool.conventions]\nignore = {json.dumps(sorted(JUDGED))}\n",
+        "[tool.conventions\n",
+        "[tool.conventions]\nreview = false\n",
+    ],
+    ids=["no-table", "every-judged-rule-ignored", "table-does-not-parse", "review-off"],
+)
+def test_a_member_is_left_out_unless_its_own_table_asks_for_the_review(repo, pyproject):
+    calls: list[str] = []
+    (repo / "member").mkdir()
+    (repo / "member" / "pyproject.toml").write_text(pyproject)
+    (repo / "member" / "mod.py").write_text("# Add one.\nx = 1 + 1\n")
+    (repo / "new.py").write_text("# Add one.\nx = 1 + 1\n")
+
+    claude_hook(stop(), repo, ask=answering(verdict(), calls))
+
+    assert ("+++ b/new.py" in sent(calls[0]), "member/mod.py" in sent(calls[0])) == (
+        True,
+        False,
+    )
+
+
+def test_a_member_with_its_own_table_is_reviewed_in_a_repo_without_one(repo):
+    calls: list[str] = []
+    (repo / "pyproject.toml").write_text('[project]\nname = "x"\n')
+    (repo / "member").mkdir()
+    (repo / "member" / "pyproject.toml").write_text("[tool.conventions]\n")
+    (repo / "member" / "mod.py").write_text("# Add one.\nx = 1 + 1\n")
+    (repo / "new.py").write_text("# Add one.\nx = 1 + 1\n")
+
+    claude_hook(stop(), repo, ask=answering(verdict(), calls))
+
+    assert ("+++ b/new.py" in sent(calls[0]), "member/mod.py" in sent(calls[0])) == (
+        False,
+        True,
+    )
+
+
+def test_a_finding_is_dropped_when_the_table_of_its_file_ignores_the_rule(repo, capsys):
+    calls: list[str] = []
+    (repo / "member").mkdir()
+    (repo / "member" / "pyproject.toml").write_text(
+        '[tool.conventions]\nignore = ["DOC-4"]\n'
+    )
+    (repo / "member" / "mod.py").write_text("# Add one.\nx = 1 + 1\n")
+    (repo / "new.py").write_text("# Add one.\nx = 1 + 1\n")
+    answer = verdict(FINDING, {**FINDING, "path": "member/mod.py"})
+
+    code = claude_hook(stop(), repo, ask=answering(answer, calls))
+
+    assert (code, capsys.readouterr().err) == (
+        2,
+        "FAIL\nnew.py:1: DOC-4 restates the code ('# Add one.'); delete it\n",
+    )
+
+
+def test_a_state_file_in_the_old_format_counts_as_empty(repo):
+    calls: list[str] = []
+    ask = answering(verdict(), calls)
+    (repo / ".git" / "review-comments").write_text("6c1a2bb5" * 8)
+    (repo / "new.py").write_text("# Add one.\nx = 1 + 1\n")
+
+    codes = (claude_hook(stop(), repo, ask=ask), claude_hook(stop(), repo, ask=ask))
+
+    assert (codes, len(calls)) == ((0, 0), 1)
+
+
+def test_the_stop_hook_names_a_file_over_the_limit_at_one_stop_only(repo, capsys):
+    calls: list[str] = []
+    ask = answering(verdict(), calls)
+    (repo / "new.py").write_text("# Add one.\nx = 1 + 1\n")
+    claude_hook(stop(), repo, ask=ask)
+    (repo / "table.py").write_text("# Generated table.\n" + "x = 1\n" * 40_000)
+
+    codes = (claude_hook(stop(), repo, ask=ask), claude_hook(stop(), repo, ask=ask))
+
+    assert (codes, len(calls)) == ((1, 0), 1)
+    assert re.fullmatch(
+        r"review-comments: table.py adds \d+ characters of diff, over the limit of "
+        r"200000; not reviewed\n",
+        capsys.readouterr().err,
+    )
+
+
+def test_the_other_files_are_reviewed_beside_a_file_over_the_limit(repo, capsys):
+    calls: list[str] = []
+    (repo / "table.py").write_text("# Generated table.\n" + "x = 1\n" * 40_000)
+    (repo / "new.py").write_text("# Add one.\nx = 1 + 1\n")
+
+    code = claude_hook(stop(), repo, ask=answering(verdict(FINDING), calls))
+
+    assert (code, "+++ b/new.py" in sent(calls[0]), "table.py" in sent(calls[0])) == (
+        2,
+        True,
+        False,
+    )
+    over, *findings = capsys.readouterr().err.splitlines()
+    assert over.startswith("review-comments: table.py adds ")
+    assert findings == [
+        "FAIL",
+        "new.py:1: DOC-4 restates the code ('# Add one.'); delete it",
+    ]
+
+
+def test_the_largest_file_is_left_out_when_files_under_the_limit_are_over_it_together(
+    repo, capsys
+):
+    calls: list[str] = []
+    ask = answering(verdict(), calls)
+    (repo / "table.py").write_text("# Generated table.\n" + "x = 1\n" * 18_000)
+    (repo / "other.py").write_text("# Generated list.\n" + "y = 2\n" * 16_000)
+    (repo / "new.py").write_text("# Add one.\nx = 1 + 1\n")
+
+    codes = (claude_hook(stop(), repo, ask=ask), claude_hook(stop(), repo, ask=ask))
+
+    assert (codes, len(calls)) == ((1, 0), 1)
+    assert [name in sent(calls[0]) for name in ("new.py", "other.py", "table.py")] == [
+        True,
+        True,
+        False,
+    ]
+    assert re.fullmatch(
+        r"review-comments: table.py adds \d+ characters of diff, which takes the "
+        r"review over the limit of 200000; not reviewed\n",
+        capsys.readouterr().err,
+    )
+
+
+def test_a_file_over_the_limit_is_named_once_when_the_review_of_the_rest_fails(
+    repo, capsys
+):
+    calls: list[str] = []
+
+    def failing(args: list[str], stdin: str) -> str:
+        calls.append(stdin)
+        raise ReviewError("claude failed: no MCP servers")
+
+    (repo / "table.py").write_text("# Generated table.\n" + "x = 1\n" * 40_000)
+    (repo / "new.py").write_text("# Add one.\nx = 1 + 1\n")
+    first = claude_hook(stop(), repo, ask=failing)
+    over, error = capsys.readouterr().err.splitlines()
+
+    second = claude_hook(stop(), repo, ask=failing)
+
+    assert (first, second, ["+++ b/new.py" in sent(call) for call in calls]) == (
+        1,
+        1,
+        [True, True],
+    )
+    assert over.startswith("review-comments: table.py adds ")
+    assert (error, capsys.readouterr().err) == (
+        "review-comments: claude failed: no MCP servers",
+        "review-comments: claude failed: no MCP servers\n",
+    )
+
+
+def test_review_false_turns_the_review_off_on_the_command_line_and_as_a_hook(
+    repo, tmp_path_factory, monkeypatch, capsys
+):
+    calls: list[str] = []
+    bin_dir = tmp_path_factory.mktemp("bin")
+    # A review that still runs reaches this fake instead of the model.
+    (bin_dir / "claude").write_text(f"#!/bin/sh\ntouch {bin_dir}/called\n")
+    (bin_dir / "claude").chmod(0o755)
+    monkeypatch.setenv("PATH", str(bin_dir), prepend=os.pathsep)
+    monkeypatch.chdir(repo)
+    (repo / "pyproject.toml").write_text("[tool.conventions]\nreview = false\n")
+    (repo / "new.py").write_text("# Add one.\nx = 1 + 1\n")
+    git(repo, "add", "new.py")
+
+    codes = (main([]), claude_hook(stop(), repo, ask=answering(verdict(), calls)))
+
+    assert (codes, calls, (bin_dir / "called").exists()) == ((0, 0), [], False)
+    assert capsys.readouterr() == ("", "")
+
+
+def test_the_same_comment_in_another_file_is_new(repo):
+    calls: list[str] = []
+    ask = answering(verdict(), calls)
+    (repo / "new.py").write_text("# Add one.\nx = 1 + 1\n")
+    claude_hook(stop(), repo, ask=ask)
+    (repo / "other.py").write_text("# Add one.\ny = 1 + 1\n")
+
+    claude_hook(stop(), repo, ask=ask)
+
+    assert ("+++ b/other.py" in sent(calls[1]), "new.py" in sent(calls[1])) == (
+        True,
+        False,
+    )
+
+
+@pytest.mark.parametrize(
+    "line",
+    ['"""Return one."""', "'''Return one.'''", 'size = Field(1, description="Size")'],
+    ids=["docstring", "single-quoted-docstring", "description"],
+)
+def test_a_new_docstring_or_description_is_sent_like_a_comment(repo, line):
+    calls: list[str] = []
+    (repo / "module.py").write_text(f"x = 1\n{line}\n")
+
+    claude_hook(stop(), repo, ask=answering(verdict(), calls))
+
+    assert f"+{line}" in sent(calls[0])
+
+
+def test_git_settings_of_the_user_do_not_change_what_is_sent(
+    repo, tmp_path_factory, monkeypatch
+):
+    calls: list[str] = []
+    config = tmp_path_factory.mktemp("home") / "gitconfig"
+    config.write_text(
+        "[color]\n\tui = always\n"
+        "[diff]\n\tnoprefix = true\n\trenames = false\n\texternal = echo\n"
+    )
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(config))
+    (repo / "old.py").write_text("# Add one.\nx = 1 + 1\n")
+    commit(repo)
+    git(repo, "mv", "old.py", "moved.py")
+    (repo / "module.py").write_text("x = 2  # Seconds.\n")
+
+    claude_hook(stop(), repo, ask=answering(verdict(), calls))
+
+    header, hunk = sent(calls[0]).split("\n@@ ")
+    assert header.endswith("\n--- a/module.py\n+++ b/module.py")
+    assert hunk.endswith("\n-x = 1\n+x = 2  # Seconds.")

@@ -23,3 +23,4 @@ holds. The choices behind the shared library (families, the config bridge, confi
 | commits | standard types, imperative, one line, no articles | custom `doc`/`ref`; behaviour-as-fact subjects; bodies with the why | default tooling accepts them; git convention; terse history you can scan |
 | merging | squash | rebase-merge; commit to main | messy branch history is fine; `main` stays one commit per change |
 | Python | latest stable | 3.12 floor | newest language features; pin lower per project when forced |
+| this repo's README length | about 150 lines, the pre-commit snippet folded in it | about 100 lines (RDOC-1), the snippet in a linked file | a reader adding the conventions to an existing repo copies the hooks from the page they are reading; folded, the page shows about 120 lines |

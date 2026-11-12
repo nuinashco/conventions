@@ -11,8 +11,9 @@ from conventions_hooks import rules
 
 REPO = Path(__file__).resolve().parents[1]
 PLUGIN = REPO / "plugins" / "conventions"
-RUN_CHECK = '"${CLAUDE_PLUGIN_ROOT}/bin/run-check"'
+RUN_CHECK = '"${CLAUDE_PLUGIN_ROOT}/scripts/run-check"'
 HOOK = re.compile(rf"{re.escape(RUN_CHECK)} (\S+) --claude-hook")
+BASH_BLOCK = re.compile(r"^ *```bash\n(.*?)^ *```$", re.M | re.S)
 
 
 def test_generated_files_are_fresh():
@@ -99,3 +100,16 @@ def test_every_skill_and_agent_starts_with_frontmatter_naming_it():
         for page, name in names.items()
         if name and page.name == "SKILL.md"
     )
+
+
+def test_command_blocks_of_the_documents_hold_only_commands():
+    # An interactive zsh hands a trailing `# comment` to the command as arguments.
+    commented = [
+        f"{name}: {line.strip()}"
+        for name in ("README.md", "CONTRIBUTING.md")
+        for block in BASH_BLOCK.findall((REPO / name).read_text())
+        for line in block.splitlines()
+        if "#" in line
+    ]
+
+    assert commented == []

@@ -5,10 +5,13 @@ from __future__ import annotations
 import ast
 import functools
 import os
+import tokenize
 from collections.abc import Iterator
 from pathlib import Path, PurePath
 
 from conventions_hooks import switches, waivers
+from conventions_hooks.findings import UNREADABLE
+from conventions_hooks.settings import project_root
 
 
 def top_package(path: Path) -> Path | None:
@@ -22,29 +25,34 @@ def top_package(path: Path) -> Path | None:
 
 
 def is_test(path: PurePath) -> bool:
-    """Return whether `path` names test code: under `tests/`, or a pytest file."""
-    return (
-        "tests" in path.parts
-        or path.name.startswith("test_")
-        or path.name == "conftest.py"
-    )
+    """Return whether `path`, from its project's root, names test code.
+
+    That is a file under a `tests` folder, or a pytest file (`test_*.py`, `conftest.py`)
+    outside `src/`: under `src/` a file is package code whatever its name.
+    """
+    pytest_file = path.name.startswith("test_") or path.name == "conftest.py"
+    return "tests" in path.parts or (pytest_file and "src" not in path.parts)
 
 
 def modules(top: Path) -> Iterator[Path]:
     """Yield the modules of the package at `top`, without its tests.
 
-    Only folders with an `__init__.py` are entered, so a virtualenv or a data folder
-    that sits inside the package is not read.
+    A file is a test by its path from its project's root, as `is_test` reads it, and
+    a `tests` folder is not entered. Outside a project a file is judged by its name
+    alone. Only folders with an `__init__.py` are entered, so a virtualenv or a data
+    folder that sits inside the package is not read.
     """
     try:
         entries = sorted(top.iterdir())
     except OSError:
         return
+    root = project_root(top)
+    inside = top.absolute().relative_to(root) if root else PurePath()
     for entry in entries:
         if entry.is_dir():
             if entry.name != "tests" and (entry / "__init__.py").is_file():
                 yield from modules(entry)
-        elif entry.suffix == ".py" and not is_test(PurePath(entry.name)):
+        elif entry.suffix == ".py" and not is_test(inside / entry.name):
             yield entry
 
 
@@ -85,14 +93,16 @@ def _switches(module: Path) -> tuple[switches.Switch, ...]:
 def _parsed(module: Path, mtime_ns: int, size: int) -> tuple[switches.Switch, ...]:
     """Parse a module once per version: one run checks many files of one package.
 
-    `mtime_ns` and `size` only key the cache. A module that does not parse has no
-    switches here; ruff reports it when it is checked itself.
+    `mtime_ns` and `size` only key the cache. A module that Python cannot read or
+    parse has no switches here.
     """
     del mtime_ns, size
     try:
-        source = module.read_text(encoding="utf-8")
-        found = switches.switches_of(ast.parse(source))
-    except (OSError, ValueError, SyntaxError, RecursionError):
+        with tokenize.open(module) as file:
+            source = file.read()
+        tree = ast.parse(source)
+    except (OSError, *UNREADABLE):
         return ()
-    waived = waivers.waived(source)
-    return tuple(s for s in found if "ARC-9" not in waived.get(s.line, ()))
+    waived = waivers.waived(source, tree)
+    lines = {line for line, rules in waived.items() if "ARC-9" in rules}
+    return tuple(s for s in switches.switches_of(tree) if not s.waived(lines))

@@ -24,8 +24,8 @@ make test-judges  # live `claude` runs of the judges on tests/judges/ (costs tok
 - Prefer a check a tool can run: a new mechanical check goes into `check-conventions` (or a new hook) with tests,
   and the rule's *Check* names it.
 - A hook's `--claude-hook` mode exits 0 silently in a repo without `[tool.conventions]`; every mode honours its
-  `ignore`. Keep the console script names: `plugins/conventions/hooks/hooks.json` and projects' pre-commit configs
-  call them.
+  `ignore`. The plugin's `scripts/run-check` relies on that silence: it never looks for the table. Keep the console
+  script names: `plugins/conventions/hooks/hooks.json` and projects' pre-commit configs call them.
 - A change to a judge's prompt (`agents/`, `review.py`) or model is measured with `make test-judges` before
   committing; a mistake a judge makes becomes a case in `tests/judges/` (TOOL-6).
 - Releases are tags (`vMAJOR.MINOR.PATCH`) that projects pin; the plugin follows the default branch.
@@ -37,7 +37,7 @@ make test-judges  # live `claude` runs of the judges on tests/judges/ (costs tok
 rules/                    the rules: one file per area, plus _intro, _decisions, _sources
 agents/                   sources of the plugin's subagents
 src/conventions_hooks/    the hooks, settings.py ([tool.conventions]), rules.py (build-rules)
-plugins/conventions/      the plugin: .claude-plugin/plugin.json, hooks/, bin/run-check, generated skills/ and agents/
+plugins/conventions/      the plugin: .claude-plugin/plugin.json, hooks/, scripts/run-check, generated skills/ and agents/
 .claude-plugin/           marketplace.json of the nuinashco marketplace
 tests/                    conventions_hooks/: unit tests; test_invariants.py, test_run_check.py; judges/: cases
 ```

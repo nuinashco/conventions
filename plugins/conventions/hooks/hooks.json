@@ -1,5 +1,5 @@
 {
-  "description": "Run the project's own conventions-hooks checks; bin/run-check does nothing in a repo without [tool.conventions].",
+  "description": "Run the project's own conventions-hooks checks through scripts/run-check; they do nothing in a repo without [tool.conventions].",
   "hooks": {
     "PreToolUse": [
       {
@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/run-check\" check-protected --claude-hook",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/run-check\" check-protected --claude-hook",
             "timeout": 30,
             "statusMessage": "Checking for protected files"
           }
@@ -20,13 +20,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/run-check\" check-comments --claude-hook",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/run-check\" check-comments --claude-hook",
             "timeout": 30,
             "statusMessage": "Checking comment conventions"
           },
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/run-check\" check-conventions --claude-hook",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/run-check\" check-conventions --claude-hook",
             "timeout": 30,
             "statusMessage": "Checking code conventions"
           }
@@ -38,7 +38,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/run-check\" review-comments --claude-hook",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/run-check\" review-comments --claude-hook",
             "timeout": 600,
             "statusMessage": "Reviewing new comments in the background",
             "asyncRewake": true

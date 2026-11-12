@@ -28,7 +28,8 @@ Docstrings are one line where possible:
 - every public class has one (`D101`);
 - a function or method gets one when its name and signature don't already say it all.
 
-*Check:* ruff D101, D401; `check-comments` flags a class docstring that opens with an order; review.
+*Check:* ruff D101, D401; `check-comments` flags a class docstring that opens with an order (`Return the ...`);
+review.
 
 ### DOC-3 SHOULD
 
@@ -64,12 +65,13 @@ Information that code can't express still needs writing down
 ([Ousterhout](https://github.com/johnousterhout/aposd-vs-clean-code)).
 
 *Check:* ruff ERA001; `check-comments` flags banners; `review-comments` asks Claude whether new comments say anything
-the code doesn't (the plugin's `Stop` hook, and on demand with `pre-commit run review-comments --hook-stage manual`).
+the code doesn't (the plugin's `Stop` hook, and `uv run review-comments` for the staged diff).
 
 ### DOC-5 MUST
 
 Comments are sentences: capitalised and ending with a period. A sentence that opens with a lowercase name puts it in
-backticks (`` `git` is not installed. ``).
+backticks (`` `git` is not installed. ``). A comment a tool reads is not one: `# noqa`, `# type:`, an `SPDX-` line, a
+`# %%` cell marker and the text of a jupytext markdown cell, a PEP 723 block.
 
 *Check:* `check-comments`, in pre-commit and as a Claude Code `PostToolUse` hook on every edited `.py` file.
 

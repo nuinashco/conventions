@@ -84,6 +84,8 @@ def commit(project: Path, message: str) -> None:
         "user.email=t@t",
         "-c",
         "user.name=t",
+        "-c",
+        "commit.gpgsign=false",
         "commit",
         "-qm",
         message,

@@ -30,6 +30,6 @@ imports are lazy (ARC-8).
 Linters, hooks and the template report these; follow them as you write.
 
 - **LAY-1** MUST: Projects use uv with the `uv_build` backend, the src layout and a committed `uv.lock`. *Check:* template.
-- **LAY-2** MUST: A distribution has one top-level import package, `src/<pkg>/`. A standalone part of the project (a proxy, a client) is a subpackage such as `<pkg>/proxy/`, isolated by an import contract (ARC-1). *Check:* `module-name = "<pkg>"` in the template; `check-conventions` flags grab-bag module names under `src/`.
+- **LAY-2** MUST: A distribution has one top-level import package, `src/<pkg>/`. A standalone part of the project (a proxy, a client) is a subpackage such as `<pkg>/proxy/`, isolated by an import contract (ARC-1). *Check:* `module-name = "<pkg>"` in the template; `check-conventions` flags grab-bag module names under `src/`, also when private (`_utils.py`) or suffixed (`string_utils.py`).
 - **LAY-3** MUST: `requires-python` starts at the latest stable CPython when the project is created (3.14 as of 2026-10). Pin lower only when a dependency or runtime forces it, and say which one in a comment next to the pin. *Check:* template default; review.
 - **LAY-6** MUST: A Makefile runs every routine task and documents itself: `make help` lists the targets from their `##` comments. The standard targets are `setup lint format typecheck test check`, plus what the project needs, such as `test-integration` and `configs` in an rnd project or `build` in a library. *Check:* template.

@@ -11,33 +11,45 @@ Code hands back to Claude; a repo without a `[tool.conventions]` table is skippe
 Rules listed in that table's `ignore` are skipped in both modes.
 
 Each check stands in for a rule whose *Check* used to be review alone: no grab-bag
-modules (LAY-2), heavy imports kept lazy (ARC-8), no branching on `kind` (ARC-4), a
-variant name switched on in one place of the package (ARC-9), no functions that only
-forward (ARC-10), registration outermost (FAM-2), attrs instead of `__init__` and
-dataclasses (TYP-4), options keyword-only (STY-4), lowercase error messages (ERR-3),
-snake_case log events (LOG-2) and test functions rather than classes (TST-1). In a
-project with a `src/<pkg>/paths.py`, repo paths and environment go through it (ENV-1,
-ENV-3). A justified exception is a comment naming the rule with its reason, on the
-flagged line or alone on the line above it:
-`# conventions: TYP-4 - the base class from httpx needs __init__.`
+modules (LAY-2), heavy imports kept lazy unless a class base or a decorator needs them
+(ARC-8), no branching on a `kind` string (ARC-4), a variant name switched on in one
+place of the package (ARC-9), no functions that only forward (ARC-10), registration
+outermost (FAM-2), attrs instead of dataclasses and of an `__init__` that no base from
+outside the project needs (TYP-4), options keyword-only (STY-4), ASCII only (STY-8),
+lowercase error messages (ERR-3), snake_case log events (LOG-2) and test functions
+rather than classes (TST-1). In a project with a `src/<pkg>/paths.py`, the repo root
+is found and environment variables are read there (ENV-1, ENV-3). A justified
+exception is a comment naming the rule with its reason, on the flagged line or alone
+above the flagged statement:
+`# conventions: STY-4 - OmegaConf calls this resolver by position.`
+A file that Python cannot decode or parse gets no findings; ruff reports a syntax error.
 """
 
 from __future__ import annotations
 
 import ast
 import functools
+import itertools
 import re
 import sys
-from collections.abc import Callable, Iterator, Sequence
+import tokenize
+from collections.abc import Callable, Collection, Iterator, Sequence
 from pathlib import Path, PurePath
 
 from attrs import frozen
 
 from conventions_hooks import forwarders, package, switches, waivers
-from conventions_hooks.findings import Finding, check_edit, check_paths
+from conventions_hooks.findings import (
+    UNREADABLE,
+    Finding,
+    check_edit,
+    check_paths,
+    merged,
+)
 from conventions_hooks.settings import project_root
 
 GRAB_BAGS = frozenset({"utils", "util", "common", "core", "helpers", "misc"})
+GRAB_BAG_SUFFIXES = ("_utils", "_util", "_helpers", "_common")
 HEAVY = frozenset(
     {"torch", "vllm", "litellm", "wandb", "boto3", "transformers", "tensorflow", "jax"}
 )
@@ -47,8 +59,15 @@ LOG_METHODS = frozenset(
 )
 LOGGERS = frozenset({"log", "logger"})
 EVENT = re.compile(r"[a-z][a-z0-9]*(_[a-z0-9]+)*")
+NON_ASCII = re.compile(r"[^\x00-\x7f]")
 EXCEPTION_SUFFIXES = ("Error", "Exception", "Warning")
-PLAIN_BASES = frozenset({"Protocol", "ABC", "Enum", "StrEnum", "IntEnum", "NamedTuple"})
+PLAIN_BASES = frozenset({"Protocol", "Enum", "StrEnum", "IntEnum", "NamedTuple"})
+# Bases that say nothing about who owns a class: the project's family bases have them,
+# nuikit's `Configurable` among them.
+UNOWNED_BASES = frozenset({"ABC", "Configurable", "Generic", "object"})
+DATACLASS_CALLS = frozenset({"field", "make_dataclass"})
+DATACLASS_MAKERS = DATACLASS_CALLS | {"dataclass"}
+PYTHON_NAMES = frozenset({"None", "True", "False"})
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -64,16 +83,31 @@ def claude_hook(payload: str) -> int:
 
 def check_file(path: Path) -> list[Finding]:
     """Return the findings for one Python file, judged by its place in its project."""
+    try:
+        with tokenize.open(path) as file:
+            source = file.read()
+    except UNREADABLE:
+        return []  # Python cannot read it as text.
     root = project_root(path.parent)
     inside = path.absolute().relative_to(root) if root else path
+    top = package.top_package(path)
     return check_source(
-        path.read_text(encoding="utf-8"),
+        source,
         path=str(path),
         relative=str(inside),
         paths_module=bool(root and any(root.glob("src/*/paths.py"))),
-        top=package.top_package(path),
+        top=top,
         elsewhere=functools.partial(package.switches_elsewhere, path),
+        own_packages=_own_packages(root, top),
     )
+
+
+def _own_packages(root: Path | None, top: Path | None) -> frozenset[str]:
+    """Return the names of a project's packages: `top` and the folders under `src/`."""
+    names = {top.name} if top else set()
+    if root:
+        names |= {init.parent.name for init in root.glob("src/*/__init__.py")}
+    return frozenset(names)
 
 
 def check_source(
@@ -84,6 +118,7 @@ def check_source(
     paths_module: bool = True,
     top: Path | None = None,
     elsewhere: Callable[[], Sequence[switches.Elsewhere]] | None = None,
+    own_packages: Collection[str] = (),
 ) -> list[Finding]:
     """Return the convention findings for one Python source, reported at `path`.
 
@@ -92,27 +127,38 @@ def check_source(
     ENV-1 and ENV-3 apply only when `paths_module` says the project has a
     `src/<pkg>/paths.py`. ARC-9 and ARC-10 look past the file: `elsewhere` returns
     the switches in the other modules of its package, and `top` is the folder of
-    its top package, given when `path` is the file itself.
+    its top package, given when `path` is the file itself. TYP-4 lets a class keep
+    the `__init__` that a base from outside the project needs: `own_packages` names
+    the project's packages, and an absolute import of any other module is from
+    outside.
     """
     try:
         tree = ast.parse(source)
-    except SyntaxError:
+    except UNREADABLE:
         return []  # Ruff reports the syntax error itself.
     where = _Where.of(relative or path, env=paths_module)
     findings = list(_module_name(where, relative or path, report=path))
+    findings += _non_ascii(source, path)
     if where.package:
         findings += _heavy_imports(tree, path)
+    findings += _hand_written_inits(tree, path, own_packages)
+    # A dataclass, its fields and the import that brings it in are one defect,
+    # reported where the dataclass is made; a waiver there is enough.
+    findings += list(_dataclasses(tree, path)) or _dataclass_imports(tree, path)
     for node in ast.walk(tree):
         findings += _check_node(node, where, path)
+    waived = waivers.waived(source, tree)
     if not where.test:
-        findings += switches.check(tree, path, elsewhere=elsewhere)
+        findings += switches.check(
+            tree,
+            path,
+            elsewhere=elsewhere,
+            waived={line for line, rules in waived.items() if "ARC-9" in rules},
+        )
     if where.package and top:
         findings += forwarders.check(tree, path, top)
-    waived = waivers.waived(source)
     kept = [f for f in findings if f.rule not in waived.get(f.line, ())]
-    # A dict keeps findings in the order they were met; a set shuffles those that
-    # share a line and a rule from one run to the next.
-    return sorted(dict.fromkeys(kept), key=lambda f: (f.line, f.rule))
+    return sorted(merged(kept), key=lambda f: (f.line, f.rule))
 
 
 @frozen
@@ -137,18 +183,16 @@ class _Where:
 
 
 def _check_node(node: ast.AST, where: _Where, path: str) -> Iterator[Finding]:
+    if where.env and isinstance(node, ast.Attribute | ast.Subscript | ast.Compare):
+        yield from _paths_rules(node, where, path)
     if isinstance(node, ast.ClassDef):
         yield from _class(node, where, path)
     elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
         yield from _registration_order(node.decorator_list, path)
         if not where.test:
             yield from _keyword_only(node, path)
-    elif isinstance(node, ast.ImportFrom | ast.Import):
-        yield from _dataclass_import(node, path)
-    elif isinstance(node, ast.Compare) and not where.test:
-        yield from _kind_comparison(node, path)
-    elif isinstance(node, ast.Attribute):
-        yield from _attribute(node, where, path)
+    elif isinstance(node, ast.Compare | ast.Match) and not where.test:
+        yield from _kind_branch(node, path)
     elif isinstance(node, ast.Call):
         yield from _log_event(node, path)
     elif isinstance(node, ast.Raise):
@@ -160,8 +204,10 @@ def _module_name(where: _Where, relative: str, *, report: str) -> Iterator[Findi
         return
     pure = PurePath(relative)
     names = [*pure.parent.parts[pure.parts.index("src") + 1 :], pure.stem]
-    for name in names:
-        if name in GRAB_BAGS:
+    for depth, name in enumerate(names):
+        # The top package carries the project's name: `nlp_common` is no grab bag.
+        suffixed = depth > 0 and name.endswith(GRAB_BAG_SUFFIXES)
+        if name.lstrip("_") in GRAB_BAGS or suffixed:
             yield Finding(
                 report,
                 1,
@@ -171,16 +217,24 @@ def _module_name(where: _Where, relative: str, *, report: str) -> Iterator[Findi
             return
 
 
+def _non_ascii(source: str, path: str) -> Iterator[Finding]:
+    for number, line in enumerate(source.split("\n"), start=1):
+        if match := NON_ASCII.search(line):
+            yield Finding(
+                path,
+                number,
+                "STY-8",
+                f"non-ASCII character U+{ord(match[0]):04X}; "
+                "write it in ASCII or as an escape",
+            )
+
+
 def _heavy_imports(tree: ast.Module, path: str) -> Iterator[Finding]:
-    for node in tree.body:
-        if isinstance(node, ast.Import):
-            modules = [alias.name for alias in node.names]
-        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
-            modules = [node.module]
-        else:
-            continue  # `if TYPE_CHECKING:` blocks and other statements are fine.
-        for module in modules:
-            if _heavy(module):
+    needed = _needed_at_import(tree)
+    for node in _module_level(tree):
+        for module, bound in _imported(node):
+            # A class base or a decorator cannot wait for a function to import it.
+            if _heavy(module) and not bound & needed:
                 yield Finding(
                     path,
                     node.lineno,
@@ -189,13 +243,195 @@ def _heavy_imports(tree: ast.Module, path: str) -> Iterator[Finding]:
                 )
 
 
+def _module_level(tree: ast.Module) -> Iterator[ast.stmt]:
+    """Yield the statements that run when the module is imported, outside a class.
+
+    The blocks of `if`, `try` and `with` statements are entered, however nested,
+    except the block of an `if` that only a type checker reads or that runs only
+    when the module is run as a script (`__name__ == "__main__"`).
+    """
+    # A stack, not recursion: a chain of `elif`s nests as deep as it is long.
+    stack = tree.body[::-1]
+    while stack:
+        node = stack.pop()
+        yield node
+        if isinstance(node, ast.If):
+            blocks = _blocks_that_run(node)
+        elif isinstance(node, ast.Try | ast.TryStar):
+            handlers = [handler.body for handler in node.handlers]
+            blocks = [node.body, *handlers, node.orelse, node.finalbody]
+        elif isinstance(node, ast.With):
+            blocks = [node.body]
+        else:
+            continue
+        stack += [statement for block in blocks for statement in block][::-1]
+
+
+def _blocks_that_run(node: ast.If) -> list[list[ast.stmt]]:
+    test = node.test
+    if _name(test) == "TYPE_CHECKING" or _runs_as_script(test):
+        return [node.orelse]
+    if (
+        isinstance(test, ast.UnaryOp)
+        and isinstance(test.op, ast.Not)
+        and _name(test.operand) == "TYPE_CHECKING"
+    ):
+        return [node.body]
+    return [node.body, node.orelse]
+
+
+def _runs_as_script(test: ast.expr) -> bool:
+    """Return whether `test` is `__name__ == "__main__"`, either way round."""
+    if not (
+        isinstance(test, ast.Compare)
+        and len(test.ops) == 1
+        and isinstance(test.ops[0], ast.Eq)
+    ):
+        return False
+    sides = [test.left, *test.comparators]
+    names = {side.id for side in sides if isinstance(side, ast.Name)}
+    values = {side.value for side in sides if isinstance(side, ast.Constant)}
+    return names == {"__name__"} and values == {"__main__"}
+
+
+def _needed_at_import(tree: ast.Module) -> set[str]:
+    """Return the names in the class bases and decorators that run at import.
+
+    Those are the bases of a class and the decorators of a class or function that
+    is not nested inside a function.
+    """
+    needed: list[ast.expr] = []
+    for node in _statements(tree, inside_functions=False):
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+            needed += node.decorator_list
+        elif isinstance(node, ast.ClassDef):
+            needed += [*node.bases, *node.decorator_list]
+    return {
+        node.id
+        for expression in needed
+        for node in ast.walk(expression)
+        if isinstance(node, ast.Name)
+    }
+
+
+def _statements(tree: ast.Module, *, inside_functions: bool) -> Iterator[ast.stmt]:
+    """Yield the statements of a module, however nested, expressions left unread.
+
+    A function is always yielded; the statements of its body, which run when it is
+    called, only with `inside_functions`.
+    """
+    # A stack, not recursion: a chain of `elif`s nests as deep as it is long.
+    # Children go on it last first, so they come off in the order of the source.
+    stack: list[ast.AST] = [tree]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, ast.stmt):
+            yield node
+            function = isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+            if function and not inside_functions:
+                continue
+        stack += [
+            child
+            for child in ast.iter_child_nodes(node)
+            if isinstance(child, ast.stmt | ast.excepthandler | ast.match_case)
+        ][::-1]
+
+
+def _imported(node: ast.stmt) -> Iterator[tuple[str, set[str]]]:
+    """Yield each module an absolute import names, with the names it binds here."""
+    if isinstance(node, ast.Import):
+        for alias in node.names:
+            yield alias.name, {alias.asname or alias.name.split(".", maxsplit=1)[0]}
+    elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+        yield node.module, {alias.asname or alias.name for alias in node.names}
+
+
 def _heavy(module: str) -> bool:
     top = module.split(".", maxsplit=1)[0]
     return top in HEAVY or module.startswith(HEAVY_PREFIXES)
 
 
+def _hand_written_inits(
+    tree: ast.Module, path: str, own_packages: Collection[str]
+) -> Iterator[Finding]:
+    """Report each `__init__` of a class that could declare attrs fields instead.
+
+    An exception, a Protocol and an enum stay plain classes, and a subclass of a
+    class from outside the project is built the way that base says.
+    """
+    statements = list(_statements(tree, inside_functions=True))
+    classes = [node for node in statements if isinstance(node, ast.ClassDef)]
+    outside = _outside_names(statements, classes, own_packages)
+    for node in classes:
+        if _stays_plain(node) or not outside.isdisjoint(_owning_bases(node)):
+            continue
+        for item in node.body:
+            if isinstance(item, ast.FunctionDef) and item.name == "__init__":
+                yield Finding(
+                    path,
+                    item.lineno,
+                    "TYP-4",
+                    "no hand-written `__init__`; declare attrs fields and derive "
+                    "state in a classmethod constructor or `__attrs_post_init__`",
+                )
+
+
+def _outside_names(
+    statements: Sequence[ast.stmt],
+    classes: Sequence[ast.ClassDef],
+    own_packages: Collection[str],
+) -> set[str]:
+    """Return the names that stand for a module or a class from outside the project.
+
+    Those are the names bound by an absolute import of a module that is not one of
+    `own_packages`, and the `classes` of this module that descend from one. Bases
+    are not followed into other modules: a base imported from the project is its
+    own.
+    """
+    names = {
+        name
+        for node in statements
+        for module, bound in _imported(node)
+        if module.split(".", maxsplit=1)[0] not in own_packages
+        for name in bound
+    }
+    subclasses: dict[str, list[str]] = {}
+    for node in classes:
+        for base in _owning_bases(node):
+            subclasses.setdefault(base, []).append(node.name)
+    # A queue, not recursion: a line of classes is as deep as it is long.
+    queue = list(names)
+    while queue:
+        for name in subclasses.pop(queue.pop(), ()):
+            if name not in names:
+                names.add(name)
+                queue.append(name)
+    return names
+
+
+def _owning_bases(node: ast.ClassDef) -> list[str]:
+    """Return the name each base of a class starts from, where the base has an owner."""
+    return [_root(base) for base in node.bases if _name(base) not in UNOWNED_BASES]
+
+
+def _root(node: ast.expr) -> str:
+    """Return the name that `a.b.C[T]` starts from: `a`."""
+    while isinstance(node, ast.Attribute | ast.Subscript):
+        node = node.value
+    return node.id if isinstance(node, ast.Name) else ""
+
+
+def _stays_plain(node: ast.ClassDef) -> bool:
+    bases = {_name(base) for base in node.bases}
+    return (
+        node.name.endswith(EXCEPTION_SUFFIXES)
+        or any(base.endswith(EXCEPTION_SUFFIXES) for base in bases)
+        or bool(bases & PLAIN_BASES)
+    )
+
+
 def _class(node: ast.ClassDef, where: _Where, path: str) -> Iterator[Finding]:
-    if where.test and node.name.startswith("Test"):
+    if where.test and _is_test_class(node):
         yield Finding(
             path,
             node.lineno,
@@ -203,40 +439,70 @@ def _class(node: ast.ClassDef, where: _Where, path: str) -> Iterator[Finding]:
             "tests are plain functions named as sentences, not classes",
         )
     yield from _registration_order(node.decorator_list, path)
-    bases = {_name(base) for base in node.bases}
-    if any(base.endswith(EXCEPTION_SUFFIXES) for base in bases) or bases & PLAIN_BASES:
-        return
-    if node.name.endswith(EXCEPTION_SUFFIXES):
-        return
-    for item in node.body:
-        if isinstance(item, ast.FunctionDef) and item.name == "__init__":
-            yield Finding(
-                path,
-                item.lineno,
-                "TYP-4",
-                "no hand-written `__init__`; declare attrs fields and derive state "
-                "in a classmethod constructor or `__attrs_post_init__`",
-            )
-    for decorator in node.decorator_list:
-        if _name(decorator) == "dataclass":
-            yield Finding(
-                path,
-                decorator.lineno,
-                "TYP-4",
-                "classes are attrs (`@frozen` or `@define`), not dataclasses",
-            )
 
 
-def _dataclass_import(
-    node: ast.Import | ast.ImportFrom, path: str
-) -> Iterator[Finding]:
-    modules = (
-        [alias.name for alias in node.names]
-        if isinstance(node, ast.Import)
-        else [node.module or ""]
+def _is_test_class(node: ast.ClassDef) -> bool:
+    return any(_name(base).endswith("TestCase") for base in node.bases) or any(
+        isinstance(item, ast.FunctionDef | ast.AsyncFunctionDef)
+        and item.name.startswith("test")
+        for item in node.body
     )
-    if "dataclasses" in modules:
-        yield Finding(path, node.lineno, "TYP-4", "use attrs instead of `dataclasses`")
+
+
+def _dataclasses(tree: ast.Module, path: str) -> Iterator[Finding]:
+    """Yield a finding for each dataclass the module makes, and each field outside one.
+
+    A class decorated `@dataclass` is one, unless it stays a plain class; so is a call
+    of `make_dataclass` or `field` on the module `dataclasses` imported whole, under
+    its name or an alias. A field of a class decorated `@dataclass` is part of it.
+    """
+    modules = {
+        alias.asname or alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+        if alias.name == "dataclasses"
+    }
+    inside: set[ast.AST] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and any(
+            _name(decorator) == "dataclass" for decorator in node.decorator_list
+        ):
+            # The walk is breadth-first: a class comes before the calls in its body.
+            inside.update(ast.walk(node))
+            if _stays_plain(node):
+                continue
+            for decorator in node.decorator_list:
+                if _name(decorator) == "dataclass":
+                    yield Finding(
+                        path,
+                        decorator.lineno,
+                        "TYP-4",
+                        "classes are attrs (`@frozen` or `@define`), not dataclasses",
+                    )
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr in DATACLASS_CALLS
+            and not (node in inside and node.func.attr == "field")
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id in modules
+        ):
+            yield Finding(
+                path, node.lineno, "TYP-4", "use attrs instead of `dataclasses`"
+            )
+
+
+def _dataclass_imports(tree: ast.Module, path: str) -> list[Finding]:
+    # Reading a dataclass of a library (`asdict`, `fields`) defines none.
+    return [
+        Finding(path, node.lineno, "TYP-4", "use attrs instead of `dataclasses`")
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom)
+        and node.module == "dataclasses"
+        and not node.level
+        and {alias.name for alias in node.names} & DATACLASS_MAKERS
+    ]
 
 
 def _registration_order(decorators: list[ast.expr], path: str) -> Iterator[Finding]:
@@ -262,25 +528,64 @@ def _is_registration(node: ast.expr) -> bool:
 def _keyword_only(
     node: ast.FunctionDef | ast.AsyncFunctionDef, path: str
 ) -> Iterator[Finding]:
-    # A console script's `main(argv=None)` takes the signature its runner passes.
+    # A console script's `main(argv=None)` takes the signature its runner passes,
+    # and an `@override` method the one its base class has.
     if node.name == "main" or (node.name.startswith("__") and node.name.endswith("__")):
         return
-    arguments = node.args
-    positional = [*arguments.posonlyargs, *arguments.args]
-    for arg in positional[len(positional) - len(arguments.defaults) :]:
+    if any(_name(decorator) == "override" for decorator in node.decorator_list):
+        return
+    # Defaults fill the parameters from the last one back; a caller cannot name one
+    # before `/`, so that one stays as it is.
+    named = node.args.args
+    optional = min(len(named), len(node.args.defaults))
+    lines: dict[int, list[str]] = {}
+    for arg in named[len(named) - optional :]:
+        lines.setdefault(arg.lineno, []).append(f"`{arg.arg}`")
+    for line, names in lines.items():
+        subject = (
+            f"optional parameter {names[0]} goes"
+            if len(names) == 1
+            else f"optional parameters {', '.join(names)} go"
+        )
         yield Finding(
             path,
-            arg.lineno,
+            line,
             "STY-4",
-            f"optional parameter `{arg.arg}` goes after `*`, keyword-only",
+            f"{subject} after `*`, keyword-only, unless a caller outside the project "
+            "fixes the signature: then waive it",
         )
 
 
-def _kind_comparison(node: ast.Compare, path: str) -> Iterator[Finding]:
-    if not any(isinstance(op, ast.Eq | ast.NotEq) for op in node.ops):
-        return
-    operands = [node.left, *node.comparators]
-    if any(isinstance(o, ast.Attribute) and o.attr == "kind" for o in operands):
+def _kind_branch(node: ast.Compare | ast.Match, path: str) -> Iterator[Finding]:
+    """Report a `kind` attribute set against a string that names a family kind.
+
+    Other attributes are called `kind` too: `inspect.Parameter.kind` is compared with
+    constants, and a numpy dtype's with one letter or tested against a string of
+    letters (`in "iu"`), so `in` counts only against a tuple, list or set display.
+    """
+    if isinstance(node, ast.Match):
+        branches = _is_kind(node.subject) and any(
+            _names_a_kind(case.pattern) for case in node.cases
+        )
+    else:
+        sides = itertools.pairwise([node.left, *node.comparators])
+        branches = any(
+            (
+                isinstance(op, ast.Eq | ast.NotEq)
+                and (
+                    (_is_kind(left) and _names_a_kind(right))
+                    or (_is_kind(right) and _names_a_kind(left))
+                )
+            )
+            or (
+                isinstance(op, ast.In | ast.NotIn)
+                and _is_kind(left)
+                and isinstance(right, ast.Tuple | ast.List | ast.Set)
+                and _names_a_kind(right)
+            )
+            for op, (left, right) in zip(node.ops, sides, strict=True)
+        )
+    if branches:
         yield Finding(
             path,
             node.lineno,
@@ -289,10 +594,32 @@ def _kind_comparison(node: ast.Compare, path: str) -> Iterator[Finding]:
         )
 
 
-def _attribute(node: ast.Attribute, where: _Where, path: str) -> Iterator[Finding]:
-    if not where.env:
-        return
-    if _from_dunder_file(node):
+def _is_kind(node: ast.expr) -> bool:
+    return isinstance(node, ast.Attribute) and node.attr == "kind"
+
+
+def _names_a_kind(node: ast.expr | ast.pattern) -> bool:
+    """Return whether `node` is a string of two characters or more, or holds one."""
+    if isinstance(node, ast.MatchAs) and node.pattern:
+        node = node.pattern
+    if isinstance(node, ast.MatchValue):
+        node = node.value
+    if isinstance(node, ast.MatchOr):
+        return any(map(_names_a_kind, node.patterns))
+    if isinstance(node, ast.Tuple | ast.List | ast.Set):
+        return any(map(_names_a_kind, node.elts))
+    return (
+        isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and len(node.value) > 1
+    )
+
+
+def _paths_rules(
+    node: ast.Attribute | ast.Subscript | ast.Compare, where: _Where, path: str
+) -> Iterator[Finding]:
+    """Report what a project with a `paths.py` does there: ENV-1 and ENV-3."""
+    if isinstance(node, ast.Attribute) and _from_dunder_file(node):
         yield Finding(
             path,
             node.lineno,
@@ -301,13 +628,42 @@ def _attribute(node: ast.Attribute, where: _Where, path: str) -> Iterator[Findin
         )
     if where.test or where.paths:
         return
-    if _name(node.value) == "os" and node.attr in {"environ", "getenv"}:
+    if read := _environment_read(node):
         yield Finding(
             path,
-            node.lineno,
+            read.lineno,
             "ENV-3",
             "read environment variables in YAML (`oc.env`) or in `paths.py`",
         )
+
+
+def _environment_read(
+    node: ast.Attribute | ast.Subscript | ast.Compare,
+) -> ast.expr | None:
+    """Return the `os.environ` or `os.getenv` that `node` reads a variable through.
+
+    Setting or deleting a variable is no read, and neither is handing the whole
+    environment on, as `{**os.environ, "SEED": "0"}` does for a child process.
+    """
+    if isinstance(node, ast.Compare):
+        for op, right in zip(node.ops, node.comparators, strict=True):
+            if isinstance(op, ast.In | ast.NotIn) and _is_environ(right):
+                return right
+        return None
+    if isinstance(node, ast.Subscript):
+        read = isinstance(node.ctx, ast.Load) and _is_environ(node.value)
+        return node.value if read else None
+    if node.attr == "getenv" and _name(node.value) == "os":
+        return node
+    return node.value if node.attr == "get" and _is_environ(node.value) else None
+
+
+def _is_environ(node: ast.expr) -> bool:
+    return (
+        isinstance(node, ast.Attribute)
+        and node.attr == "environ"
+        and _name(node.value) == "os"
+    )
 
 
 def _from_dunder_file(node: ast.Attribute) -> bool:
@@ -326,7 +682,7 @@ def _log_event(node: ast.Call, path: str) -> Iterator[Finding]:
     if not (
         isinstance(func, ast.Attribute)
         and func.attr in LOG_METHODS
-        and _name(func.value) in LOGGERS
+        and _is_logger(func.value)
         and node.args
     ):
         return
@@ -349,6 +705,12 @@ def _log_event(node: ast.Call, path: str) -> Iterator[Finding]:
         )
 
 
+def _is_logger(node: ast.expr) -> bool:
+    """Return whether `node` is `log`, `_logger`, `LOG` and the like, or `logging`."""
+    name = _name(node)
+    return name == "logging" or name.lstrip("_").lower() in LOGGERS
+
+
 def _is_format(node: ast.expr) -> bool:
     return (
         isinstance(node, ast.Call)
@@ -365,16 +727,33 @@ def _error_message(node: ast.Raise, path: str) -> Iterator[Finding]:
         and call.args
     ):
         return
-    message = _literal_text(call.args[0])
-    if not message:
+    words = _literal_text(call.args[0]).split()
+    # One word is a name or a path (`FileNotFoundError("Makefile")`), not a message.
+    if len(words) < 2:
         return
-    first = message.split(maxsplit=1)[0]
-    if first.isalpha() and first[0].isupper() and first[1:].islower():
+    if _opens_a_sentence(words[0]):
         yield Finding(path, node.lineno, "ERR-3", "error messages start lowercase")
-    if message.rstrip().endswith("."):
+    if words[-1].endswith(".") and not words[-1].endswith("..."):
         yield Finding(
             path, node.lineno, "ERR-3", "error messages have no trailing period"
         )
+
+
+def _opens_a_sentence(word: str) -> bool:
+    """Return whether `word` is capitalised as prose is: `Missing`, `Can't`, `Rows:`.
+
+    A word in capitals or mixed case, in quotes, or with a dot or a digit in it is a
+    name, as Python's own `None`, `True` and `False` are.
+    """
+    word = word.rstrip(":,;!?.")
+    parts = re.split("['-]", word)
+    if word in PYTHON_NAMES or not all(part.isalpha() for part in parts):
+        return False
+    # A lone capital is a name (`X`, `F-score`), except for the article.
+    if len(parts[0]) == 1:
+        return word == "A"
+    letters = "".join(parts)
+    return letters[0].isupper() and letters[1:].islower()
 
 
 def _literal_text(node: ast.expr) -> str:
@@ -391,12 +770,11 @@ def _literal_text(node: ast.expr) -> str:
 
 
 def _name(node: ast.expr) -> str:
-    if isinstance(node, ast.Call):
-        return _name(node.func)
+    # A loop, not recursion: `table[0][1]...` nests as deep as it is long.
+    while isinstance(node, ast.Call | ast.Subscript):
+        node = node.func if isinstance(node, ast.Call) else node.value
     if isinstance(node, ast.Attribute):
         return node.attr
     if isinstance(node, ast.Name):
         return node.id
-    if isinstance(node, ast.Subscript):
-        return _name(node.value)
     return ""

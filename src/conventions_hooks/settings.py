@@ -1,4 +1,4 @@
-"""The `[tool.conventions]` table that opts a repo in and turns rules off."""
+"""The `[tool.conventions]` table that opts a repo in and turns checks off."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from pathlib import Path
 from attrs import frozen
 
 RULE_ID = re.compile(r"[A-Z]+-\d+")
-KEYS = frozenset({"ignore"})
+KEYS = frozenset({"ignore", "review"})
 
 
 class SettingsError(Exception):
@@ -18,10 +18,15 @@ class SettingsError(Exception):
 
 @frozen
 class Settings:
-    """What a repo's `[tool.conventions]` table says; `enabled` when it has one."""
+    """What a repo's `[tool.conventions]` table says; `enabled` when it has one.
+
+    `review` is false when the table turns `review-comments` off, which leaves every
+    other check on.
+    """
 
     enabled: bool
     ignore: frozenset[str] = frozenset()
+    review: bool = True
 
     @classmethod
     def of(cls, path: Path) -> Settings:
@@ -58,7 +63,13 @@ class Settings:
                 f"{pyproject}: [tool.conventions] ignore must list rule IDs; "
                 'write it as ignore = ["STY-4"]'
             )
-        return cls(enabled=True, ignore=frozenset(ignore))
+        review = table.get("review", True)
+        if not isinstance(review, bool):
+            raise SettingsError(
+                f"{pyproject}: [tool.conventions] review must be true or false; "
+                "write it as review = false"
+            )
+        return cls(enabled=True, ignore=frozenset(ignore), review=review)
 
     def keeps(self, rule: str) -> bool:
         """Return whether this repo checks `rule`."""

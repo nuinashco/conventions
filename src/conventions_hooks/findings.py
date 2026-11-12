@@ -4,12 +4,27 @@ from __future__ import annotations
 
 import json
 import sys
-from collections.abc import Callable, Sequence
+import tokenize
+from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
 
 from attrs import frozen
 
 from conventions_hooks.settings import Settings, SettingsError
+
+# What Python raises for a file it cannot read or parse; the checks skip such a file.
+# Besides a syntax error: bytes outside the declared encoding or a lone surrogate
+# (`ValueError`), a coding cookie that names no text encoding (`LookupError`), and
+# nesting too deep for the compiler (`RecursionError`) or the parser (`MemoryError`).
+# Catch it around the read and the parse alone: a bug in a check raises the same.
+UNREADABLE = (
+    SyntaxError,
+    tokenize.TokenError,
+    ValueError,
+    LookupError,
+    RecursionError,
+    MemoryError,
+)
 
 
 @frozen
@@ -26,6 +41,24 @@ class Finding:
 
 
 type CheckFile = Callable[[Path], list[Finding]]
+
+
+def merged(findings: Iterable[Finding]) -> list[Finding]:
+    """Return one finding per path, line and rule, its messages joined by `; `.
+
+    Two findings that share all three are one defect: a message that is capitalised
+    and ends with a period, a comment that neither starts nor ends as a sentence.
+    Findings and messages keep the order they were met in, a message said twice once.
+    """
+    messages: dict[tuple[str, int, str], list[str]] = {}
+    for finding in findings:
+        said = messages.setdefault((finding.path, finding.line, finding.rule), [])
+        if finding.message not in said:
+            said.append(finding.message)
+    return [
+        Finding(path, line, rule, "; ".join(said))
+        for (path, line, rule), said in messages.items()
+    ]
 
 
 def check_paths(args: Sequence[str], *, check_file: CheckFile, usage: str) -> int:

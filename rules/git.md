@@ -21,7 +21,9 @@ Example: `fix(proxy): retry on 429 from upstream`, not `fix(proxy): add a retry 
 *Why:* the default tooling accepts exactly these types, and the imperative matches git's own convention
 ([Beams](https://cbea.ms/git-commit/)).
 
-*Check:* the `conventional-pre-commit` and `check-commit-msg` commit-msg hooks.
+*Check:* the `conventional-pre-commit` and `check-commit-msg` commit-msg hooks, for the type, the lowercase start, the
+period, the length and the articles, except in a subject that git writes (`Merge `, `fixup! `, `amend! `, `squash! `);
+review for the imperative and for filler.
 
 ### GIT-2 MUST
 
@@ -42,7 +44,8 @@ deleted. GitHub appends ` (#N)` to the title, so PR titles stay within 65 charac
 
 ### GIT-5 MUST
 
-Secrets, data, run outputs and notebook outputs are never committed.
+Secrets, data, run outputs and notebook outputs are never committed. A third-party notebook kept as published
+(TOOL-5) is the exception: it keeps its outputs.
 
 *Check:* gitleaks, nbstripout, `.gitignore`.
 

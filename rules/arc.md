@@ -61,7 +61,8 @@ that returns `None` when a feature is absent; never `if item.kind == "api"` or `
 
 *Why:* adding an item never edits its callers.
 
-*Check:* `check-conventions` flags comparisons with a `kind` attribute; review for `isinstance`.
+*Check:* `check-conventions` flags a `kind` attribute compared with a string, by `==`, `!=`, `in` or a `match` case;
+review for `isinstance`.
 
 ### ARC-5 SHOULD
 
@@ -97,12 +98,14 @@ from branching ([Hynek](https://hynek.me/articles/python-subclassing-redux/)).
 ### ARC-8 MUST
 
 Heavy or optional third-party modules (torch, vllm, litellm, cloud SDKs, wandb) are imported inside the function that
-needs them. Annotations that name them use `if TYPE_CHECKING:` imports.
+needs them. Annotations that name them use `if TYPE_CHECKING:` imports. A module whose classes need one at import time,
+as a model does for its `nn.Module` base, imports it at the top, and the code that uses that module imports it inside a
+function in turn.
 
 *Why:* CLI start-up time, test runtime, and optional extras.
 
-*Check:* `check-conventions` flags a module-level import of a known heavy module under `src/`; review for the others;
-ruff PLC0415 is off on purpose.
+*Check:* `check-conventions` flags a module-level import of a known heavy module under `src/`, unless a class base or a
+decorator in the module uses it; review for the others; ruff PLC0415 is off on purpose.
 
 ### ARC-9 MUST
 
@@ -140,10 +143,15 @@ and research code mostly gains variants. Coding agents grow conditional chains r
 ([Zhu et al.](https://arxiv.org/html/2605.02741), [SlopCodeBench](https://arxiv.org/html/2603.24755v1)).
 
 *Check:* `check-conventions` flags a variant name switched on with the same values in two functions of a package, and a
-chain of three arms on one name, unless every arm returns a new object (the factory) or the `match` ends in
-`assert_never`. Across modules it reads the package's folders that have an `__init__.py`, tests aside: one of the two
-switches has two arms or more, and a switch waived by its comment does not count against the others; review for
-switches on `StrEnum` members, on `isinstance`, and through dicts of functions.
+chain of three arms on one name. It does not report the factory itself, whose every arm builds an object, but a second
+function that branches on one of its values is reported. It leaves alone a `match` that ends in `assert_never`, a value
+that does not read as a name (a file suffix, an empty string), any call (`platform.system()`, `cfg.backend.lower()`),
+and only these names that Python or a library owns: a dunder such as `__name__`, `os.name`, `sys.platform`,
+`sys.implementation.name`, `device.type` and a `dtype`; any other `name`, even a `Path.name`, counts as the project's. A
+waiver above any `if` of a run of guard clauses waives the run, and a waived switch does not count against the others.
+Across modules it reads the package's folders that have an `__init__.py`, tests aside, and one of the two switches is
+the factory or has two arms or more; review for switches on `StrEnum` members, on `isinstance`, and through dicts of
+functions.
 
 ### ARC-10 SHOULD
 

@@ -8,7 +8,7 @@ How I structure, write, test and document Python and ML projects. These are the 
 `conventions` Claude Code plugin carries them to Claude, one skill per area, and the `conventions-hooks` package checks
 what a tool can.
 
-Version 0.1.0 · last reviewed 2026-11-05 · owner: nuinashco
+Version 0.1.0 · last reviewed 2026-11-12 · owner: nuinashco
 
 ## How to read
 
@@ -16,18 +16,19 @@ Version 0.1.0 · last reviewed 2026-11-05 · owner: nuinashco
   [RFC 8174](https://www.rfc-editor.org/rfc/rfc8174): they carry their meaning only in capitals.
   - **MUST**: checked by a tool or test where possible. A justified exception gets a comment at the site naming the
     rule (`# noqa: BLE001 - a failing callback must not stop training`, or
-    `# conventions: TYP-4 - the base class from httpx needs __init__.` for `check-conventions`).
+    `# conventions: STY-4 - OmegaConf calls this resolver by position.` for `check-comments` and `check-conventions`).
   - **SHOULD**: the default. Deviate when you can say why.
   - **MAY**: a matter of taste, written down so it is consistent.
-- Every rule has an ID (`STY-4`) for reviews and commit bodies, a *Why*, and a *Check*: a ruff rule, pyright, a hook
-  of this repo, a test, `template` when [nuinashco/rnd-template](https://github.com/nuinashco/rnd-template) sets it
-  up, or `review` when no tool can tell. [COVERAGE.md](COVERAGE.md) lists the MUST rules only review checks.
+- Every rule has an ID (`STY-4`) for reviews and PR descriptions, a *Why* where the reason needs saying, and a
+  *Check*: a ruff rule, pyright, a hook of this repo, a test, `template` when
+  [nuinashco/rnd-template](https://github.com/nuinashco/rnd-template) sets it up, or `review` when no tool can tell.
+  [COVERAGE.md](COVERAGE.md) lists the MUST rules only review checks.
 - Rules apply to every project unless tagged **[rnd]** (research and development: tools, pipelines, training).
 - A repo that can't follow a rule yet lists it under "Deviations" in its CONTRIBUTING.md, with the reason. A rule that
   does not apply to the repo at all goes in `ignore` of its `[tool.conventions]` table (TOOL-4), and the hooks skip it.
 - Changing a rule means editing it under `rules/` in nuinashco/conventions, regenerating this file and the plugin with
-  `make build`, and changing the checks and templates it affects in the same commit, then tagging a new version.
-  Projects pick it up through the plugin and by upgrading `conventions-hooks`.
+  `make build`, and changing the checks it affects in the same commit, then tagging a new version; the template
+  follows in its own repo. Projects pick it up through the plugin and by upgrading `conventions-hooks`.
 
 ## Where the other rules live
 
