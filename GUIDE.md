@@ -313,11 +313,12 @@ and research code mostly gains variants. Coding agents grow conditional chains r
 *Check:* `check-conventions` flags a variant name switched on with the same values in two functions of a package, and a
 chain of three arms on one name. It does not report the factory itself, whose every arm builds an object, but a second
 function that branches on one of its values is reported. It leaves alone a `match` that ends in `assert_never`, a value
-that does not read as a name (a file suffix, an empty string), and names that Python or another library owns
-(`__name__`, `os.name`, `sys.platform`, a call such as `platform.system()`, `device.type`, a `dtype`). A waiver above
-any `if` of a run of guard clauses waives the run, and a waived switch does not count against the others. Across
-modules it reads the package's folders that have an `__init__.py`, tests aside, and one of the two switches has two arms
-or more; review for switches on `StrEnum` members, on `isinstance`, and through dicts of functions.
+that does not read as a name (a file suffix, an empty string), and only these names that Python or a library owns: a
+dunder such as `__name__`, `os.name`, `sys.platform`, `sys.implementation.name`, a call such as `platform.system()`,
+`device.type` and a `dtype`; any other `name`, even a `Path.name`, counts as the project's. A waiver above any `if` of
+a run of guard clauses waives the run, and a waived switch does not count against the others. Across modules it reads
+the package's folders that have an `__init__.py`, tests aside, and one of the two switches is the factory or has two
+arms or more; review for switches on `StrEnum` members, on `isinstance`, and through dicts of functions.
 
 ### ARC-10 SHOULD
 

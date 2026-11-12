@@ -366,6 +366,25 @@ def test_a_waived_switch_does_not_count_against_the_rest_of_its_module():
     assert rules(source.replace("ARC-9", "STY-4")) == [(10, "ARC-9")]
 
 
+def test_a_waiver_above_a_guard_with_no_arm_waives_its_run_of_guards():
+    source = (
+        "def render(rows, *, fmt):\n"
+        "    # conventions: ARC-9 - the formats share nothing worth a class.\n"
+        "    if fmt == '':\n        return to_text(rows)\n"
+        "    if fmt == 'csv':\n        return to_csv(rows)\n"
+        "    if fmt == 'json':\n        return to_json(rows)\n"
+        "    if fmt == 'md':\n        return to_markdown(rows)\n"
+        "    raise UnknownFormatError(fmt)\n\n\n"
+        "def header(fmt):\n    if fmt == 'csv':\n        return 'a,b'\n"
+    )
+
+    assert rules(source) == []
+    assert rules(source.replace("conventions: ARC-9", "note")) == [
+        (5, "ARC-9"),
+        (15, "ARC-9"),
+    ]
+
+
 def rules_in_demo(source: str) -> list[tuple[int, str]]:
     """Return the findings for a module of a project whose own package is `demo`."""
     found = check_source(source, path=PACKAGE, own_packages={"demo"})

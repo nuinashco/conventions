@@ -734,7 +734,16 @@ def test_a_string_that_does_not_read_as_a_name_is_not_a_variant_value(value):
 
 @pytest.mark.parametrize(
     "subject",
-    ["name", "cfg.model.name", "self.name", "platform", "cfg.platform", "os", "cfg.os"],
+    [
+        "name",
+        "cfg.model.name",
+        "self.name",
+        "path.name",
+        "platform",
+        "cfg.platform",
+        "os",
+        "cfg.os",
+    ],
 )
 def test_a_name_of_the_project_is_a_variant_name_whatever_it_is(subject):
     assert found(asked_twice("modal", subject=subject)) == [(7, "ARC-9")]
@@ -745,19 +754,25 @@ def test_a_name_of_the_project_is_a_variant_name_whatever_it_is(subject):
     [
         ("os.name", "posix"),
         ("sys.platform", "darwin"),
+        ("sys.implementation.name", "pypy"),
         ("platform.system()", "Linux"),
         ("platform.machine()", "arm64"),
         ("__name__", "demo"),
         ("type(request).__name__", "Request"),
+        ("type(request).__qualname__", "Request"),
+        ("request.__module__", "builtins"),
         ("request.dtype", "object"),
     ],
     ids=[
         "os-name",
         "sys-platform",
+        "implementation-name",
         "platform-system",
         "platform-machine",
         "module-name",
         "class-name",
+        "qualname",
+        "module-of",
         "dtype",
     ],
 )
@@ -878,8 +893,21 @@ FACTORY_THAT_ASSIGNS = (
     "    else:\n        raise UnknownBackendError(cfg.backend)\n"
     "    return runner\n"
 )
-FACTORIES = [FACTORY, FACTORY_THROUGH_CLASSMETHODS, FACTORY_THAT_ASSIGNS]
-FACTORY_IDS = ["factory", "factory-through-classmethods", "factory-that-assigns"]
+FACTORY_IN_ONE_LINE = (
+    "def build(cfg):\n    return Modal() if cfg.backend == 'modal' else Local()\n"
+)
+FACTORIES = [
+    FACTORY,
+    FACTORY_THROUGH_CLASSMETHODS,
+    FACTORY_THAT_ASSIGNS,
+    FACTORY_IN_ONE_LINE,
+]
+FACTORY_IDS = [
+    "factory",
+    "factory-through-classmethods",
+    "factory-that-assigns",
+    "factory-as-conditional-expression",
+]
 
 
 @pytest.mark.parametrize("source", FACTORIES, ids=FACTORY_IDS)

@@ -14,11 +14,12 @@ MIN_ARMS = 3
 # A string names a variant when it reads as a name: `modal`, `linear-warmup`, `gpt-4.1`.
 # An empty string, a file suffix, a media type or one letter is tested, not switched on.
 VALUE = re.compile(r"[A-Za-z][A-Za-z0-9_.-]+")
-# Python and other libraries own these names: `__name__` and the `dtype` of an array
-# or a column are not variants of the project.
-SKIPPED = frozenset({"__name__", "dtype"})
-# Python owns these attributes of its modules, by the module they are on.
-MODULE_NAMES = frozenset({("os", "name"), ("sys", "platform")})
+# Libraries own the `dtype` of an array or a column: it is no variant of the project.
+SKIPPED = frozenset({"dtype"})
+# Python owns these attributes, by the dotted name of the module or object they are on.
+MODULE_NAMES = frozenset(
+    {("os", "name"), ("sys", "platform"), ("sys.implementation", "name")}
+)
 
 
 @frozen
@@ -78,8 +79,9 @@ def check(
     `elsewhere` returns the switches of the package's other modules, and is called
     only when this module has a switch they could repeat. A variant name switched on
     here and there is reported here, in each module that has it. Across modules one
-    of the two must have two arms or more: a lone `if cfg.backend == "modal"` in each
-    of two modules is not reported, though in two functions of one module it is.
+    of the two must be the factory or have two arms or more: a lone
+    `if cfg.backend == "modal"` in each of two modules is not reported, though in two
+    functions of one module it is.
     """
     switches = [s for s in switches_of(tree) if not s.waived(waived)]
     return [
@@ -93,16 +95,16 @@ def switches_of(tree: ast.Module) -> list[Switch]:
     """Return the switches on a variant name in the functions of one module.
 
     A switch tests one name against strings that read as names. A `match` that ends
-    in `assert_never`, a name in `SKIPPED` or `MODULE_NAMES`, a `kind` attribute and
-    the `type` of a `device` give none, so nothing is reported for them or counted
-    against them.
+    in `assert_never`, a dunder, a name in `SKIPPED` or `MODULE_NAMES`, a `kind`
+    attribute and the `type` of a `device` give none, so nothing is reported for them
+    or counted against them.
     """
     found: list[Switch] = []
     for function in _functions(tree):
         nodes = (function, *_own_nodes(function))
         found += _switches(nodes, function.name)
         found += _conditionals(nodes, function.name)
-    return [s for s in found if s.key not in SKIPPED]
+    return [s for s in found if s.key not in SKIPPED and not _dunder(s.key)]
 
 
 def _chains(switches: list[Switch], path: str) -> Iterator[Finding]:
@@ -171,7 +173,10 @@ def _repeated_elsewhere(
                 for other in others
                 if other.switch.key == switch.key
                 and other.switch.values & switch.values
-                and max(len(other.switch.arms), len(switch.arms)) > 1
+                and (
+                    _factory(other.switch)
+                    or max(len(other.switch.arms), len(switch.arms)) > 1
+                )
             ),
             None,
         )
@@ -362,13 +367,25 @@ def _subject(node: ast.expr) -> str:
     if isinstance(node, ast.Attribute) and (
         node.attr == "kind"
         or (node.attr == "type" and _key(node.value) == "device")
-        or (
-            isinstance(node.value, ast.Name)
-            and (node.value.id, node.attr) in MODULE_NAMES
-        )
+        or (_dotted(node.value), node.attr) in MODULE_NAMES
     ):
         return ""
     return _key(node)
+
+
+def _dotted(node: ast.expr) -> str:
+    """Return the dotted name `node` is, as `sys.implementation`, or "" for none."""
+    # A loop, not recursion: a chain of attributes can nest thousands deep.
+    parts: list[str] = []
+    while isinstance(node, ast.Attribute):
+        parts.append(node.attr)
+        node = node.value
+    return ".".join([node.id, *reversed(parts)]) if isinstance(node, ast.Name) else ""
+
+
+def _dunder(name: str) -> bool:
+    """Return whether Python owns `name`, as it owns `__name__` and `__qualname__`."""
+    return name.startswith("__") and name.endswith("__")
 
 
 def _key(node: ast.expr) -> str:

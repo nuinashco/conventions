@@ -64,38 +64,45 @@ def test_the_other_module_is_written_the_way_the_checked_file_was(
             "a.py": "def a(p):\n    if p.backend == 'modal':\n        go()\n",
             "b.py": COST,
         },
-        # The factory itself is not reported for a value the rest of the package uses.
-        {
-            "a.py": "def build(cfg):\n"
-            "    if cfg.backend == 'modal':\n        return Modal()\n"
-            "    elif cfg.backend == 'local':\n        return Local()\n",
-            "b.py": COST,
-        },
-        # The factory may build through classmethod constructors.
-        {
-            "a.py": "def build(cfg):\n"
-            "    if cfg.backend == 'modal':\n        return Modal.from_config(cfg)\n"
-            "    elif cfg.backend == 'local':\n        return Local.from_config(cfg)\n",
-            "b.py": COST,
-        },
         # Each operation over a closed set is one more match ending in `assert_never`.
         {
             "a.py": CLOSED.format(name="renderer"),
             "b.py": CLOSED.format(name="coloured"),
         },
     ],
-    ids=[
-        "one-arm-tests",
-        "one-arm-each",
-        "factory",
-        "factory-through-classmethods",
-        "closed-match-in-each",
-    ],
+    ids=["one-arm-tests", "one-arm-each", "closed-match-in-each"],
 )
 def test_switches_across_modules_that_are_not_repeats_pass(demo_package, files):
     demo = demo_package(files)
 
     assert rules(demo / "a.py") == []
+
+
+@pytest.mark.parametrize(
+    "factory",
+    [
+        "def build(cfg):\n"
+        "    if cfg.backend == 'modal':\n        return Modal()\n"
+        "    elif cfg.backend == 'local':\n        return Local()\n",
+        # The factory may build through classmethod constructors.
+        "def build(cfg):\n"
+        "    if cfg.backend == 'modal':\n        return Modal.from_config(cfg)\n"
+        "    elif cfg.backend == 'local':\n        return Local.from_config(cfg)\n",
+        # A factory of one arm counts, though a lone test elsewhere does not.
+        "def build(cfg):\n    return Modal() if cfg.backend == 'modal' else Local()\n",
+    ],
+    ids=[
+        "factory",
+        "factory-through-classmethods",
+        "factory-as-conditional-expression",
+    ],
+)
+def test_a_function_on_a_value_of_a_factory_in_another_module_is_reported(
+    demo_package, factory
+):
+    demo = demo_package({"a.py": factory, "b.py": COST})
+
+    assert (rules(demo / "a.py"), rules(demo / "b.py")) == ([], [(2, "ARC-9")])
 
 
 def test_a_module_outside_a_package_is_checked_alone(tmp_path):
