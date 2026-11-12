@@ -665,12 +665,14 @@ def _opens_a_sentence(word: str) -> bool:
     name, as Python's own `None`, `True` and `False` are.
     """
     word = word.rstrip(":,;!?.")
-    parts = word.split("'")
+    parts = re.split("['-]", word)
     if word in PYTHON_NAMES or not all(part.isalpha() for part in parts):
         return False
+    # A lone capital is a name (`X`, `F-score`), except for the article.
+    if len(parts[0]) == 1:
+        return word == "A"
     letters = "".join(parts)
-    # A lone capital is a name (`X`, `N`), except for the article.
-    return letters == "A" or (letters[0].isupper() and letters[1:].islower())
+    return letters[0].isupper() and letters[1:].islower()
 
 
 def _literal_text(node: ast.expr) -> str:

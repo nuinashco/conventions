@@ -850,6 +850,8 @@ def test_reading_a_variable_is_reported(source, expected):
         "raise ValueError('HTTP status 500')\n",
         "raise ConfigError('OmegaConf cannot resolve it')\n",
         "raise ValueError('X and y differ in length')\n",
+        "raise ValueError('F-score needs one positive label')\n",
+        "raise ValueError('Content-Type header is missing')\n",
         "raise ValueError('`Trainer` needs a seed')\n",
         "raise ValueError(\"'Makefile' has no target\")\n",
         "raise ValueError('Trainer.fit was not called')\n",
@@ -863,6 +865,8 @@ def test_reading_a_variable_is_reported(source, expected):
         "acronym",
         "mixed-case",
         "one-letter-name",
+        "one-letter-name-with-a-hyphen",
+        "mixed-case-with-a-hyphen",
         "name-in-backticks",
         "name-in-quotes",
         "dotted-name",
@@ -880,9 +884,10 @@ def test_a_message_that_opens_with_a_name_or_trails_off_passes(source):
         'raise ValueError("Can\'t read a negative number of rows")\n',
         "raise ValueError('Rows: expected fewer than ten')\n",
         "raise UserError(f'Missing, {name}')\n",
+        "raise ValueError('Non-empty table expected')\n",
         "raise ValueError('wait a second.')\n",
     ],
-    ids=["article", "apostrophe", "colon", "comma", "period"],
+    ids=["article", "apostrophe", "colon", "comma", "hyphen", "period"],
 )
 def test_a_capitalised_first_word_or_a_period_is_reported(source):
     assert rules(source) == [(1, "ERR-3")]
