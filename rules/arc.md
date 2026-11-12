@@ -139,9 +139,10 @@ operations cheap ([the expression problem](https://eli.thegreenplace.net/2016/th
 and research code mostly gains variants. Coding agents grow conditional chains rather than classes
 ([Zhu et al.](https://arxiv.org/html/2605.02741), [SlopCodeBench](https://arxiv.org/html/2603.24755v1)).
 
-*Check:* `check-conventions` flags a variant name switched on with the same values in two functions of a module, and a
-chain of three arms on one name, unless every arm returns a new object (the factory) or the `match` ends in
-`assert_never`; review for switches across modules.
+*Check:* `check-conventions` flags a variant name switched on with the same values in two functions of a package (across
+modules, one of the two has two arms or more), and a chain of three arms on one name, unless every arm returns a new
+object (the factory) or the `match` ends in `assert_never`; review for switches on `StrEnum` members, on `isinstance`,
+and through dicts of functions.
 
 ### ARC-10 SHOULD
 
@@ -152,4 +153,6 @@ forwards its arguments, an interface with one implementation and no fake, or a l
 functionality ([Ousterhout](https://github.com/johnousterhout/aposd-vs-clean-code)); ARC-9 must not turn into
 abstraction for its own sake.
 
-*Check:* review.
+*Check:* `check-conventions` flags a module-level function of the package whose body only passes its own parameters,
+unchanged and in order, to another function of the package; decorated functions, methods and a public function over a
+private one are left alone; review for one-implementation interfaces and mirrored layers.

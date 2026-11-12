@@ -65,7 +65,6 @@ Rules whose only check is review, by area:
   - **ARC-3** MUST: Each entry point has one composition root, where objects are built and wired: the `cli/<command>.py` function, or the script itself.
   - **ARC-5** SHOULD: Split the top level by domain (`evaluation/`, `grading/`, `endpoints/`) and split inside a domain by role.
   - **ARC-7** SHOULD: Use modules as namespaces: `from <pkg>.evaluation import harness`, then `harness.run(...)`. Write a class when there is state, or when behaviour varies by variant: interchangeable implementations of one role are classes behind one base or `Protocol` (ARC-9), each small enough to read alone.
-  - **ARC-10** SHOULD: A module, class or layer hides something its caller would otherwise know. Do not add a function or class that only forwards its arguments, an interface with one implementation and no fake, or a layer whose names mirror the one below.
 - Types and data (TYP):
   - **TYP-6** MUST: Family bases are ABCs: the registry checks subclassing, and items inherit `Config` and helpers. An injected collaborator that only needs a shape (a clock, an HTTP client, an uploader) is typed as a `Protocol`, so fakes need no inheritance.
   - **TYP-7** SHOULD: Use `Literal` for small closed sets of config values, and `StrEnum` when code iterates over the set or attaches behaviour to it.
@@ -164,9 +163,23 @@ operations cheap ([the expression problem](https://eli.thegreenplace.net/2016/th
 and research code mostly gains variants. Coding agents grow conditional chains rather than classes
 ([Zhu et al.](https://arxiv.org/html/2605.02741), [SlopCodeBench](https://arxiv.org/html/2603.24755v1)).
 
-*Check:* `check-conventions` flags a variant name switched on with the same values in two functions of a module, and a
-chain of three arms on one name, unless every arm returns a new object (the factory) or the `match` ends in
-`assert_never`; review for switches across modules.
+*Check:* `check-conventions` flags a variant name switched on with the same values in two functions of a package (across
+modules, one of the two has two arms or more), and a chain of three arms on one name, unless every arm returns a new
+object (the factory) or the `match` ends in `assert_never`; review for switches on `StrEnum` members, on `isinstance`,
+and through dicts of functions.
+
+### ARC-10 SHOULD
+
+A module, class or layer hides something its caller would otherwise know. Do not add a function or class that only
+forwards its arguments, an interface with one implementation and no fake, or a layer whose names mirror the one below.
+
+*Why:* deep modules have an interface much simpler than their implementation, and pass-through methods add no
+functionality ([Ousterhout](https://github.com/johnousterhout/aposd-vs-clean-code)); ARC-9 must not turn into
+abstraction for its own sake.
+
+*Check:* `check-conventions` flags a module-level function of the package whose body only passes its own parameters,
+unchanged and in order, to another function of the package; decorated functions, methods and a public function over a
+private one are left alone; review for one-implementation interfaces and mirrored layers.
 
 ### TYP-4 MUST
 

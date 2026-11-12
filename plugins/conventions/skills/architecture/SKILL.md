@@ -63,17 +63,6 @@ from branching ([Hynek](https://hynek.me/articles/python-subclassing-redux/)).
 
 *Check:* review.
 
-### ARC-10 SHOULD
-
-A module, class or layer hides something its caller would otherwise know. Do not add a function or class that only
-forwards its arguments, an interface with one implementation and no fake, or a layer whose names mirror the one below.
-
-*Why:* deep modules have an interface much simpler than their implementation, and pass-through methods add no
-functionality ([Ousterhout](https://github.com/johnousterhout/aposd-vs-clean-code)); ARC-9 must not turn into
-abstraction for its own sake.
-
-*Check:* review.
-
 ## Checked by tools
 
 Linters, hooks and the template report these; follow them as you write.
@@ -82,4 +71,5 @@ Linters, hooks and the template report these; follow them as you write.
 - **ARC-4** MUST: Code branches on declared capabilities, not identities. Use a `ClassVar[bool]` such as `requires_hardware`, or a method that returns `None` when a feature is absent; never `if item.kind == "api"` or `isinstance(x, ConcreteItem)`. *Check:* `check-conventions` flags comparisons with a `kind` attribute; review for `isinstance`.
 - **ARC-6** SHOULD: Extract shared code on the third repetition, not the second. Until then prefer duplication: "duplication is far cheaper than the wrong abstraction" ([Metz](https://sandimetz.com/blog/2016/1/20/the-wrong-abstraction)). *Check:* review; `check-conventions` for the switches (ARC-9).
 - **ARC-8** MUST: Heavy or optional third-party modules (torch, vllm, litellm, cloud SDKs, wandb) are imported inside the function that needs them. Annotations that name them use `if TYPE_CHECKING:` imports. *Check:* `check-conventions` flags a module-level import of a known heavy module under `src/`; review for the others; ruff PLC0415 is off on purpose.
-- **ARC-9** MUST: Behaviour that varies by variant is chosen in one place. A value that names a variant (a `kind`, `mode`, `backend` or `strategy`, as a `str`, `Literal` or `StrEnum`) selects behaviour in at most one function: the factory that builds the object for it. *Check:* `check-conventions` flags a variant name switched on with the same values in two functions of a module, and a chain of three arms on one name, unless every arm returns a new object (the factory) or the `match` ends in `assert_never`; review for switches across modules.
+- **ARC-9** MUST: Behaviour that varies by variant is chosen in one place. A value that names a variant (a `kind`, `mode`, `backend` or `strategy`, as a `str`, `Literal` or `StrEnum`) selects behaviour in at most one function: the factory that builds the object for it. *Check:* `check-conventions` flags a variant name switched on with the same values in two functions of a package (across modules, one of the two has two arms or more), and a chain of three arms on one name, unless every arm returns a new object (the factory) or the `match` ends in `assert_never`; review for switches on `StrEnum` members, on `isinstance`, and through dicts of functions.
+- **ARC-10** SHOULD: A module, class or layer hides something its caller would otherwise know. Do not add a function or class that only forwards its arguments, an interface with one implementation and no fake, or a layer whose names mirror the one below. *Check:* `check-conventions` flags a module-level function of the package whose body only passes its own parameters, unchanged and in order, to another function of the package; decorated functions, methods and a public function over a private one are left alone; review for one-implementation interfaces and mirrored layers.

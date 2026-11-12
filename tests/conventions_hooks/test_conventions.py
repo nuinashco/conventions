@@ -270,3 +270,123 @@ def test_one_switch_in_one_place_passes(source):
 
 def test_tests_may_switch_on_variants():
     assert rules(LONG_CHAIN, "tests/demo/test_metrics.py") == []
+
+
+def package(root, files: dict[str, str]):
+    """Write `files` under `root/src/demo/`, each folder a package; return it."""
+    folder = root / "src" / "demo"
+    for name, source in {"__init__.py": "", **files}.items():
+        path = folder / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        (path.parent / "__init__.py").touch()
+        path.write_text(source)
+    return folder
+
+
+START = (
+    "def start(cfg):\n"
+    "    if cfg.backend == 'modal':\n        launch()\n"
+    "    elif cfg.backend == 'local':\n        run()\n"
+)
+COST = "def cost(cfg):\n    if cfg.backend == 'modal':\n        return bill()\n"
+
+
+def test_a_variant_switched_on_in_two_modules_is_reported_in_each(tmp_path):
+    demo = package(tmp_path, {"start.py": START, "billing/cost.py": COST})
+
+    start = [(f.line, f.rule, f.message) for f in check_file(demo / "start.py")]
+    cost = [(f.line, f.rule) for f in check_file(demo / "billing" / "cost.py")]
+
+    assert [(line, rule) for line, rule, _ in start] == [(2, "ARC-9")]
+    assert "demo/billing/cost.py:2" in start[0][2]
+    assert cost == [(2, "ARC-9")]
+
+
+@pytest.mark.parametrize(
+    "files",
+    [
+        # A lone test in each module is not a switch.
+        {"a.py": "def a(p):\n    if p.suffix == '.py':\n        go()\n", "b.py": COST},
+        {
+            "a.py": "def a(p):\n    if p.backend == 'modal':\n        go()\n",
+            "b.py": COST,
+        },
+        # The factory may switch on what the rest of the package uses.
+        {
+            "a.py": "def build(cfg):\n"
+            "    if cfg.backend == 'modal':\n        return Modal()\n"
+            "    elif cfg.backend == 'local':\n        return Local()\n",
+            "b.py": COST,
+        },
+    ],
+    ids=["one-arm-tests", "one-arm-each", "factory"],
+)
+def test_switches_across_modules_that_are_not_repeats_pass(tmp_path, files):
+    demo = package(tmp_path, files)
+
+    assert [f for f in check_file(demo / "a.py") if f.rule == "ARC-9"] == []
+
+
+def test_a_module_outside_a_package_is_checked_alone(tmp_path):
+    (tmp_path / "start.py").write_text(START)
+    (tmp_path / "cost.py").write_text(COST)
+
+    assert check_file(tmp_path / "start.py") == []
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "from demo.store import save\n\n\ndef persist(item, *, force):\n"
+        "    return save(item, force=force)\n",
+        "from . import store\n\n\ndef persist(*args, **kwargs):\n"
+        "    store.save(*args, **kwargs)\n",
+        "def _save(item):\n    ...\n\n\ndef persist(item):\n"
+        '    """Persist one item."""\n    return _do(item)\n\n\n'
+        "def _persist(item):\n    return _save(item)\n",
+    ],
+    ids=["keywords", "star-arguments", "private-to-private"],
+)
+def test_a_function_that_only_forwards_is_reported(tmp_path, source):
+    demo = package(tmp_path, {"api.py": source})
+
+    found = [(f.rule, f.message) for f in check_file(demo / "api.py")]
+
+    assert [rule for rule, _ in found] == ["ARC-10"]
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        # Changes or adds an argument: it hides something.
+        "from demo.store import save\n\n\ndef persist(item):\n"
+        "    return save(item, force=True)\n",
+        "from demo.store import save\n\n\ndef persist(item, path):\n"
+        "    return save(path, item)\n",
+        # Calls outside the package: an adapter over a dependency.
+        "import yaml\n\n\ndef load(text):\n    return yaml.safe_load(text)\n",
+        # A public name over a private implementation is the interface.
+        "def _save(item):\n    ...\n\n\ndef save(item):\n    return _save(item)\n",
+        # Registrations and methods are left alone.
+        "from demo.store import save\n\n\n@app.command()\ndef persist(item):\n"
+        "    return save(item)\n",
+        "from demo.store import save\n\n\nclass Store:\n"
+        "    def persist(self, item):\n        return save(item)\n",
+        "from demo.store import save\n\n\n"
+        "def persist(item):  # conventions: ARC-10 - the public name of `save`.\n"
+        "    return save(item)\n",
+    ],
+    ids=[
+        "adds-argument",
+        "reorders",
+        "third-party",
+        "private-implementation",
+        "decorated",
+        "method",
+        "allowed",
+    ],
+)
+def test_a_function_that_does_more_than_forward_passes(tmp_path, source):
+    demo = package(tmp_path, {"api.py": source})
+
+    assert check_file(demo / "api.py") == []
