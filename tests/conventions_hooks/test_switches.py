@@ -229,6 +229,112 @@ def build(backend, cfg):
     return runner
 """
 
+LOGGED_THEN_BUILT = """
+def build(backend, cfg):
+    if backend == "modal":
+        log.info("backend_chosen")
+        return ModalRunner(cfg)
+    if backend == "local":
+        return LocalRunner(cfg)
+    if backend == "slurm":
+        return SlurmRunner(cfg)
+"""
+
+# A test on a string that does not read as a name is no arm; the arms around it count.
+EMPTY_FIRST = """
+def run(mode):
+    if mode == "":
+        default()
+    elif mode == "train":
+        train()
+    elif mode == "eval":
+        evaluate()
+    elif mode == "export":
+        export()
+"""
+
+EMPTY_FIRST_IN_A_MATCH = """
+def run(mode):
+    match mode:
+        case "":
+            default()
+        case "train":
+            train()
+        case "eval":
+            evaluate()
+        case "export":
+            export()
+"""
+
+EMPTY_LAST = """
+def run(mode):
+    if mode == "train":
+        train()
+    elif mode == "eval":
+        evaluate()
+    elif mode == "export":
+        export()
+    elif mode == "":
+        default()
+"""
+
+EMPTY_FIRST_THEN_REPEATED = """
+def run(mode):
+    if mode == "":
+        default()
+    elif mode == "train":
+        train()
+    elif mode == "eval":
+        evaluate()
+
+
+def cost(mode):
+    if mode == "train":
+        return 1.0
+    return 0.0
+"""
+
+# A run of guard clauses is reported at the first of them that has an arm.
+EMPTY_GUARD_FIRST = """
+def render(rows, *, fmt):
+    if fmt == "":
+        return to_text(rows)
+    if fmt == "csv":
+        return to_csv(rows)
+    if fmt == "json":
+        return to_json(rows)
+    if fmt == "md":
+        return to_markdown(rows)
+    raise UnknownFormatError(fmt)
+"""
+
+EMPTY_GUARD_BETWEEN = """
+def render(rows, *, fmt):
+    if fmt == "csv":
+        return to_csv(rows)
+    if fmt in ("", "-"):
+        return to_text(rows)
+    if fmt == "json":
+        return to_json(rows)
+    if fmt == "md":
+        return to_markdown(rows)
+    raise UnknownFormatError(fmt)
+"""
+
+# The expression on an empty string is no switch: `first` is the one `second` repeats.
+EMPTY_CONDITIONAL_FIRST = """
+def label(mode):
+    return "none" if mode == "" else mode
+
+
+def first(mode):
+    return 1 if mode == "train" else 0
+
+
+def second(mode):
+    return 2 if mode == "train" else 0
+"""
+
 
 @pytest.mark.parametrize(
     ("source", "expected"),
@@ -250,6 +356,14 @@ def build(backend, cfg):
         (BUILT_THEN_CONFIGURED, [(3, "ARC-9")]),
         (ASSIGNED_TO_TWO_NAMES, [(3, "ARC-9")]),
         (RETURNED_AND_ASSIGNED, [(3, "ARC-9")]),
+        (LOGGED_THEN_BUILT, [(3, "ARC-9")]),
+        (EMPTY_FIRST, [(3, "ARC-9")]),
+        (EMPTY_FIRST_IN_A_MATCH, [(3, "ARC-9")]),
+        (EMPTY_LAST, [(3, "ARC-9")]),
+        (EMPTY_FIRST_THEN_REPEATED, [(12, "ARC-9")]),
+        (EMPTY_GUARD_FIRST, [(5, "ARC-9")]),
+        (EMPTY_GUARD_BETWEEN, [(3, "ARC-9")]),
+        (EMPTY_CONDITIONAL_FIRST, [(11, "ARC-9")]),
     ],
     ids=[
         "same-variant-in-two-functions",
@@ -269,6 +383,14 @@ def build(backend, cfg):
         "arm-builds-then-configures",
         "arms-assign-two-names",
         "arms-return-and-assign",
+        "arm-logs-then-builds",
+        "empty-string-first-in-a-chain",
+        "empty-string-first-in-a-match",
+        "empty-string-last-in-a-chain",
+        "empty-string-first-then-repeated",
+        "empty-string-guard-first",
+        "empty-string-guard-between",
+        "conditional-expression-on-an-empty-string-first",
     ],
 )
 def test_switches_on_a_variant_name_are_reported(source, expected):
@@ -352,6 +474,15 @@ def coloured(fmt):
         "        if p.suffix == '.py':\n            yield p\n\n\n"
         "def module_name(p):\n    if p.suffix == '.py':\n"
         "        p = p.with_suffix('')\n    return '.'.join(p.parts)\n",
+        # Such a test is no arm: two arms are left here, in a chain and in a run.
+        "def run(mode):\n"
+        "    if mode == '':\n        default()\n"
+        "    elif mode == 'train':\n        train()\n"
+        "    elif mode == 'eval':\n        evaluate()\n\n\n"
+        "def render(rows, *, mode):\n"
+        "    if mode == 'csv':\n        return to_csv(rows)\n"
+        "    if mode == '':\n        return to_text(rows)\n"
+        "    if mode == 'json':\n        return to_json(rows)\n",
         # The dispatch on a file suffix that STY-9 recommends.
         "def load(path):\n    match path.suffix:\n"
         "        case '.json':\n            return json.loads(path.read_text())\n"
@@ -382,6 +513,15 @@ def coloured(fmt):
         "        case 'batch':\n            return price_batch(item)\n\n\n"
         "def remote(item):\n    if item.kind in ('api', 'batch'):\n"
         "        return True\n    return False\n",
+        # A membership test on a `kind` attribute or on the `type` of a device.
+        "def remote(item):\n    if item.kind in ('api', 'batch'):\n"
+        "        return True\n    return False\n\n\n"
+        "def queued(item):\n    if item.kind in ('batch', 'queue'):\n"
+        "        return True\n    return False\n\n\n"
+        "def on_gpu(device):\n    if device.type in ('cuda', 'mps'):\n"
+        "        return True\n    return False\n\n\n"
+        "def pinned(self):\n    if self.device.type in ('cuda', 'mps'):\n"
+        "        return True\n    return False\n",
         # Two arms in one function, different variant names elsewhere.
         "def a(x):\n    if x.mode == 'fast':\n        go()\n\n\n"
         "def b(x):\n    if x.split == 'fast':\n        go()\n",
@@ -403,10 +543,12 @@ def coloured(fmt):
         "closed-match-in-two-functions",
         "empty-string-in-two-functions",
         "file-suffix-in-two-functions",
+        "two-arms-beside-an-empty-string",
         "match-on-file-suffix",
         "type-of-a-device",
         "dtype",
         "kind-attribute",
+        "membership-of-kind-and-device-type",
         "different-names",
         "main-guard",
         "factory-as-conditional-expression",
@@ -431,7 +573,17 @@ def test_a_string_that_reads_as_a_name_is_a_variant_value(value):
 
 @pytest.mark.parametrize(
     "value",
-    ["", "\n", ".py", "r", "application/json", "POST /x", "8080", "_private"],
+    [
+        "",
+        "\n",
+        ".py",
+        "r",
+        "application/json",
+        "POST /x",
+        "signed integer",
+        "8080",
+        "_private",
+    ],
     ids=[
         "empty",
         "newline",
@@ -439,6 +591,7 @@ def test_a_string_that_reads_as_a_name_is_a_variant_value(value):
         "one-letter",
         "media-type",
         "request-line",
+        "two-words",
         "number",
         "leading-underscore",
     ],
@@ -455,6 +608,17 @@ def test_a_test_on_mixed_values_keeps_the_ones_that_read_as_names():
     )
 
     assert found(source) == [(7, "ARC-9")]
+
+
+@pytest.mark.parametrize(
+    "source",
+    [EMPTY_FIRST, EMPTY_FIRST_IN_A_MATCH, EMPTY_LAST, EMPTY_GUARD_FIRST],
+    ids=["first-in-a-chain", "first-in-a-match", "last-in-a-chain", "guard-first"],
+)
+def test_a_test_on_a_string_that_does_not_read_as_a_name_is_no_arm(source):
+    [finding] = switches.check(ast.parse(source), "src/demo/runner.py")
+
+    assert finding.message.startswith("3 arms on `")
 
 
 # A third function on the value of `SHOTGUN`, to follow it.

@@ -219,7 +219,8 @@ def _runs(block: list[ast.stmt], function: str) -> Iterator[Switch]:
     """Yield the `if`/`elif` chains of one block, and its runs of `if`s on one name.
 
     Consecutive guard clauses (`if fmt == "csv": return ...`) are one switch, as an
-    `elif` chain is.
+    `elif` chain is. An `if` without an arm does not end the run, and the switch is
+    at the line of the first `if` that has one.
     """
     run: list[tuple[str, tuple[Arm, ...], bool, int]] = []
     for statement in [*block, None]:
@@ -227,14 +228,19 @@ def _runs(block: list[ast.stmt], function: str) -> Iterator[Switch]:
         if chain and run and chain[0] == run[-1][0] and run[-1][2]:
             run.append(chain)
             continue
-        if run:
-            arms = tuple(arm for _, chain_arms, _, _ in run for arm in chain_arms)
-            yield Switch(run[0][0], function, run[0][3], arms)
+        arms = tuple(arm for _, chain_arms, _, _ in run for arm in chain_arms)
+        if arms:
+            line = next(line for _, chain_arms, _, line in run if chain_arms)
+            yield Switch(run[0][0], function, line, arms)
         run = [chain] if chain else []
 
 
 def _if_chain(node: ast.If) -> tuple[str, tuple[Arm, ...], bool, int] | None:
-    """Return the name a chain tests, its arms, whether it lacks `else`, its line."""
+    """Return the name a chain tests, its arms, whether it lacks `else`, its line.
+
+    A test on a string that does not read as a name is no arm, and the chain goes on
+    below it, as a `match` goes on below such a `case`.
+    """
     arms: list[Arm] = []
     key = ""
     current: ast.If | None = node
@@ -244,13 +250,14 @@ def _if_chain(node: ast.If) -> tuple[str, tuple[Arm, ...], bool, int] | None:
         if test is None or (key and test[0] != key):
             break
         key = test[0]
-        arms.append(Arm(test[1], tuple(current.body)))
+        if test[1]:
+            arms.append(Arm(test[1], tuple(current.body)))
         orelse = current.orelse
         open_ended = not orelse
         current = (
             orelse[0] if len(orelse) == 1 and isinstance(orelse[0], ast.If) else None
         )
-    return (key, tuple(arms), open_ended, node.lineno) if arms else None
+    return (key, tuple(arms), open_ended, node.lineno) if key else None
 
 
 def _match(node: ast.Match, function: str) -> Iterator[Switch]:
@@ -281,27 +288,31 @@ def _conditionals(nodes: Sequence[ast.AST], function: str) -> Iterator[Switch]:
     factory, as the `if` statement that says the same would be.
     """
     for node in nodes:
-        if isinstance(node, ast.IfExp) and (test := _test(node.test)):
+        if isinstance(node, ast.IfExp) and (test := _test(node.test)) and test[1]:
             arm = Arm(test[1], (ast.Return(value=node.body),))
             yield Switch(test[0], function, node.test.lineno, (arm,))
 
 
 def _test(test: ast.expr) -> tuple[str, frozenset[str]] | None:
-    """Return the name and values that `x == "v1"` or `x in ("v1", "v2")` tests."""
+    """Return the name and values that `x == "v1"` or `x in ("v1", "v2")` tests.
+
+    The values are the strings that read as names: a test on other strings only, as
+    `x == ""` is, gives the name and no value.
+    """
     if not isinstance(test, ast.Compare) or len(test.ops) != 1:
         return None
     left, right, op = test.left, test.comparators[0], test.ops[0]
     if isinstance(op, ast.Eq):
         for name, value in ((left, right), (right, left)):
-            if (key := _subject(name)) and (values := _strings(value)):
-                return key, values
+            if (key := _subject(name)) and _string(value):
+                return key, _strings(value)
     if (
         isinstance(op, ast.In)
         and (key := _subject(left))
         and isinstance(right, ast.Tuple | ast.List | ast.Set)
-        and (values := frozenset().union(*map(_strings, right.elts)))
+        and any(map(_string, right.elts))
     ):
-        return key, values
+        return key, frozenset().union(*map(_strings, right.elts))
     return None
 
 
@@ -311,6 +322,10 @@ def _pattern_values(pattern: ast.pattern) -> frozenset[str]:
     if isinstance(pattern, ast.MatchOr):
         return frozenset().union(*map(_pattern_values, pattern.patterns))
     return frozenset()
+
+
+def _string(node: ast.expr) -> bool:
+    return isinstance(node, ast.Constant) and isinstance(node.value, str)
 
 
 def _strings(node: ast.expr) -> frozenset[str]:

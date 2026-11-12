@@ -359,3 +359,4 @@ def test_a_waived_switch_does_not_count_against_the_rest_of_its_module():
 
     assert rules(source) == []
     assert rules(source.replace("conventions: ARC-9", "note")) == [(10, "ARC-9")]
+    assert rules(source.replace("ARC-9", "STY-4")) == [(10, "ARC-9")]
