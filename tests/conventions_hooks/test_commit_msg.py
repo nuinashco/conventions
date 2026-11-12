@@ -54,6 +54,7 @@ def commit_in_an_editor(repo: Path) -> str:
     The editor writes the subject above the template that git put in the message.
     """
     hook = repo / ".git" / "hooks" / "commit-msg"
+    hook.parent.mkdir(exist_ok=True)  # A git without a template folder makes none.
     command = Path(sys.executable).with_name("check-commit-msg")
     hook.write_text(f'#!/bin/sh\nexec "{command}" "$1"\n')
     editor = repo / ".git" / "editor"

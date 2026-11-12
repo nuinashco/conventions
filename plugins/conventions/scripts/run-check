@@ -1,10 +1,10 @@
 #!/bin/sh
 # Runs one conventions-hooks command from the project's own virtualenv, so each project
 # gets the version its uv.lock pins: run-check <command> [args...]. The virtualenv is the
-# first .venv with the command at or above CLAUDE_PROJECT_DIR, because a uv workspace keeps
-# one at its root. The search ends at the folder that holds .git, and a .venv above the
+# first .venv with the command at or above CLAUDE_PROJECT_DIR: a uv workspace keeps one at
+# its root, and a git worktree is served by the checkout it lies in. A .venv above the
 # project counts only when it belongs to the user, so one that somebody else puts in a
-# shared folder above the repository never runs. With none it exits 0 without output, and
+# shared folder above the project never runs. With none it exits 0 without output, and
 # the command itself says nothing in a repo that has not opted in with a [tool.conventions]
 # table, so the plugin fails open everywhere else. A command that cannot start, as after the
 # project folder was moved, gets one line on stderr that says how to repair it, and exit 1.
@@ -14,9 +14,7 @@ shift
 cd -P "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || exit 0
 dir=$PWD
 until [ -x "$dir/.venv/bin/$command" ]; do
-    if [ -z "$dir" ] || [ -e "$dir/.git" ]; then
-        exit 0
-    fi
+    [ -n "$dir" ] || exit 0
     dir=${dir%/*}
 done
 if [ "$dir" != "$PWD" ]; then

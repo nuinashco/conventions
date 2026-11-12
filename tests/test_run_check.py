@@ -122,15 +122,15 @@ def test_run_check_finds_the_workspace_of_a_member_reached_through_a_symlink(tmp
     assert result.stdout == "workspace\n"
 
 
-def test_run_check_never_runs_a_virtualenv_above_the_repository(tmp_path):
-    install(tmp_path, "#!/bin/sh\necho planted\n")
-    project = tmp_path / "repo" / "packages" / "member"
-    project.mkdir(parents=True)
-    (tmp_path / "repo" / ".git").mkdir()
+def test_run_check_serves_a_git_worktree_from_the_checkout_it_lies_in(tmp_path):
+    install(tmp_path, "#!/bin/sh\necho checkout\n")
+    worktree = tmp_path / ".claude" / "worktrees" / "fix"
+    worktree.mkdir(parents=True)
+    (worktree / ".git").write_text("gitdir: ../../../.git/worktrees/fix\n")
 
-    result = run_check(project, "check-comments", "--claude-hook", stdin="{}")
+    result = run_check(worktree, "check-comments")
 
-    assert (result.returncode, result.stdout, result.stderr) == (0, "", "")
+    assert result.stdout == "checkout\n"
 
 
 def test_run_check_never_runs_a_virtualenv_above_the_project_that_another_user_owns(
