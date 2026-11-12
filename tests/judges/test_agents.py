@@ -60,7 +60,6 @@ class Worker:
         self.name = name.strip()
 
     def handle(self, item: Item) -> None:
-        """Process one item."""
         if not item.ok:
             raise DataError("Invalid item!")
         log.info("Started processing item")
