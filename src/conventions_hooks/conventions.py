@@ -113,11 +113,16 @@ def check_source(
         findings += _heavy_imports(tree, path)
     for node in ast.walk(tree):
         findings += _check_node(node, where, path)
+    waived = waivers.waived(source)
     if not where.test:
-        findings += switches.check(tree, path, elsewhere=elsewhere)
+        findings += switches.check(
+            tree,
+            path,
+            elsewhere=elsewhere,
+            waived={line for line, rules in waived.items() if "ARC-9" in rules},
+        )
     if where.package and top:
         findings += forwarders.check(tree, path, top)
-    waived = waivers.waived(source)
     kept = [f for f in findings if f.rule not in waived.get(f.line, ())]
     # A dict keeps findings in the order they were met; a set shuffles those that
     # share a line and a rule from one run to the next.

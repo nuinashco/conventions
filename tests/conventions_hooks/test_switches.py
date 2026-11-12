@@ -9,8 +9,10 @@ import pytest
 from conventions_hooks import switches
 
 
-def found(source: str) -> list[tuple[int, str]]:
-    findings = switches.check(ast.parse(source), "src/demo/runner.py")
+def found(
+    source: str, *, waived: frozenset[int] = frozenset()
+) -> list[tuple[int, str]]:
+    findings = switches.check(ast.parse(source), "src/demo/runner.py", waived=waived)
     return [(f.line, f.rule) for f in findings]
 
 
@@ -103,20 +105,20 @@ def teardown(cfg):
         unpin()
 """
 
-# Walked in the order of the source, `stop` meets "x" first, so `halt` repeats it.
+# Walked in the order of the source, `stop` meets "drop" first, so `halt` repeats it.
 NESTED_FIRST = """
 def stop(mode, items):
     for item in items:
         for part in item:
-            if mode == "x":
+            if mode == "drop":
                 drop(part)
     while items:
-        if mode == "y":
+        if mode == "pop":
             items.pop()
 
 
 def halt(mode):
-    if mode == "x":
+    if mode == "drop":
         leave()
 """
 
@@ -125,16 +127,106 @@ NESTED_SIBLINGS = """
 def stop(mode, items):
     for item in items:
         while item:
-            if mode == "x":
+            if mode == "drop":
                 drop(item)
         while items:
-            if mode == "y":
+            if mode == "pop":
                 items.pop()
 
 
 def halt(mode):
-    if mode == "x":
+    if mode == "drop":
         leave()
+"""
+
+# One test in each of two functions is the second function the rule forbids.
+LONE_PAIR = """
+def start(cfg):
+    if cfg.backend == "modal":
+        launch_modal()
+
+
+def stop(cfg):
+    if cfg.backend == "modal":
+        halt_modal()
+"""
+
+KIND_CHAIN = """
+def run(kind):
+    if kind == "api":
+        call_api()
+    elif kind == "local":
+        call_local()
+    elif kind == "batch":
+        call_batch()
+"""
+
+KIND_MATCH = """
+def cost(kind, item):
+    match kind:
+        case "api":
+            return price_api(item)
+        case "local":
+            return 0.0
+        case "batch":
+            return price_batch(item)
+"""
+
+# Only the `type` of a `device` is another library's name.
+SCHEDULER_TYPE = """
+def warmup(cfg):
+    if cfg.scheduler.type == "cosine":
+        return ramp(cfg)
+
+
+def decay(cfg):
+    if cfg.scheduler.type == "cosine":
+        return anneal(cfg)
+"""
+
+PLAIN_DEVICE = """
+def pin(device):
+    if device == "cuda":
+        return True
+    return False
+
+
+def sync(device):
+    if device == "cuda":
+        wait()
+"""
+
+BUILT_THEN_CONFIGURED = """
+def build(backend, cfg):
+    if backend == "modal":
+        runner = ModalRunner(cfg)
+        runner.warm_up()
+    elif backend == "local":
+        runner = LocalRunner(cfg)
+    elif backend == "slurm":
+        runner = SlurmRunner(cfg)
+    return runner
+"""
+
+ASSIGNED_TO_TWO_NAMES = """
+def build(backend, cfg):
+    if backend == "modal":
+        runner = ModalRunner(cfg)
+    elif backend == "local":
+        pool = LocalPool(cfg)
+    elif backend == "slurm":
+        runner = SlurmRunner(cfg)
+"""
+
+RETURNED_AND_ASSIGNED = """
+def build(backend, cfg):
+    if backend == "modal":
+        return ModalRunner(cfg)
+    elif backend == "local":
+        runner = LocalRunner(cfg)
+    elif backend == "slurm":
+        return SlurmRunner(cfg)
+    return runner
 """
 
 
@@ -150,6 +242,14 @@ def halt(mode):
         (BELOW_A_CONDITIONAL, [(12, "ARC-9")]),
         (NESTED_FIRST, [(13, "ARC-9")]),
         (NESTED_SIBLINGS, [(13, "ARC-9")]),
+        (LONE_PAIR, [(8, "ARC-9")]),
+        (KIND_CHAIN, [(3, "ARC-9")]),
+        (KIND_MATCH, [(3, "ARC-9")]),
+        (SCHEDULER_TYPE, [(8, "ARC-9")]),
+        (PLAIN_DEVICE, [(9, "ARC-9")]),
+        (BUILT_THEN_CONFIGURED, [(3, "ARC-9")]),
+        (ASSIGNED_TO_TWO_NAMES, [(3, "ARC-9")]),
+        (RETURNED_AND_ASSIGNED, [(3, "ARC-9")]),
     ],
     ids=[
         "same-variant-in-two-functions",
@@ -161,26 +261,127 @@ def halt(mode):
         "statements-below-a-conditional-expression",
         "nested-switch-met-first",
         "nested-siblings-in-source-order",
+        "one-test-in-each-of-two-functions",
+        "three-arms-on-a-name-kind",
+        "match-on-a-name-kind",
+        "type-of-something-else",
+        "plain-name-device",
+        "arm-builds-then-configures",
+        "arms-assign-two-names",
+        "arms-return-and-assign",
     ],
 )
 def test_switches_on_a_variant_name_are_reported(source, expected):
     assert found(source) == expected
 
 
+# Two operations over one closed set: the shape the rule prescribes.
+CLOSED_TWICE = """
+def renderer(fmt):
+    match fmt:
+        case "console":
+            return pick()
+        case "json":
+            return "orjson"
+        case _:
+            assert_never(fmt)
+
+
+def coloured(fmt):
+    match fmt:
+        case "console":
+            return isatty()
+        case "json":
+            return False
+        case _:
+            assert_never(fmt)
+"""
+
+
 @pytest.mark.parametrize(
     "source",
     [
         # The factory: every arm builds and returns an object.
-        "def build(name):\n"
-        "    if name == 'a':\n        return A()\n"
-        "    elif name == 'b':\n        return B()\n"
-        "    elif name == 'c':\n        return C()\n",
+        "def build(backend):\n"
+        "    if backend == 'modal':\n        return Modal()\n"
+        "    elif backend == 'local':\n        return Local()\n"
+        "    elif backend == 'slurm':\n        return Slurm()\n",
+        "def build(kind, cfg):\n"
+        "    if kind == 'api':\n        return Api(cfg)\n"
+        "    elif kind == 'local':\n        return Local(cfg)\n"
+        "    elif kind == 'batch':\n        return Batch(cfg)\n",
+        # A classmethod constructor builds the object too (TYP-4).
+        "def build(backend, cfg):\n"
+        "    if backend == 'modal':\n        return Modal.from_config(cfg)\n"
+        "    if backend == 'local':\n        return Local.from_config(cfg)\n"
+        "    if backend == 'slurm':\n        return runners.Slurm.from_config(cfg)\n"
+        "    raise UnknownBackendError(backend)\n",
+        # The lazy import ARC-8 asks for comes before the object.
+        "def optimizer(optim, params, *, lr):\n"
+        "    if optim == 'adam':\n"
+        "        from torch.optim import Adam\n\n"
+        "        return Adam(params, lr=lr)\n"
+        "    if optim == 'sgd':\n"
+        "        from torch.optim import SGD\n\n"
+        "        return SGD(params, lr=lr)\n"
+        "    if optim == 'adamw':\n"
+        "        import torch\n\n"
+        "        return torch.optim.AdamW(params, lr=lr)\n"
+        "    raise UnknownOptimizerError(optim)\n",
+        # Every arm assigns the object to one name, returned after the chain.
+        "def build(backend, cfg):\n"
+        "    if backend == 'modal':\n        runner = ModalRunner(cfg)\n"
+        "    elif backend == 'local':\n        runner = LocalRunner(cfg)\n"
+        "    elif backend == 'slurm':\n        runner = SlurmRunner.of(cfg)\n"
+        "    else:\n        raise UnknownBackendError(backend)\n"
+        "    return runner\n",
         # A closed set that gains operations stays a match ending in `assert_never`.
         "def describe(shape):\n    match shape.form:\n"
         "        case 'circle':\n            draw()\n"
         "        case 'square':\n            fill()\n"
         "        case 'line':\n            stroke()\n"
         "        case _:\n            assert_never(shape.form)\n",
+        # A second operation over the closed set is a second such match.
+        CLOSED_TWICE,
+        # A value that does not read as a name is tested, not switched on.
+        "def as_int(text):\n    if text == '':\n        return None\n"
+        "    return int(text)\n\n\n"
+        "def as_float(text):\n    if text == '':\n        return None\n"
+        "    return float(text)\n",
+        "def sources(paths):\n    for p in paths:\n"
+        "        if p.suffix == '.py':\n            yield p\n\n\n"
+        "def module_name(p):\n    if p.suffix == '.py':\n"
+        "        p = p.with_suffix('')\n    return '.'.join(p.parts)\n",
+        # The dispatch on a file suffix that STY-9 recommends.
+        "def load(path):\n    match path.suffix:\n"
+        "        case '.json':\n            return json.loads(path.read_text())\n"
+        "        case '.yaml' | '.yml':\n"
+        "            return yaml.safe_load(path.read_text())\n"
+        "        case '.toml':\n            return tomllib.loads(path.read_text())\n"
+        "        case _:\n            raise UnknownSuffixError(path.suffix)\n",
+        # Names that torch, numpy and pandas own.
+        "def synchronize(device):\n    if device.type == 'cuda':\n        wait()\n\n\n"
+        "def pin_memory(self):\n    if self.device.type == 'cuda':\n"
+        "        return True\n    return False\n\n\n"
+        "def autocast(batch):\n    match batch.device.type:\n"
+        "        case 'cuda':\n            half()\n"
+        "        case 'mps':\n            single()\n"
+        "        case 'cpu':\n            double()\n",
+        "def is_text(df, column):\n    if df[column].dtype == 'object':\n"
+        "        return True\n    return False\n\n\n"
+        "def fill(array):\n    if array.dtype == 'object':\n"
+        "        return array.astype(str)\n    return array\n",
+        # A `kind` attribute is ARC-4's to report, in each of its three shapes.
+        "def run(item):\n"
+        "    if item.kind == 'api':\n        call_api()\n"
+        "    elif item.kind == 'local':\n        call_local()\n"
+        "    elif item.kind == 'batch':\n        call_batch()\n\n\n"
+        "def cost(item):\n    match item.kind:\n"
+        "        case 'api':\n            return price_api(item)\n"
+        "        case 'local':\n            return free(item)\n"
+        "        case 'batch':\n            return price_batch(item)\n\n\n"
+        "def remote(item):\n    if item.kind in ('api', 'batch'):\n"
+        "        return True\n    return False\n",
         # Two arms in one function, different variant names elsewhere.
         "def a(x):\n    if x.mode == 'fast':\n        go()\n\n\n"
         "def b(x):\n    if x.split == 'fast':\n        go()\n",
@@ -194,7 +395,18 @@ def test_switches_on_a_variant_name_are_reported(source, expected):
     ],
     ids=[
         "factory",
+        "factory-on-a-name-kind",
+        "factory-through-classmethods",
+        "factory-with-lazy-imports",
+        "factory-that-assigns",
         "closed-match",
+        "closed-match-in-two-functions",
+        "empty-string-in-two-functions",
+        "file-suffix-in-two-functions",
+        "match-on-file-suffix",
+        "type-of-a-device",
+        "dtype",
+        "kind-attribute",
         "different-names",
         "main-guard",
         "factory-as-conditional-expression",
@@ -203,6 +415,68 @@ def test_switches_on_a_variant_name_are_reported(source, expected):
 )
 def test_one_switch_in_one_place_passes(source):
     assert found(source) == []
+
+
+def asked_twice(value: str) -> str:
+    return (
+        f"def first(request):\n    if request.field == {value!r}:\n        go()\n\n\n"
+        f"def second(request):\n    if request.field == {value!r}:\n        stop()\n"
+    )
+
+
+@pytest.mark.parametrize("value", ["modal", "linear-warmup", "gpt-4.1", "POST", "v2"])
+def test_a_string_that_reads_as_a_name_is_a_variant_value(value):
+    assert found(asked_twice(value)) == [(7, "ARC-9")]
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["", "\n", ".py", "r", "application/json", "POST /x", "8080", "_private"],
+    ids=[
+        "empty",
+        "newline",
+        "file-suffix",
+        "one-letter",
+        "media-type",
+        "request-line",
+        "number",
+        "leading-underscore",
+    ],
+)
+def test_a_string_that_does_not_read_as_a_name_is_not_a_variant_value(value):
+    assert found(asked_twice(value)) == []
+
+
+def test_a_test_on_mixed_values_keeps_the_ones_that_read_as_names():
+    source = (
+        "def first(mode):\n    if mode in ('', 'train'):\n        go()\n\n\n"
+        "def second(mode):\n    if mode == 'train':\n        stop()\n\n\n"
+        "def third(mode):\n    if mode in ('', 'r'):\n        wait()\n"
+    )
+
+    assert found(source) == [(7, "ARC-9")]
+
+
+# A third function on the value of `SHOTGUN`, to follow it.
+LABEL = "\n\ndef label(cfg):\n    if cfg.backend == 'modal':\n        return 'cloud'\n"
+
+
+def test_a_waived_switch_does_not_count_against_the_others_of_its_module():
+    assert found(SHOTGUN, waived=frozenset({3})) == []
+    assert found(SHOTGUN + LABEL) == [(10, "ARC-9"), (16, "ARC-9")]
+
+
+def test_the_switch_below_a_waived_one_is_the_first_that_the_others_repeat():
+    tree = ast.parse(SHOTGUN + LABEL)
+
+    [finding] = switches.check(tree, "src/demo/runner.py", waived=frozenset({3}))
+
+    assert finding.line == 16
+    assert "`cost` (line 10)" in finding.message
+
+
+def test_a_match_that_ends_in_assert_never_is_no_switch_for_another_module():
+    assert switches.switches_of(ast.parse(CLOSED_TWICE)) == []
 
 
 START = (
@@ -230,16 +504,50 @@ def test_a_switch_repeated_in_another_module_is_reported_with_its_place(source):
     assert "`start` (src/demo/start.py:2)" in findings[0].message
 
 
+FACTORY = (
+    "def build(cfg):\n"
+    "    if cfg.backend == 'modal':\n        return Modal()\n"
+    "    elif cfg.backend == 'local':\n        return Local()\n"
+)
+FACTORY_THROUGH_CLASSMETHODS = (
+    "def build(cfg):\n"
+    "    if cfg.backend == 'modal':\n        return Modal.from_config(cfg)\n"
+    "    elif cfg.backend == 'local':\n        return Local.from_config(cfg)\n"
+)
+FACTORY_THAT_ASSIGNS = (
+    "def build(cfg):\n"
+    "    if cfg.backend == 'modal':\n"
+    "        from demo.modal import Modal\n\n        runner = Modal(cfg)\n"
+    "    elif cfg.backend == 'local':\n        runner = Local(cfg)\n"
+    "    else:\n        raise UnknownBackendError(cfg.backend)\n"
+    "    return runner\n"
+)
+FACTORIES = [FACTORY, FACTORY_THROUGH_CLASSMETHODS, FACTORY_THAT_ASSIGNS]
+FACTORY_IDS = ["factory", "factory-through-classmethods", "factory-that-assigns"]
+
+
+@pytest.mark.parametrize("source", FACTORIES, ids=FACTORY_IDS)
+def test_a_factory_in_another_module_does_not_count(source):
+    other = switches.Elsewhere(
+        "src/demo/build.py", switches.switches_of(ast.parse(source))[0]
+    )
+
+    findings = switches.check(
+        ast.parse(COST), "src/demo/cost.py", elsewhere=lambda: [other]
+    )
+
+    assert findings == []
+
+
 @pytest.mark.parametrize(
     "source",
     [
         "def run(cfg):\n    return launch(cfg.backend)\n",
         LONG_CHAIN,
-        "def build(cfg):\n"
-        "    if cfg.backend == 'modal':\n        return Modal()\n"
-        "    elif cfg.backend == 'local':\n        return Local()\n",
+        *FACTORIES,
+        CLOSED_TWICE,
     ],
-    ids=["no-switch", "long-chain-reported-already", "factory"],
+    ids=["no-switch", "long-chain-reported-already", *FACTORY_IDS, "closed-match"],
 )
 def test_other_modules_are_read_only_for_a_switch_they_could_repeat(source):
     def unread() -> list[switches.Elsewhere]:

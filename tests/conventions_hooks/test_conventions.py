@@ -344,3 +344,18 @@ def test_tests_may_switch_on_variants():
 
     assert rules(source) == [(2, "ARC-9")]
     assert rules(source, "tests/demo/test_metrics.py") == []
+
+
+def test_a_waived_switch_does_not_count_against_the_rest_of_its_module():
+    source = (
+        "def start(backend):\n"
+        "    # conventions: ARC-9 - the launchers differ too much to share a class.\n"
+        "    if backend == 'modal':\n        launch_modal()\n"
+        "    elif backend == 'local':\n        launch_local()\n\n\n"
+        "def cost_usd(backend):\n"
+        "    if backend == 'modal':\n        return 0.3\n"
+        "    return 0.0\n"
+    )
+
+    assert rules(source) == []
+    assert rules(source.replace("conventions: ARC-9", "note")) == [(10, "ARC-9")]
