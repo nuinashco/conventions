@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import inspect
 import json
 import re
 import tomllib
 from pathlib import Path
 
-from conventions_hooks import rules
+from conventions_hooks import review, rules
 
 REPO = Path(__file__).resolve().parents[1]
 PLUGIN = REPO / "plugins" / "conventions"
@@ -66,6 +67,15 @@ def test_only_the_stop_hook_runs_in_the_background():
         for g in groups
         for hook in g["hooks"]
     )
+
+
+def test_stop_hook_outlasts_the_review_it_runs():
+    hooks = json.loads((PLUGIN / "hooks" / "hooks.json").read_text())["hooks"]
+    [hook] = hooks["Stop"][0]["hooks"]
+    judge = inspect.signature(review.ask_claude).parameters["timeout_s"].default
+
+    # A hook ended first could not print why the review gave no answer.
+    assert hook["timeout"] > judge
 
 
 def test_marketplace_lists_both_plugins_with_sources_that_resolve():

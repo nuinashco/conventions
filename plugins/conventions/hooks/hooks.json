@@ -39,7 +39,7 @@
           {
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/run-check\" review-comments --claude-hook",
-            "timeout": 600,
+            "timeout": 660,
             "statusMessage": "Reviewing new comments in the background",
             "asyncRewake": true
           }
