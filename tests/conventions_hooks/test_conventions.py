@@ -635,6 +635,11 @@ def test_a_heavy_import_used_only_when_code_runs_is_reported(source, expected):
             "if not TYPE_CHECKING:\n    import jax\nelse:\n    from torch import nn\n",
             [(2, "ARC-8")],
         ),
+        (
+            "if __name__ == '__main__':\n    pass\nelse:\n    import torch\n",
+            [(4, "ARC-8")],
+        ),
+        ("if __name__ != '__main__':\n    import torch\n", [(2, "ARC-8")]),
     ],
     ids=[
         "try",
@@ -646,6 +651,8 @@ def test_a_heavy_import_used_only_when_code_runs_is_reported(source, expected):
         "nested-blocks",
         "else-of-type-checking",
         "not-type-checking",
+        "else-of-main-guard",
+        "not-main",
     ],
 )
 def test_a_heavy_import_in_a_block_of_the_module_is_reported(source, expected):
@@ -662,12 +669,17 @@ def test_a_heavy_import_in_a_block_of_the_module_is_reported(source, expected):
         "        return None\n    return wandb\n",
         "class Lazy:\n    try:\n        import wandb\n    except ImportError:\n"
         "        wandb = None\n",
+        "if __name__ == '__main__':\n    import torch\n\n    main()\n",
+        "if '__main__' == __name__:\n    try:\n        import wandb\n"
+        "    except ImportError:\n        pass\n",
     ],
     ids=[
         "dotted-type-checking",
         "try-under-type-checking",
         "try-inside-a-function",
         "try-inside-a-class",
+        "main-guard",
+        "main-guard-reversed",
     ],
 )
 def test_a_heavy_import_outside_the_blocks_of_the_module_passes(source):
@@ -735,6 +747,9 @@ def test_a_positional_default_is_reported_where_the_caller_may_name_it(source, n
         "match values.dtype.kind:\n    case 'f' | 'c':\n        pass\n",
         "match item.kind:\n    case Kind.API | 'f':\n        pass\n",
         "match item:\n    case 'api':\n        pass\n",
+        "if values.dtype.kind in 'iu':\n    pass\n",
+        "if values.dtype.kind not in 'fc':\n    pass\n",
+        "if 'api' in item.kind:\n    pass\n",
     ],
     ids=[
         "inspect-parameter-kind",
@@ -747,6 +762,9 @@ def test_a_positional_default_is_reported_where_the_caller_may_name_it(source, n
         "match-on-dtype-kind",
         "match-on-enum-members",
         "match-on-another-subject",
+        "dtype-kind-in-a-string",
+        "dtype-kind-not-in-a-string",
+        "substring-of-a-kind",
     ],
 )
 def test_a_kind_that_is_no_family_kind_may_be_compared(source):
@@ -965,6 +983,16 @@ def test_a_class_is_a_test_class_by_what_it_holds(source, expected):
         ("src/demo/text_util.py", "text_util"),
         ("src/demo/io_helpers/text.py", "io_helpers"),
         ("src/demo/data_common.py", "data_common"),
+        ("src/nlp_common/_utils.py", "_utils"),
+    ],
+    ids=[
+        "private",
+        "dunder-private",
+        "utils-suffix",
+        "util-suffix",
+        "helpers-folder",
+        "common-suffix",
+        "under-a-suffixed-package",
     ],
 )
 def test_a_grab_bag_is_reported_under_its_private_and_suffixed_names(path, quoted):
@@ -983,6 +1011,16 @@ def test_a_grab_bag_is_reported_under_its_private_and_suffixed_names(path, quote
         "src/demo/core_ops.py",
         "src/demo/_rows.py",
         "scripts/_utils.py",
+        "src/nlp_common/tokenize_corpus.py",
+    ],
+    ids=[
+        "utilities",
+        "shared",
+        "no-underscore-before-suffix",
+        "prefix-not-suffix",
+        "private-one-thing",
+        "outside-src",
+        "suffixed-top-package",
     ],
 )
 def test_a_module_named_after_one_thing_is_no_grab_bag(path):

@@ -197,8 +197,10 @@ def _module_name(where: _Where, relative: str, *, report: str) -> Iterator[Findi
         return
     pure = PurePath(relative)
     names = [*pure.parent.parts[pure.parts.index("src") + 1 :], pure.stem]
-    for name in names:
-        if name.lstrip("_") in GRAB_BAGS or name.endswith(GRAB_BAG_SUFFIXES):
+    for depth, name in enumerate(names):
+        # The top package carries the project's name: `nlp_common` is no grab bag.
+        suffixed = depth > 0 and name.endswith(GRAB_BAG_SUFFIXES)
+        if name.lstrip("_") in GRAB_BAGS or suffixed:
             yield Finding(
                 report,
                 1,
@@ -238,7 +240,8 @@ def _module_level(tree: ast.Module) -> Iterator[ast.stmt]:
     """Yield the statements that run when the module is imported, outside a class.
 
     The blocks of `if`, `try` and `with` statements are entered, however nested,
-    except the block of an `if` that only a type checker reads.
+    except the block of an `if` that only a type checker reads or that runs only
+    when the module is run as a script (`__name__ == "__main__"`).
     """
     # A stack, not recursion: a chain of `elif`s nests as deep as it is long.
     stack = tree.body[::-1]
@@ -259,7 +262,7 @@ def _module_level(tree: ast.Module) -> Iterator[ast.stmt]:
 
 def _blocks_that_run(node: ast.If) -> list[list[ast.stmt]]:
     test = node.test
-    if _name(test) == "TYPE_CHECKING":
+    if _name(test) == "TYPE_CHECKING" or _runs_as_script(test):
         return [node.orelse]
     if (
         isinstance(test, ast.UnaryOp)
@@ -268,6 +271,20 @@ def _blocks_that_run(node: ast.If) -> list[list[ast.stmt]]:
     ):
         return [node.body]
     return [node.body, node.orelse]
+
+
+def _runs_as_script(test: ast.expr) -> bool:
+    """Return whether `test` is `__name__ == "__main__"`, either way round."""
+    if not (
+        isinstance(test, ast.Compare)
+        and len(test.ops) == 1
+        and isinstance(test.ops[0], ast.Eq)
+    ):
+        return False
+    sides = [test.left, *test.comparators]
+    names = {side.id for side in sides if isinstance(side, ast.Name)}
+    values = {side.value for side in sides if isinstance(side, ast.Constant)}
+    return names == {"__name__"} and values == {"__main__"}
 
 
 def _needed_at_import(tree: ast.Module) -> set[str]:
@@ -488,7 +505,8 @@ def _kind_branch(node: ast.Compare | ast.Match, path: str) -> Iterator[Finding]:
     """Report a `kind` attribute set against a string that names a family kind.
 
     Other attributes are called `kind` too: `inspect.Parameter.kind` is compared with
-    constants, and a numpy dtype's with one letter.
+    constants, and a numpy dtype's with one letter or tested against a string of
+    letters (`in "iu"`), so `in` counts only against a tuple, list or set display.
     """
     if isinstance(node, ast.Match):
         branches = _is_kind(node.subject) and any(
@@ -497,10 +515,18 @@ def _kind_branch(node: ast.Compare | ast.Match, path: str) -> Iterator[Finding]:
     else:
         sides = itertools.pairwise([node.left, *node.comparators])
         branches = any(
-            isinstance(op, ast.Eq | ast.NotEq | ast.In | ast.NotIn)
-            and (
-                (_is_kind(left) and _names_a_kind(right))
-                or (_is_kind(right) and _names_a_kind(left))
+            (
+                isinstance(op, ast.Eq | ast.NotEq)
+                and (
+                    (_is_kind(left) and _names_a_kind(right))
+                    or (_is_kind(right) and _names_a_kind(left))
+                )
+            )
+            or (
+                isinstance(op, ast.In | ast.NotIn)
+                and _is_kind(left)
+                and isinstance(right, ast.Tuple | ast.List | ast.Set)
+                and _names_a_kind(right)
             )
             for op, (left, right) in zip(node.ops, sides, strict=True)
         )
