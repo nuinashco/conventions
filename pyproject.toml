@@ -48,14 +48,17 @@ extend-exclude = ["tests/judges/fixtures"]  # Projects a judge reviews, with pla
 select = [
     "E", "F", "W", "I", "B", "UP", "SIM", "RET", "PTH", "C4", "C90", "RUF", "TID",
     "FBT", "N", "PERF", "G", "LOG", "BLE", "PL", "D", "NPY", "ERA", "T20", "TD004",
-    "TD005", "TD006", "TD007", "FA",
+    "TD005", "TD006", "TD007", "FA", "ANN", "PGH004",
     "D401",  # The google convention drops imperative mood; selecting it restores it.
 ]
 ignore = [
-    "PLC0415", "PLR2004", "PLR0913",
+    "PLC0415", "PLR2004", "PLR0913", "ANN401",
     "D102", "D103", "D105", "D106", "D107",
     "T201",  # The hooks report to stdout.
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["ANN"]  # Test functions and fixtures may skip annotations (TYP-1).
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
