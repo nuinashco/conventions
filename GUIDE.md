@@ -106,7 +106,7 @@ IDs are never reused.
 | [TST-6](#tst-6-must) | MUST | Child processes, servers and Docker appear only in tests of what can't be measured in process. Before adding a slow test, check `pytest --durations=10`. |
 | [TST-7](#tst-7-should) | SHOULD | Separate arrange, act and assert with blank lines. Compare related values in one tuple assert. A test module's docstring states the invariant it protects. |
 | [TST-8](#tst-8-should) | SHOULD | Test ML code with tiny real models, not mocks: loss decreases, and a batch can be overfitted ([Yan](https://eugeneyan.com/writing/unit-testing-ml/)). |
-| [RDOC-1](#rdoc-1-must) | MUST | README.md is the user's and operator's view: setup, daily workflow, commands, outputs, caveats. CONTRIBUTING.md is the contributor's view: architecture, layout, families, configs, deviations, the "Extending" table, tests and commits. |
+| [RDOC-1](#rdoc-1-must) | MUST | README.md is the user's and operator's view: setup, daily workflow, commands, outputs, caveats. It opens by saying in a sentence or two what the project is and who it is for, then shows how to install it and one command or snippet to copy, with its output where that helps. |
 | [RDOC-2](#rdoc-2-must) | MUST | A standalone subpackage has its own README.md and CONTRIBUTING.md next to its code. |
 | [RDOC-3](#rdoc-3-must) | MUST | Diagrams are mermaid. Flowcharts colour pure components with `classDef pure` and effectful ones with `classDef side`, using the template's palette. |
 | [RDOC-4](#rdoc-4-must) | MUST | AGENTS.md is the entry point for coding agents, at most 60 lines: commands, layout, what this repo asks beyond the conventions, and pointers to CONTRIBUTING. |
@@ -116,7 +116,7 @@ IDs are never reused.
 | [GIT-3](#git-3-must) | MUST | Branches are short-lived and named `<type>/<slug>` (`feat/`, `fix/`, `docs/`, `refactor/`, plus `exp/` for experiments). Merges are squash-merges, and the PR title is the conventional commit that lands on `main`. |
 | [GIT-5](#git-5-must) | MUST | Secrets, data, run outputs and notebook outputs are never committed. |
 | [GIT-6](#git-6-must) | MUST | A PR description follows `.github/pull_request_template.md`: a summary of why, the changes made with the alternatives rejected, and the checklist; results, how to reproduce them and notes for the reviewer when they apply. |
-| [TOOL-1](#tool-1-must) | MUST | `make check` runs ruff check, ruff format `--check`, pyright, `lint-imports` and pytest, and CI runs it on every pull request. |
+| [TOOL-1](#tool-1-must) | MUST | `make check` runs ruff check, ruff format `--check`, `check-comments` and `check-conventions` on every Python file git does not ignore (TOOL-4), pyright, `lint-imports` and pytest, and CI runs it on every pull request. |
 | [TOOL-2](#tool-2-must) | MUST | Tool versions come from `uv.lock`. Hooks for Python tools are local `uv run` hooks, so pre-commit, CI and editors all use the same versions. |
 | [TOOL-4](#tool-4-must) | MUST | The checks this guide adds on top of ruff are the `conventions-hooks` package of nuinashco/conventions. A repo opts in with a `[tool.conventions]` table in its root `pyproject.toml`, where `ignore = ["STY-4"]` turns rules off for that repo, and adds the package as a dev dependency pinned by `uv.lock`. |
 | [TOOL-5](#tool-5-must) | MUST | Files nobody edits by hand are listed in `.gitattributes` with `protected=<why>`: `generated`: config mirrors, `.copier-answers.yml`, and whatever a build step writes; `vendored`: code copied in from another repo and changed only there; `published`: third-party files kept as published, such as `notebooks/reference/`. |
@@ -305,10 +305,11 @@ operations cheap ([the expression problem](https://eli.thegreenplace.net/2016/th
 and research code mostly gains variants. Coding agents grow conditional chains rather than classes
 ([Zhu et al.](https://arxiv.org/html/2605.02741), [SlopCodeBench](https://arxiv.org/html/2603.24755v1)).
 
-*Check:* `check-conventions` flags a variant name switched on with the same values in two functions of a package (across
-modules, one of the two has two arms or more), and a chain of three arms on one name, unless every arm returns a new
-object (the factory) or the `match` ends in `assert_never`; review for switches on `StrEnum` members, on `isinstance`,
-and through dicts of functions.
+*Check:* `check-conventions` flags a variant name switched on with the same values in two functions of a package, and a
+chain of three arms on one name, unless every arm returns a new object (the factory) or the `match` ends in
+`assert_never`. Across modules it reads the package's folders that have an `__init__.py`, tests aside: one of the two
+switches has two arms or more, and a switch waived by its comment does not count against the others; review for
+switches on `StrEnum` members, on `isinstance`, and through dicts of functions.
 
 ### ARC-10 SHOULD
 
@@ -319,9 +320,10 @@ forwards its arguments, an interface with one implementation and no fake, or a l
 functionality ([Ousterhout](https://github.com/johnousterhout/aposd-vs-clean-code)); ARC-9 must not turn into
 abstraction for its own sake.
 
-*Check:* `check-conventions` flags a module-level function of the package whose body only passes its own parameters,
-unchanged and in order, to another function of the package; decorated functions, methods and a public function over a
-private one are left alone; review for one-implementation interfaces and mirrored layers.
+*Check:* `check-conventions` flags a module-level function under `src/` that takes parameters, gives none a default,
+and only passes them, unchanged and in order, to another function of its package. Decorated functions, methods, a
+public function over a private one, and calls that build an object or go through one are left alone; review for
+one-implementation interfaces and mirrored layers.
 
 ## 3. Types and data (TYP)
 
@@ -728,12 +730,19 @@ Test ML code with tiny real models, not mocks: loss decreases, and a batch can b
 
 ### RDOC-1 MUST
 
-README.md is the user's and operator's view: setup, daily workflow, commands, outputs, caveats. CONTRIBUTING.md is the
-contributor's view: architecture, layout, families, configs, deviations, the "Extending" table, tests and commits.
+README.md is the user's and operator's view: setup, daily workflow, commands, outputs, caveats. It opens by saying
+in a sentence or two what the project is and who it is for, then shows how to install it and one command or snippet
+to copy, with its output where that helps. It stays short, about 100 lines, and links to what is longer.
+CONTRIBUTING.md is the contributor's view: architecture, layout, families, configs, deviations, the "Extending"
+table, tests, commits and releases.
 
-*Why:* one document, one purpose ([SWE at Google ch. 10](https://abseil.io/resources/swe-book/html/ch10.html)).
+*Why:* one document, one purpose ([SWE at Google ch. 10](https://abseil.io/resources/swe-book/html/ch10.html)). A
+README is what a first-time reader meets, so it holds what they need to start and points to the rest
+([Google's README guide](https://google.github.io/styleguide/docguide/READMEs.html),
+[GitHub](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-readmes),
+[Standard Readme](https://github.com/RichardLitt/standard-readme/blob/main/spec.md)).
 
-*Check:* template skeletons.
+*Check:* template skeletons; review.
 
 ### RDOC-2 MUST
 
@@ -824,11 +833,13 @@ TOOL-3, keeping a generated project on its template with `copier update`, is a r
 
 ### TOOL-1 MUST
 
-`make check` runs ruff check, ruff format `--check`, pyright, `lint-imports` and pytest, and CI runs it on every pull
-request. pre-commit runs the fast checks plus the commit-msg lint, nbstripout, gitleaks and the `uv lock` check.
+`make check` runs ruff check, ruff format `--check`, `check-comments` and `check-conventions` on every Python file git
+does not ignore (TOOL-4), pyright, `lint-imports` and pytest, and CI runs it on every pull request. pre-commit runs the fast
+checks on the files of each commit, plus the commit-msg lint, nbstripout, gitleaks and the `uv lock` check.
 
 *Why:* rules that a tool can check are enforced by a tool
-([SWE at Google ch. 8](https://abseil.io/resources/swe-book/html/ch08.html)).
+([SWE at Google ch. 8](https://abseil.io/resources/swe-book/html/ch08.html)). A commit can skip pre-commit, and
+pre-commit sees only the files it changes, so CI is where every file is checked.
 
 *Check:* template.
 
@@ -845,15 +856,15 @@ The checks this guide adds on top of ruff are the `conventions-hooks` package of
 with a `[tool.conventions]` table in its root `pyproject.toml`, where `ignore = ["STY-4"]` turns rules off for that
 repo, and adds the package as a dev dependency pinned by `uv.lock`. The package's commands are `check-comments`,
 `check-conventions`, `check-protected`, `check-commit-msg` and `review-comments`; `check-conventions` also checks
-nuikit's FAM-2 and, in a project with a `src/<pkg>/paths.py`, rnd-template's ENV-1 and ENV-3. The checks run in two
-layers with the same code: pre-commit gates every commit by anyone, and the `conventions` Claude Code plugin gives
-Claude the findings while it works (`PreToolUse` before an edit, `PostToolUse` after it, and `Stop` after it hands back: that hook runs in the
-background and wakes Claude only when it has findings).
-The plugin runs the project's own `.venv/bin/<command>`, so each project gets the version its lock pins, and does
-nothing in a repo that has not opted in.
+nuikit's FAM-2 and, in a project with a `src/<pkg>/paths.py`, rnd-template's ENV-1 and ENV-3. The checks run in three
+layers with the same code: `make check` runs them on every file of the repo, locally and in CI (TOOL-1); pre-commit runs
+them on the files of each commit; and the `conventions` Claude Code plugin gives Claude the findings while it works
+(`PreToolUse` before an edit, `PostToolUse` after it, and `Stop` after it hands back: that hook runs in the background
+and wakes Claude only when it has findings). The plugin runs the project's own `.venv/bin/<command>`, so each project
+gets the version its lock pins, and does nothing in a repo that has not opted in.
 
-*Why:* only pre-commit sees every author, but feedback during the edit is cheaper than at commit time. One plugin,
-enabled once per machine, serves every repo without copying hook settings into each.
+*Why:* CI is the gate no author skips, pre-commit gives the same answer before a push, and feedback during the edit
+is cheaper still. One plugin, enabled once per machine, serves every repo without copying hook settings into each.
 
 *Check:* template; the opt-in and plugin tests of nuinashco/conventions.
 
@@ -901,7 +912,7 @@ holds. The choices behind the shared library (families, the config bridge, confi
 |---|---|---|---|
 | line length | 88 | 79 (PEP 8, Google), 100, 120 (earlier repos) | ecosystem default; no primary guide endorses 120 |
 | multi-part repos | one package with subpackages | uv workspace; several top-level modules | simplest, no name clashes; import-linter keeps the boundaries |
-| shared building blocks | the `nuikit` library, a dependency pinned by `uv.lock` | vendored by the template; copying by hand | one source with its own tags; a project takes a fix by upgrading one dependency, not by a template update |
+| shared building blocks | the `nuikit` library, a dependency pinned to a release tag | vendored by the template; copying by hand | one source with its own tags; a project takes a fix by moving one pin, not by a template update |
 | rules for agents | written once in `rules/`, generated into this guide and the `conventions` plugin's skills and subagents | a copy of the guide in every project; hand-kept agent files | one source; every repo gets a new rule through the plugin, and Claude loads only the area it works in |
 | config comments | only options and what the key can't say | a description on every field | comments that repeat the key bury the ones that matter |
 | data classes | attrs for every class, pydantic for configs | dataclasses; pydantic everywhere | validation at the edge, plain typed state inside; no `__init__` boilerplate |
@@ -956,4 +967,7 @@ holds. The choices behind the shared library (families, the config bridge, confi
   - Beams, [How to Write a Git Commit Message](https://cbea.ms/git-commit/)
   - [RFC 8174](https://www.rfc-editor.org/rfc/rfc8174)
   - [agents.md](https://agents.md/)
+  - Google, [READMEs](https://google.github.io/styleguide/docguide/READMEs.html) and
+    [Documentation best practices](https://google.github.io/styleguide/docguide/best_practices.html)
+  - [Standard Readme](https://github.com/RichardLitt/standard-readme/blob/main/spec.md)
   - [Claude Code memory](https://code.claude.com/docs/en/memory)

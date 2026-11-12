@@ -1,136 +1,120 @@
 # conventions
 
-My conventions for Python and ML repos: the rules, the checks that enforce what a tool can decide, and the Claude Code
-plugin that carries both to Claude.
+Rules for Python and ML repos, the checks that enforce them, and a Claude Code plugin that teaches them to Claude.
 
-- [GUIDE.md](GUIDE.md): every rule (MUST/SHOULD/MAY, each with a reason and a check), the decisions behind them, and
-  sources. It is generated from [rules/](rules/), one file per area.
-- `conventions-hooks`, the Python package in `src/conventions_hooks/`: `check-comments`, `check-conventions`,
-  `check-protected`, `check-commit-msg` and `review-comments`.
-- [plugins/conventions/](plugins/conventions/): the `conventions` Claude Code plugin, one skill per rule area, the
-  `conventions-reviewer` and `descriptions-judge` subagents, and hooks that run the checks while Claude edits.
-- [.claude-plugin/marketplace.json](.claude-plugin/marketplace.json): the `nuinashco` plugin marketplace, with
-  `conventions` and [nuikit](https://github.com/nuinashco/nuikit)'s plugin.
-- [COVERAGE.md](COVERAGE.md): the MUST rules that only review checks, the backlog for new mechanical checks.
+| part | what it is |
+|---|---|
+| [GUIDE.md](GUIDE.md) | Every rule, with its reason and the tool that checks it. |
+| `conventions-hooks` | The checks, as commands. They run in `make check`, in pre-commit and while Claude edits. |
+| `conventions` plugin | A skill per rule area, two review subagents, and hooks that run the checks on each edit. |
 
-Two more repos implement the rest: [nuinashco/nuikit](https://github.com/nuinashco/nuikit) is the library projects
-build on (families, configs, errors, logging, runs, seeding) with its own rules, and
-[nuinashco/rnd-template](https://github.com/nuinashco/rnd-template) is the copier template that starts a project
-already opted in to all of it.
+Starting a new project? Use [rnd-template](https://github.com/nuinashco/rnd-template), which sets all of this up.
+The steps below add the conventions to a repo that already exists.
 
-## Install the plugin
+## Install
 
-Once per machine, in Claude Code:
+You need [uv](https://docs.astral.sh/uv/) and Python 3.12 or later.
 
-```text
-/plugin marketplace add nuinashco/conventions
-/plugin install conventions@nuinashco
-/plugin install nuikit@nuinashco
-```
-
-Or in your user settings, `~/.claude/settings.json`, so every repo gets them and they update themselves:
-
-```json
-{
-  "extraKnownMarketplaces": {
-    "nuinashco": {
-      "source": { "source": "github", "repo": "nuinashco/conventions" },
-      "autoUpdate": true
-    }
-  },
-  "enabledPlugins": { "conventions@nuinashco": true, "nuikit@nuinashco": true }
-}
-```
-
-Projects made from rnd-template carry the same lines in their `.claude/settings.json`. The skills and subagents work
-in any repo. The hooks do nothing until the repo opts in.
-
-## Opt a repo in
-
-1. Add the table to the repo's root `pyproject.toml`. `ignore` is optional and turns rules off for this repo:
-
-   ```toml
-   [tool.conventions]
-   ignore = ["ENV-1", "ENV-3"]
-   ```
-
-2. Add the hooks as a dev dependency, pinned by `uv.lock`; the plugin runs `.venv/bin/<command>`, so each repo gets
-   the version it pins:
+1. Add the checks to the repo, pinned to a release:
 
    ```bash
    uv add --dev git+https://github.com/nuinashco/conventions --tag v0.1.0
    ```
 
-   which leaves `conventions-hooks = { git = "https://github.com/nuinashco/conventions", tag = "v0.1.0" }` under
-   `[tool.uv.sources]`.
+2. Opt the repo in, in its root `pyproject.toml`. The nearest `pyproject.toml` above a file decides, so a
+   workspace member with its own `pyproject.toml` needs its own table:
 
-3. Run the same checks in pre-commit, as local `uv run` hooks in `.pre-commit-config.yaml`:
-
-   ```yaml
-   - repo: local
-     hooks:
-       - id: check-comments
-         name: comments are sentences, no banners (GUIDE DOC)
-         entry: uv run check-comments
-         language: system
-         types: [python]
-       - id: check-conventions
-         name: code rules an AST can decide (GUIDE)
-         entry: uv run check-conventions
-         language: system
-         types: [python]
-       - id: check-commit-msg
-         name: commit message is one line without articles (GUIDE GIT-1, GIT-2)
-         entry: uv run check-commit-msg
-         language: system
-         stages: [commit-msg]
+   ```toml
+   [tool.conventions]
    ```
 
-   A repo without uv can use this repo as a pre-commit source instead (`repo: https://github.com/nuinashco/conventions`,
-   `rev: v0.1.0`, the hook IDs of [.pre-commit-hooks.yaml](.pre-commit-hooks.yaml)).
+3. Add the plugin to Claude Code, once per machine:
 
-The nearest `pyproject.toml` above a file decides, so a workspace member with its own `pyproject.toml` needs its own
-table. A justified exception at one line is a comment naming the rule:
-`# conventions: TYP-4 - the base class from httpx needs __init__.`
+   ```text
+   /plugin marketplace add nuinashco/conventions
+   /plugin install conventions@nuinashco
+   ```
 
-## Hooks
+   The plugin follows this repo's `main` branch. To have it update itself, turn on auto-update for the `nuinashco`
+   marketplace in `/plugin`, or copy `extraKnownMarketplaces` from
+   [rnd-template's settings](https://github.com/nuinashco/rnd-template/blob/main/template/.claude/settings.json).
 
-| command | checks | runs |
-|---|---|---|
-| `check-comments` | comments are sentences, no section banners, class docstrings are noun phrases (DOC-2, DOC-4, DOC-5) | pre-commit; the plugin's `PostToolUse` hook after each edit |
-| `check-conventions` | the code rules an AST can decide: grab-bag modules, eager heavy imports, `kind ==`, switches on a variant repeated across the package or grown to three arms, functions that only forward, `__init__` and dataclasses, positional options, error messages, log events, test classes (LAY-2, ARC-4, ARC-8, ARC-9, ARC-10, TYP-4, STY-4, ERR-3, LOG-2, TST-1, nuikit's FAM-2, and rnd-template's ENV-1 and ENV-3 in a project with a `src/<pkg>/paths.py`) | pre-commit; the plugin's `PostToolUse` hook after each edit |
-| `check-protected` | files `.gitattributes` marks `protected` (generated, vendored, published), or that start with `# Generated by`, are not edited by hand (TOOL-5) | the plugin's `PreToolUse` hook before each edit |
-| `check-commit-msg` | commit messages are one line, under 72 characters, without articles (GIT-1, GIT-2) | pre-commit, at the commit-msg stage |
-| `review-comments` | new comments, docstrings and `Field` descriptions say only what the code cannot (DOC-2 to DOC-7), judged by `claude -p` with a structured verdict | the plugin's `Stop` hook, in the background: it wakes Claude only with findings; `pre-commit run review-comments --hook-stage manual` |
-| `build-rules` | `GUIDE.md`, `COVERAGE.md` and the plugin's skills and subagents match `rules/` and `agents/` | this repo only: `make build`, and `--check` in CI |
+## Use
 
-From the command line every check runs on the files it is given and leaves out the rules `ignore` lists. As a Claude
-Code hook (`--claude-hook`) it does nothing in a repo without the `[tool.conventions]` table.
+Run a check on any files. Each finding names its rule, and [GUIDE.md](GUIDE.md) gives the reason behind it:
 
-`review-comments` and both subagents are LLM judges (TOOL-6). `tests/judges/` holds their labelled cases: diffs that
-must pass or fail, and fixture projects with planted mistakes.
-
-## Change or add a rule
-
-1. Edit the rule in `rules/<area>.md`, keeping its ID and its shape: a `### <ID> <LEVEL>` heading, the body, a
-   `*Why:*` paragraph when there is a reason to give, and a final `*Check:*` paragraph. A new rule takes the next
-   free number of its area; an ID is never reused, and a retired one goes in the `retired` list of `rules/_intro.md`.
-2. When a tool can decide the rule, add the check (`check-conventions` is the usual home) with its tests, and name it
-   in the *Check*; a rule whose every *Check* part starts with "review" stays in COVERAGE.md.
-3. Run `make build`, which regenerates GUIDE.md, COVERAGE.md and the plugin's skills and subagents, and `make test`,
-   which fails while any of them is stale.
-4. After changing a judge's prompt (`agents/`, the instructions in `review.py`) or its model, run `make test-judges`
-   (live `claude` calls: minutes, about $3) and add each mistake it makes as a new case.
-5. Update nuinashco/rnd-template where it implements the rule, commit, and tag `vMAJOR.MINOR.PATCH`. The plugin's
-   text follows this repo's default branch; projects take new checks by moving their `conventions-hooks` pin.
-
-## Development
-
-```bash
-make setup        # uv sync + pre-commit and commit-msg hooks
-make check        # ruff, pyright, unit tests, generated files fresh
-make build        # regenerate from rules/ and agents/
-make test-judges  # the judges on their labelled cases (needs the Claude Code CLI, logged in)
+```console
+$ uv run check-conventions src/demo/worker.py
+src/demo/worker.py:4: STY-4 optional parameter `retries` goes after `*`, keyword-only
+src/demo/worker.py:6: ARC-4 branch on a declared capability (`ClassVar[bool]`), not on `kind`
+src/demo/worker.py:7: ERR-3 error messages start lowercase
+src/demo/worker.py:7: ERR-3 error messages have no trailing period
 ```
 
-Layout and conventions for working here: [CONTRIBUTING.md](CONTRIBUTING.md).
+| command | checks |
+|---|---|
+| `check-comments` | Comments are sentences, there are no section banners, class docstrings are noun phrases. |
+| `check-conventions` | The code rules an AST can decide, such as attrs classes, keyword-only options and one switch per variant. |
+| `check-commit-msg` | A commit message is one line under 72 characters, without articles. |
+| `check-protected` | Generated, vendored and published files are not edited by hand. |
+| `review-comments` | New comments and docstrings say only what the code cannot. It asks Claude (`claude -p`). |
+
+### Run them automatically
+
+- **In `make check` and CI.** Add both checks to the `lint` target, on every Python file git does not ignore:
+
+  ```make
+  lint:
+  	uv run check-comments $$(git ls-files -co --exclude-standard '*.py')
+  	uv run check-conventions $$(git ls-files -co --exclude-standard '*.py')
+  ```
+
+- **In pre-commit.** Add them as local hooks, so they run the version `uv.lock` pins:
+
+  <details>
+  <summary><code>.pre-commit-config.yaml</code></summary>
+
+  ```yaml
+  - repo: local
+    hooks:
+      - id: check-comments
+        name: comments are sentences, no banners (GUIDE DOC)
+        entry: uv run check-comments
+        language: system
+        types: [python]
+      - id: check-conventions
+        name: code rules an AST can decide (GUIDE)
+        entry: uv run check-conventions
+        language: system
+        types: [python]
+      - id: check-commit-msg
+        name: commit message is one line without articles (GUIDE GIT-1, GIT-2)
+        entry: uv run check-commit-msg
+        language: system
+        stages: [commit-msg]
+  ```
+
+  </details>
+
+- **While Claude edits.** The plugin does this by itself, with the repo's own `.venv/bin/<command>`:
+  `check-protected` before an edit, `check-comments` and `check-conventions` after it, and `review-comments` in the
+  background once Claude hands back. It does nothing in a repo without the `[tool.conventions]` table.
+
+### Turn a rule off
+
+- For the whole repo, list it in the table: `ignore = ["ENV-1", "ENV-3"]`.
+- For one line, name the rule and the reason in a comment on that line or the one above:
+  `# conventions: TYP-4 - the base class from httpx needs __init__.`
+
+## Related repos
+
+- [nuikit](https://github.com/nuinashco/nuikit): the library projects build on, with its own rules and plugin.
+- [rnd-template](https://github.com/nuinashco/rnd-template): the template that starts a project with all three.
+
+## Contributing
+
+[CONTRIBUTING.md](CONTRIBUTING.md) covers the layout, how to change or add a rule, the tests and releases.
+
+## License
+
+[MIT](LICENSE)

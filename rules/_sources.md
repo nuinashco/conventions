@@ -42,4 +42,7 @@ title: Sources
   - Beams, [How to Write a Git Commit Message](https://cbea.ms/git-commit/)
   - [RFC 8174](https://www.rfc-editor.org/rfc/rfc8174)
   - [agents.md](https://agents.md/)
+  - Google, [READMEs](https://google.github.io/styleguide/docguide/READMEs.html) and
+    [Documentation best practices](https://google.github.io/styleguide/docguide/best_practices.html)
+  - [Standard Readme](https://github.com/RichardLitt/standard-readme/blob/main/spec.md)
   - [Claude Code memory](https://code.claude.com/docs/en/memory)

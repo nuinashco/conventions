@@ -23,7 +23,7 @@ TOOL-3, keeping a generated project on its template with `copier update`, is a r
 
 Linters, hooks and the template report these; follow them as you write.
 
-- **TOOL-1** MUST: `make check` runs ruff check, ruff format `--check`, pyright, `lint-imports` and pytest, and CI runs it on every pull request. *Check:* template.
+- **TOOL-1** MUST: `make check` runs ruff check, ruff format `--check`, `check-comments` and `check-conventions` on every Python file git does not ignore (TOOL-4), pyright, `lint-imports` and pytest, and CI runs it on every pull request. *Check:* template.
 - **TOOL-2** MUST: Tool versions come from `uv.lock`. Hooks for Python tools are local `uv run` hooks, so pre-commit, CI and editors all use the same versions. *Check:* template.
 - **TOOL-4** MUST: The checks this guide adds on top of ruff are the `conventions-hooks` package of nuinashco/conventions. A repo opts in with a `[tool.conventions]` table in its root `pyproject.toml`, where `ignore = ["STY-4"]` turns rules off for that repo, and adds the package as a dev dependency pinned by `uv.lock`. *Check:* template; the opt-in and plugin tests of nuinashco/conventions.
 - **TOOL-5** MUST: Files nobody edits by hand are listed in `.gitattributes` with `protected=<why>`: `generated`: config mirrors, `.copier-answers.yml`, and whatever a build step writes; `vendored`: code copied in from another repo and changed only there; `published`: third-party files kept as published, such as `notebooks/reference/`. *Check:* template; `check-protected PATH`.

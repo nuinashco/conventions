@@ -38,6 +38,25 @@ def test_the_command_line_leaves_out_ignored_rules(tmp_path, capsys):
     assert capsys.readouterr().out == f"{module}:2: DOC-5 second\n"
 
 
+def test_the_command_line_skips_a_deleted_file_and_says_so(tmp_path, capsys):
+    module = tmp_path / "module.py"
+    module.write_text("x = 1\n")
+    deleted = tmp_path / "deleted.py"
+
+    code = check_paths([str(deleted), str(module)], check_file=two_findings, usage="")
+
+    assert code == 1
+    output = capsys.readouterr()
+    assert output.err == f"skipped {deleted}: not a file\n"
+    assert len(output.out.splitlines()) == 2
+
+
+def test_the_command_line_passes_when_only_deleted_files_are_left(tmp_path):
+    deleted = tmp_path / "deleted.py"
+
+    assert check_paths([str(deleted)], check_file=two_findings, usage="") == 0
+
+
 def test_the_command_line_stops_on_a_broken_table(tmp_path, capsys):
     (tmp_path / "pyproject.toml").write_text('[tool.conventions]\nignore = "STY-4"\n')
 

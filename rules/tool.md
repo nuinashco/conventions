@@ -19,11 +19,13 @@ TOOL-3, keeping a generated project on its template with `copier update`, is a r
 
 ### TOOL-1 MUST
 
-`make check` runs ruff check, ruff format `--check`, pyright, `lint-imports` and pytest, and CI runs it on every pull
-request. pre-commit runs the fast checks plus the commit-msg lint, nbstripout, gitleaks and the `uv lock` check.
+`make check` runs ruff check, ruff format `--check`, `check-comments` and `check-conventions` on every Python file git
+does not ignore (TOOL-4), pyright, `lint-imports` and pytest, and CI runs it on every pull request. pre-commit runs the fast
+checks on the files of each commit, plus the commit-msg lint, nbstripout, gitleaks and the `uv lock` check.
 
 *Why:* rules that a tool can check are enforced by a tool
-([SWE at Google ch. 8](https://abseil.io/resources/swe-book/html/ch08.html)).
+([SWE at Google ch. 8](https://abseil.io/resources/swe-book/html/ch08.html)). A commit can skip pre-commit, and
+pre-commit sees only the files it changes, so CI is where every file is checked.
 
 *Check:* template.
 
@@ -40,15 +42,15 @@ The checks this guide adds on top of ruff are the `conventions-hooks` package of
 with a `[tool.conventions]` table in its root `pyproject.toml`, where `ignore = ["STY-4"]` turns rules off for that
 repo, and adds the package as a dev dependency pinned by `uv.lock`. The package's commands are `check-comments`,
 `check-conventions`, `check-protected`, `check-commit-msg` and `review-comments`; `check-conventions` also checks
-nuikit's FAM-2 and, in a project with a `src/<pkg>/paths.py`, rnd-template's ENV-1 and ENV-3. The checks run in two
-layers with the same code: pre-commit gates every commit by anyone, and the `conventions` Claude Code plugin gives
-Claude the findings while it works (`PreToolUse` before an edit, `PostToolUse` after it, and `Stop` after it hands back: that hook runs in the
-background and wakes Claude only when it has findings).
-The plugin runs the project's own `.venv/bin/<command>`, so each project gets the version its lock pins, and does
-nothing in a repo that has not opted in.
+nuikit's FAM-2 and, in a project with a `src/<pkg>/paths.py`, rnd-template's ENV-1 and ENV-3. The checks run in three
+layers with the same code: `make check` runs them on every file of the repo, locally and in CI (TOOL-1); pre-commit runs
+them on the files of each commit; and the `conventions` Claude Code plugin gives Claude the findings while it works
+(`PreToolUse` before an edit, `PostToolUse` after it, and `Stop` after it hands back: that hook runs in the background
+and wakes Claude only when it has findings). The plugin runs the project's own `.venv/bin/<command>`, so each project
+gets the version its lock pins, and does nothing in a repo that has not opted in.
 
-*Why:* only pre-commit sees every author, but feedback during the edit is cheaper than at commit time. One plugin,
-enabled once per machine, serves every repo without copying hook settings into each.
+*Why:* CI is the gate no author skips, pre-commit gives the same answer before a push, and feedback during the edit
+is cheaper still. One plugin, enabled once per machine, serves every repo without copying hook settings into each.
 
 *Check:* template; the opt-in and plugin tests of nuinashco/conventions.
 

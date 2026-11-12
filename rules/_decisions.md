@@ -11,7 +11,7 @@ holds. The choices behind the shared library (families, the config bridge, confi
 |---|---|---|---|
 | line length | 88 | 79 (PEP 8, Google), 100, 120 (earlier repos) | ecosystem default; no primary guide endorses 120 |
 | multi-part repos | one package with subpackages | uv workspace; several top-level modules | simplest, no name clashes; import-linter keeps the boundaries |
-| shared building blocks | the `nuikit` library, a dependency pinned by `uv.lock` | vendored by the template; copying by hand | one source with its own tags; a project takes a fix by upgrading one dependency, not by a template update |
+| shared building blocks | the `nuikit` library, a dependency pinned to a release tag | vendored by the template; copying by hand | one source with its own tags; a project takes a fix by moving one pin, not by a template update |
 | rules for agents | written once in `rules/`, generated into this guide and the `conventions` plugin's skills and subagents | a copy of the guide in every project; hand-kept agent files | one source; every repo gets a new rule through the plugin, and Claude loads only the area it works in |
 | config comments | only options and what the key can't say | a description on every field | comments that repeat the key bury the ones that matter |
 | data classes | attrs for every class, pydantic for configs | dataclasses; pydantic everywhere | validation at the edge, plain typed state inside; no `__init__` boilerplate |
