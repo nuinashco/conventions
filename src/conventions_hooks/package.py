@@ -38,15 +38,16 @@ def modules(top: Path) -> Iterator[Path]:
     """Yield the modules of the package at `top`, without its tests.
 
     A file is a test by its path from its project's root, as `is_test` reads it, and
-    a `tests` folder is not entered. Only folders with an `__init__.py` are entered,
-    so a virtualenv or a data folder that sits inside the package is not read.
+    a `tests` folder is not entered. Outside a project a file is judged by its name
+    alone. Only folders with an `__init__.py` are entered, so a virtualenv or a data
+    folder that sits inside the package is not read.
     """
     try:
         entries = sorted(top.iterdir())
     except OSError:
         return
     root = project_root(top)
-    inside = top.absolute().relative_to(root) if root else top
+    inside = top.absolute().relative_to(root) if root else PurePath()
     for entry in entries:
         if entry.is_dir():
             if entry.name != "tests" and (entry / "__init__.py").is_file():

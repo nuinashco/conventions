@@ -217,3 +217,40 @@ def test_the_pytest_files_of_a_package_outside_src_do_not_count(opted_in):
     after = rules(flat / "cost.py")
 
     assert (before, after) == ([], [(2, "ARC-9")])
+
+
+@pytest.mark.parametrize(
+    ("above", "other", "expected"),
+    [("src", "test_launch.py", []), ("tests", "launch.py", [(2, "ARC-9")])],
+    ids=["src-above", "tests-above"],
+)
+def test_a_folder_above_a_package_without_a_project_decides_nothing(
+    tmp_path, monkeypatch, above, other, expected
+):
+    flat = tmp_path / above / "proj" / "demo"
+    flat.mkdir(parents=True)
+    for name, source in {"__init__.py": "", "cost.py": COST, other: START}.items():
+        (flat / name).write_text(source)
+    monkeypatch.chdir(flat.parent)
+
+    assert rules(Path("demo/cost.py")) == expected
+
+
+def test_a_switch_waived_above_its_wrapped_statement_does_not_count_elsewhere(
+    demo_package,
+):
+    tier = (
+        "def tier(cfg):\n"
+        "    return rate(\n"
+        "        cfg,\n"
+        "        'high' if cfg.backend == 'modal' else 'low',\n"
+        "    )\n"
+    )
+    waiver = "    # conventions: ARC-9 - the price list alone knows every backend.\n"
+    waived = tier.replace("    return", waiver + "    return", 1)
+    demo = demo_package({"tier.py": tier, "start.py": START})
+
+    before = rules(demo / "start.py")
+    (demo / "tier.py").write_text(waived)
+
+    assert (before, rules(demo / "start.py")) == ([(2, "ARC-9")], [])

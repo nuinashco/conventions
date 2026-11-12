@@ -163,3 +163,21 @@ def test_a_waiver_at_the_end_of_a_first_line_does_not_cover_the_lines_below():
     source = "def f(  # conventions: STY-4 - passed by position.\n    a, b=1\n): ...\n"
 
     assert sorted(covered(source)) == [1]
+
+
+def test_a_comment_that_only_quotes_a_waiver_covers_its_line_and_the_next():
+    source = (
+        "# A waiver reads `# conventions: ENV-3 - why` and stands above the\n"
+        "# statement that it is for.\n"
+        "TOKEN = str(\n"
+        "    os.environ['TOKEN'],\n"
+        ")\n"
+    )
+
+    assert sorted(covered(source)) == [1, 2]
+
+
+def test_a_waiver_below_the_decorators_covers_the_signature_from_its_keyword():
+    source = "@cache\n" + ALONE + "def f(\n    a, b=1\n): ...\n"
+
+    assert sorted(covered(source)) == [2, 3, 4]
