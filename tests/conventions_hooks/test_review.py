@@ -157,7 +157,7 @@ def test_a_cli_that_refuses_to_start_is_an_error_saying_why(tmp_path, monkeypatc
     )
     (tmp_path / "claude").write_text(f"#!/bin/sh\necho '{refusal}' >&2\nexit 1\n")
     (tmp_path / "claude").chmod(0o755)
-    monkeypatch.setenv("PATH", str(tmp_path), prepend=os.pathsep)
+    monkeypatch.setenv("PATH", str(tmp_path))
 
     with pytest.raises(ReviewError, match=f"claude failed: {refusal}"):
         ask_claude(command(), "diff")

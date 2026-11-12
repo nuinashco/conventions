@@ -110,8 +110,10 @@ src/demo/worker.py:7: ERR-3 error messages have no trailing period
   `check-protected` before an edit, `check-comments` and `check-conventions` after it, and `review-comments` in the
   background once Claude hands back. That review is one `claude -p` call on your account, made only after a turn
   that left new comments; `REVIEW_COMMENTS_MODEL` picks its model, and listing DOC-2 to DOC-7 in `ignore` turns
-  it off. The plugin does nothing in a repo without the `[tool.conventions]` table. When a hook says
-  `.venv/bin/<command> cannot start`, the folder was moved after `uv sync`: run `rm -rf .venv && uv sync`.
+  it off. Turn it off where your organization deploys a `managed-mcp.json`: there the CLI refuses to start and
+  the review ends in that error. The plugin does nothing in a repo without the `[tool.conventions]` table. When
+  a hook says `.venv/bin/<command> cannot start`, the folder was moved after `uv sync`: run
+  `rm -rf .venv && uv sync`.
 
 ### Turn a rule off
 
