@@ -11,7 +11,7 @@ from conventions_hooks import rules
 
 REPO = Path(__file__).resolve().parents[1]
 PLUGIN = REPO / "plugins" / "conventions"
-RUN_CHECK = '"${CLAUDE_PLUGIN_ROOT}/bin/run-check"'
+RUN_CHECK = '"${CLAUDE_PLUGIN_ROOT}/scripts/run-check"'
 HOOK = re.compile(rf"{re.escape(RUN_CHECK)} (\S+) --claude-hook")
 BASH_BLOCK = re.compile(r"^ *```bash\n(.*?)^ *```$", re.M | re.S)
 
