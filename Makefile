@@ -1,6 +1,8 @@
 .DEFAULT_GOAL := help
-# The judged fixture projects carry planted mistakes.
-PYTHON_FILES = $$(git ls-files -co --exclude-standard '*.py' ':!tests/judges/fixtures')
+# Every Python file git does not ignore, NUL-separated so that a name with a space or a
+# letter outside ASCII reaches the checks whole. The judged fixture projects carry planted
+# mistakes.
+PYTHON_FILES = git ls-files -z -co --exclude-standard '*.py' ':!tests/judges/fixtures'
 .PHONY: help setup github lint format typecheck test build test-judges check
 
 help:  ## show targets
@@ -19,8 +21,8 @@ github:  ## once per GitHub repo: squash-merge only, PR title as the commit, mer
 lint:  ## ruff and this repo's own checks on every Python file, no changes
 	uv run ruff check
 	uv run ruff format --check
-	uv run check-comments $(PYTHON_FILES)
-	uv run check-conventions $(PYTHON_FILES)
+	$(PYTHON_FILES) | xargs -0 uv run check-comments
+	$(PYTHON_FILES) | xargs -0 uv run check-conventions
 
 format:  ## ruff auto-fix + format
 	uv run ruff check --fix
