@@ -6,7 +6,7 @@ How I structure, write, test and document Python and ML projects. These are the 
 `conventions` Claude Code plugin carries them to Claude, one skill per area, and the `conventions-hooks` package checks
 what a tool can.
 
-Version 0.1.0 · last reviewed 2026-11-05 · owner: nuinashco
+Version 0.1.0 · last reviewed 2026-11-12 · owner: nuinashco
 
 - [How to read](#how-to-read) · [Where the other rules live](#where-the-other-rules-live) · [Retired rules](#retired-rules) · [Quick reference](#quick-reference)
 - [Layout and packaging](#1-layout-and-packaging-lay) · [Architecture](#2-architecture-arc) · [Types and data](#3-types-and-data-typ) · [Code style](#4-code-style-sty) · [Comments and docstrings](#5-comments-and-docstrings-doc) · [Errors](#6-errors-err) · [Logging](#7-logging-log) · [Tests](#8-tests-tst) · [Repository docs](#9-repository-docs-rdoc) · [Git](#10-git-git) · [Tooling](#11-tooling-tool)
@@ -18,18 +18,19 @@ Version 0.1.0 · last reviewed 2026-11-05 · owner: nuinashco
   [RFC 8174](https://www.rfc-editor.org/rfc/rfc8174): they carry their meaning only in capitals.
   - **MUST**: checked by a tool or test where possible. A justified exception gets a comment at the site naming the
     rule (`# noqa: BLE001 - a failing callback must not stop training`, or
-    `# conventions: TYP-4 - the base class from httpx needs __init__.` for `check-conventions`).
+    `# conventions: TYP-4 - the base class from httpx needs __init__.` for `check-comments` and `check-conventions`).
   - **SHOULD**: the default. Deviate when you can say why.
   - **MAY**: a matter of taste, written down so it is consistent.
-- Every rule has an ID (`STY-4`) for reviews and commit bodies, a *Why*, and a *Check*: a ruff rule, pyright, a hook
-  of this repo, a test, `template` when [nuinashco/rnd-template](https://github.com/nuinashco/rnd-template) sets it
-  up, or `review` when no tool can tell. [COVERAGE.md](COVERAGE.md) lists the MUST rules only review checks.
+- Every rule has an ID (`STY-4`) for reviews and PR descriptions, a *Why* where the reason needs saying, and a
+  *Check*: a ruff rule, pyright, a hook of this repo, a test, `template` when
+  [nuinashco/rnd-template](https://github.com/nuinashco/rnd-template) sets it up, or `review` when no tool can tell.
+  [COVERAGE.md](COVERAGE.md) lists the MUST rules only review checks.
 - Rules apply to every project unless tagged **[rnd]** (research and development: tools, pipelines, training).
 - A repo that can't follow a rule yet lists it under "Deviations" in its CONTRIBUTING.md, with the reason. A rule that
   does not apply to the repo at all goes in `ignore` of its `[tool.conventions]` table (TOOL-4), and the hooks skip it.
 - Changing a rule means editing it under `rules/` in nuinashco/conventions, regenerating this file and the plugin with
-  `make build`, and changing the checks and templates it affects in the same commit, then tagging a new version.
-  Projects pick it up through the plugin and by upgrading `conventions-hooks`.
+  `make build`, and changing the checks it affects in the same commit, then tagging a new version; the template
+  follows in its own repo. Projects pick it up through the plugin and by upgrading `conventions-hooks`.
 
 ## Where the other rules live
 
@@ -76,7 +77,7 @@ IDs are never reused.
 | [TYP-8](#typ-8-should) | SHOULD | Avoid `Any` outside JSON-shaped payloads and lazily imported third-party objects. Use `object` for "accepts anything". |
 | [TYP-9](#typ-9-must) | MUST | Dicts are for wire payloads only (JSON in, JSON out). A dict with a fixed set of known keys is a class. |
 | [STY-1](#sty-1-must) | MUST | Format with ruff format: 88 columns, double quotes. |
-| [STY-2](#sty-2-must) | MUST | Lint with the template's curated rule set: `E F W I B UP SIM RET PTH C4 RUF TID FBT N PERF G LOG BLE PL D NPY ERA T20 C90` (plus `FA` below 3.14). |
+| [STY-2](#sty-2-must) | MUST | Lint with the template's curated rule set: `E F W I B UP SIM RET PTH C4 RUF TID FBT N PERF G LOG BLE PL D NPY ERA T20 C90` (plus `FA` below 3.14), with `ANN` for the signatures in `src/` (TYP-1), `PGH004` for a bare `# noqa` and `TD004` to `TD007` for TODO comments (DOC-6). |
 | [STY-3](#sty-3-must) | MUST | Imports are absolute. |
 | [STY-4](#sty-4-must) | MUST | Every optional parameter and every boolean parameter is keyword-only (after `*`). Only the one or two obvious subjects of a call are positional. |
 | [STY-5](#sty-5-must) | MUST | Naming: Modules are short nouns (`harness`, `soundness`). Functions are verbs (`select`, `bind`); Classes are nouns, and family items carry the family suffix (`LiteLLMEndpoint`, `GoldPatches`); Schemas end in `Config`. Acronyms stay capitalised (`HDBSCANClustering`, `BQ2GCSCollector`); Constants are UPPER_SNAKE right after the imports; Anything not used outside its module starts with `_`. |
@@ -335,7 +336,7 @@ nuikit.
 
 *Why:* the code relies on types (generics, `ClassVar`, `Config` bindings) that only a checker verifies.
 
-*Check:* `make typecheck`.
+*Check:* ruff ANN on `src/`; `make typecheck`.
 
 ### TYP-2 MUST
 
@@ -440,13 +441,14 @@ Format with ruff format: 88 columns, double quotes.
 ### STY-2 MUST
 
 Lint with the template's curated rule set: `E F W I B UP SIM RET PTH C4 RUF TID FBT N PERF G LOG BLE PL D NPY ERA T20
-C90` (plus `FA` below 3.14). `D401` is selected explicitly, because the google docstring convention silently drops it.
-Ignored on purpose: `PLR2004`, `PLR0913`, `PLC0415`, `D102`, `D103`, `D105`, `D106`, `D107`. The set changes only by
-changing this guide. A `# noqa` names the rule and gives a reason.
+C90` (plus `FA` below 3.14), with `ANN` for the signatures in `src/` (TYP-1), `PGH004` for a bare `# noqa` and `TD004`
+to `TD007` for TODO comments (DOC-6). `D401` is selected explicitly, because the google docstring convention silently
+drops it. Ignored on purpose: `PLR2004`, `PLR0913`, `PLC0415`, `ANN401`, `D102`, `D103`, `D105`, `D106`, `D107`. The
+set changes only by changing this guide. A `# noqa` names the rule and gives a reason.
 
 *Why:* an explicit select keeps upgrades from changing the rules silently ([ruff](https://docs.astral.sh/ruff/linter/)).
 
-*Check:* `ruff check`.
+*Check:* `ruff check`, with PGH004 for the rule a `# noqa` names; review for its reason.
 
 ### STY-3 MUST
 
@@ -494,7 +496,7 @@ Use pathlib, never `os.path`.
 
 *Why:* greppable and terminal-safe.
 
-*Check:* a pre-commit non-ASCII hook (`ascii-only-python` in the template).
+*Check:* `check-conventions` reports each line that has a character outside ASCII.
 
 ### STY-9 SHOULD
 
@@ -532,7 +534,8 @@ Docstrings are one line where possible:
 - every public class has one (`D101`);
 - a function or method gets one when its name and signature don't already say it all.
 
-*Check:* ruff D101, D401; `check-comments` flags a class docstring that opens with an order; review.
+*Check:* ruff D101, D401; `check-comments` flags a class docstring that opens with an order (`Return the ...`);
+review.
 
 ### DOC-3 SHOULD
 
@@ -568,12 +571,13 @@ Information that code can't express still needs writing down
 ([Ousterhout](https://github.com/johnousterhout/aposd-vs-clean-code)).
 
 *Check:* ruff ERA001; `check-comments` flags banners; `review-comments` asks Claude whether new comments say anything
-the code doesn't (the plugin's `Stop` hook, and on demand with `pre-commit run review-comments --hook-stage manual`).
+the code doesn't (the plugin's `Stop` hook, and `uv run review-comments` for the staged diff).
 
 ### DOC-5 MUST
 
 Comments are sentences: capitalised and ending with a period. A sentence that opens with a lowercase name puts it in
-backticks (`` `git` is not installed. ``).
+backticks (`` `git` is not installed. ``). A comment a tool reads is not one: `# noqa`, `# type:`, a `# %%` cell
+marker, a PEP 723 block.
 
 *Check:* `check-comments`, in pre-commit and as a Claude Code `PostToolUse` hook on every edited `.py` file.
 
@@ -732,7 +736,9 @@ Test ML code with tiny real models, not mocks: loss decreases, and a batch can b
 
 README.md is the user's and operator's view: setup, daily workflow, commands, outputs, caveats. It opens by saying
 in a sentence or two what the project is and who it is for, then shows how to install it and one command or snippet
-to copy, with its output where that helps. It stays short, about 100 lines, and links to what is longer.
+to copy, with its output where that helps. A command block holds only what is typed: an interactive zsh hands a
+trailing `# comment` to the command, so the explanation goes in the sentence beside the block. The README stays
+short, about 100 lines, and links to what is longer.
 CONTRIBUTING.md is the contributor's view: architecture, layout, families, configs, deviations, the "Extending"
 table, tests, commits and releases.
 
@@ -792,7 +798,8 @@ Example: `fix(proxy): retry on 429 from upstream`, not `fix(proxy): add a retry 
 *Why:* the default tooling accepts exactly these types, and the imperative matches git's own convention
 ([Beams](https://cbea.ms/git-commit/)).
 
-*Check:* the `conventional-pre-commit` and `check-commit-msg` commit-msg hooks.
+*Check:* the `conventional-pre-commit` and `check-commit-msg` commit-msg hooks, for the type, the lowercase start, the
+period, the length and the articles; review for the imperative and for filler.
 
 ### GIT-2 MUST
 
@@ -878,10 +885,11 @@ Files nobody edits by hand are listed in `.gitattributes` with `protected=<why>`
 
 The same lines carry `linguist-generated` or `linguist-vendored`, so GitHub folds those diffs in pull requests. A
 family item's mirror sits beside hand-written presets, so no path pattern can mark it: a leading comment line starting
-`# Generated by` marks it instead. The `check-protected` Claude Code `PreToolUse` hook refuses edits to all of them with
-the reason and the right place to make the change; the commands that own them (`make configs`, `copier update`) still
-write them. The hook fails open: a broken environment lets edits through instead of blocking every one. Names carry
-no marker (no `_` prefix): `_` means private in Python.
+`# Generated by` marks it instead. The `check-protected` Claude Code `PreToolUse` hook refuses an edit Claude makes to
+any of them with its edit tools, giving the reason and the right place to make the change. It does not see shell
+commands, so the commands that own the files (`make configs`, `copier update`) still write them. The hook fails open:
+a broken environment lets edits through instead of blocking every one. Names carry no marker (no `_` prefix): `_`
+means private in Python.
 
 *Why:* agents fix whatever file is in front of them, and a refusal that names the source is the cheapest redirect.
 

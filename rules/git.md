@@ -21,7 +21,8 @@ Example: `fix(proxy): retry on 429 from upstream`, not `fix(proxy): add a retry 
 *Why:* the default tooling accepts exactly these types, and the imperative matches git's own convention
 ([Beams](https://cbea.ms/git-commit/)).
 
-*Check:* the `conventional-pre-commit` and `check-commit-msg` commit-msg hooks.
+*Check:* the `conventional-pre-commit` and `check-commit-msg` commit-msg hooks, for the type, the lowercase start, the
+period, the length and the articles; review for the imperative and for filler.
 
 ### GIT-2 MUST
 

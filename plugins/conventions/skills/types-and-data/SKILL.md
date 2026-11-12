@@ -46,7 +46,7 @@ Dicts are for wire payloads only (JSON in, JSON out). A dict with a fixed set of
 
 Linters, hooks and the template report these; follow them as you write.
 
-- **TYP-1** MUST: Every function signature in `src/` is annotated; test functions and fixtures may skip annotations. pyright in standard mode passes on `src/` and `tests/`, and strict mode passes on the `src/` of a library other repos import, such as nuikit. *Check:* `make typecheck`.
+- **TYP-1** MUST: Every function signature in `src/` is annotated; test functions and fixtures may skip annotations. pyright in standard mode passes on `src/` and `tests/`, and strict mode passes on the `src/` of a library other repos import, such as nuikit. *Check:* ruff ANN on `src/`; `make typecheck`.
 - **TYP-2** MUST: Use modern syntax: `X | None`, builtin generics, `collections.abc` for abstract containers, PEP 695 generics and `type` aliases. *Check:* ruff UP.
 - **TYP-3** MUST: While `requires-python` is below 3.14, every module starts with `from __future__ import annotations`. From 3.14 on it is never used: [PEP 649](https://peps.python.org/pep-0649/) makes annotations lazy, and [PEP 749](https://peps.python.org/pep-0749/) schedules the import for deprecation. *Check:* ruff I002 with `required-imports`, set by the template only for Python below 3.14.
 - **TYP-4** MUST: pydantic is only for data parsed from outside: configs, HTTP bodies, files. Every other class is an attrs class: `@frozen` for values, `@define` for stateful objects, family bases and items included. *Check:* `check-conventions` flags a hand-written `__init__` and dataclasses; review for pydantic inside the boundary.

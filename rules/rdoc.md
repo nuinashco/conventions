@@ -13,7 +13,9 @@ paths:
 
 README.md is the user's and operator's view: setup, daily workflow, commands, outputs, caveats. It opens by saying
 in a sentence or two what the project is and who it is for, then shows how to install it and one command or snippet
-to copy, with its output where that helps. It stays short, about 100 lines, and links to what is longer.
+to copy, with its output where that helps. A command block holds only what is typed: an interactive zsh hands a
+trailing `# comment` to the command, so the explanation goes in the sentence beside the block. The README stays
+short, about 100 lines, and links to what is longer.
 CONTRIBUTING.md is the contributor's view: architecture, layout, families, configs, deviations, the "Extending"
 table, tests, commits and releases.
 

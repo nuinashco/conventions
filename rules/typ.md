@@ -17,7 +17,7 @@ nuikit.
 
 *Why:* the code relies on types (generics, `ClassVar`, `Config` bindings) that only a checker verifies.
 
-*Check:* `make typecheck`.
+*Check:* ruff ANN on `src/`; `make typecheck`.
 
 ### TYP-2 MUST
 

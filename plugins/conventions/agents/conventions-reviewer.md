@@ -217,6 +217,18 @@ class RateLimiter:
 
 *Check:* `check-conventions` flags a hand-written `__init__` and dataclasses; review for pydantic inside the boundary.
 
+### STY-2 MUST
+
+Lint with the template's curated rule set: `E F W I B UP SIM RET PTH C4 RUF TID FBT N PERF G LOG BLE PL D NPY ERA T20
+C90` (plus `FA` below 3.14), with `ANN` for the signatures in `src/` (TYP-1), `PGH004` for a bare `# noqa` and `TD004`
+to `TD007` for TODO comments (DOC-6). `D401` is selected explicitly, because the google docstring convention silently
+drops it. Ignored on purpose: `PLR2004`, `PLR0913`, `PLC0415`, `ANN401`, `D102`, `D103`, `D105`, `D106`, `D107`. The
+set changes only by changing this guide. A `# noqa` names the rule and gives a reason.
+
+*Why:* an explicit select keeps upgrades from changing the rules silently ([ruff](https://docs.astral.sh/ruff/linter/)).
+
+*Check:* `ruff check`, with PGH004 for the rule a `# noqa` names; review for its reason.
+
 ### STY-4 MUST
 
 Every optional parameter and every boolean parameter is keyword-only (after `*`). Only the one or two obvious subjects
@@ -245,7 +257,8 @@ Docstrings are one line where possible:
 - every public class has one (`D101`);
 - a function or method gets one when its name and signature don't already say it all.
 
-*Check:* ruff D101, D401; `check-comments` flags a class docstring that opens with an order; review.
+*Check:* ruff D101, D401; `check-comments` flags a class docstring that opens with an order (`Return the ...`);
+review.
 
 ### DOC-6 SHOULD
 
@@ -287,7 +300,9 @@ End-to-end tests live in `tests/integration/`, are marked `integration` and are 
 
 README.md is the user's and operator's view: setup, daily workflow, commands, outputs, caveats. It opens by saying
 in a sentence or two what the project is and who it is for, then shows how to install it and one command or snippet
-to copy, with its output where that helps. It stays short, about 100 lines, and links to what is longer.
+to copy, with its output where that helps. A command block holds only what is typed: an interactive zsh hands a
+trailing `# comment` to the command, so the explanation goes in the sentence beside the block. The README stays
+short, about 100 lines, and links to what is longer.
 CONTRIBUTING.md is the contributor's view: architecture, layout, families, configs, deviations, the "Extending"
 table, tests, commits and releases.
 
@@ -311,6 +326,23 @@ and `descriptions-judge` subagents and its hooks, TOOL-4), and a project's own p
 specific files, and a skill or a path-scoped rule loads only when its files are in play.
 
 *Check:* template; review.
+
+### GIT-1 MUST
+
+Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/):
+
+- a standard type: `feat fix docs refactor test build ci perf style chore revert`;
+- an optional scope;
+- a lowercase imperative subject, with no period, of at most 72 characters;
+- no articles (`a`, `an`, `the`) and no filler: say what changed in as few words as hold it.
+
+Example: `fix(proxy): retry on 429 from upstream`, not `fix(proxy): add a retry for the 429 errors`.
+
+*Why:* the default tooling accepts exactly these types, and the imperative matches git's own convention
+([Beams](https://cbea.ms/git-commit/)).
+
+*Check:* the `conventional-pre-commit` and `check-commit-msg` commit-msg hooks, for the type, the lowercase start, the
+period, the length and the articles; review for the imperative and for filler.
 
 ### GIT-3 MUST
 
@@ -373,7 +405,7 @@ Information that code can't express still needs writing down
 ([Ousterhout](https://github.com/johnousterhout/aposd-vs-clean-code)).
 
 *Check:* ruff ERA001; `check-comments` flags banners; `review-comments` asks Claude whether new comments say anything
-the code doesn't (the plugin's `Stop` hook, and on demand with `pre-commit run review-comments --hook-stage manual`).
+the code doesn't (the plugin's `Stop` hook, and `uv run review-comments` for the staged diff).
 
 ### DOC-7 MUST
 
