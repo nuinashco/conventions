@@ -32,7 +32,8 @@ def check_paths(args: Sequence[str], *, check_file: CheckFile, usage: str) -> in
     """Check the files in `args`, or the file a Claude edit wrote; return the exit code.
 
     The command line checks every file it is given, whether or not its repo opted in,
-    and leaves out the rules the repo's `ignore` turns off.
+    and leaves out the rules the repo's `ignore` turns off. It skips, with a note, a
+    path that is no file: `git ls-files` still names one deleted but not yet staged.
     """
     if list(args) == ["--claude-hook"]:
         return check_edit(sys.stdin.read(), check_file=check_file)
@@ -49,6 +50,9 @@ def check_paths(args: Sequence[str], *, check_file: CheckFile, usage: str) -> in
         except SettingsError as e:
             print(f"error: {e}", file=sys.stderr)
             return 2
+        if not path.is_file():
+            print(f"skipped {path}: not a file", file=sys.stderr)
+            continue
         settings = known[path.parent]
         findings += [f for f in check_file(path) if settings.keeps(f.rule)]
     for finding in findings:

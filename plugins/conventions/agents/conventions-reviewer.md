@@ -163,10 +163,11 @@ operations cheap ([the expression problem](https://eli.thegreenplace.net/2016/th
 and research code mostly gains variants. Coding agents grow conditional chains rather than classes
 ([Zhu et al.](https://arxiv.org/html/2605.02741), [SlopCodeBench](https://arxiv.org/html/2603.24755v1)).
 
-*Check:* `check-conventions` flags a variant name switched on with the same values in two functions of a package (across
-modules, one of the two has two arms or more), and a chain of three arms on one name, unless every arm returns a new
-object (the factory) or the `match` ends in `assert_never`; review for switches on `StrEnum` members, on `isinstance`,
-and through dicts of functions.
+*Check:* `check-conventions` flags a variant name switched on with the same values in two functions of a package, and a
+chain of three arms on one name, unless every arm returns a new object (the factory) or the `match` ends in
+`assert_never`. Across modules it reads the package's folders that have an `__init__.py`, tests aside: one of the two
+switches has two arms or more, and a switch waived by its comment does not count against the others; review for
+switches on `StrEnum` members, on `isinstance`, and through dicts of functions.
 
 ### ARC-10 SHOULD
 
@@ -177,9 +178,10 @@ forwards its arguments, an interface with one implementation and no fake, or a l
 functionality ([Ousterhout](https://github.com/johnousterhout/aposd-vs-clean-code)); ARC-9 must not turn into
 abstraction for its own sake.
 
-*Check:* `check-conventions` flags a module-level function of the package whose body only passes its own parameters,
-unchanged and in order, to another function of the package; decorated functions, methods and a public function over a
-private one are left alone; review for one-implementation interfaces and mirrored layers.
+*Check:* `check-conventions` flags a module-level function under `src/` that takes parameters, gives none a default,
+and only passes them, unchanged and in order, to another function of its package. Decorated functions, methods, a
+public function over a private one, and calls that build an object or go through one are left alone; review for
+one-implementation interfaces and mirrored layers.
 
 ### TYP-4 MUST
 
@@ -280,6 +282,22 @@ End-to-end tests live in `tests/integration/`, are marked `integration` and are 
 (`-m integration` runs them).
 
 *Check:* `--strict-markers`; review.
+
+### RDOC-1 MUST
+
+README.md is the user's and operator's view: setup, daily workflow, commands, outputs, caveats. It opens by saying
+in a sentence or two what the project is and who it is for, then shows how to install it and one command or snippet
+to copy, with its output where that helps. It stays short, about 100 lines, and links to what is longer.
+CONTRIBUTING.md is the contributor's view: architecture, layout, families, configs, deviations, the "Extending"
+table, tests, commits and releases.
+
+*Why:* one document, one purpose ([SWE at Google ch. 10](https://abseil.io/resources/swe-book/html/ch10.html)). A
+README is what a first-time reader meets, so it holds what they need to start and points to the rest
+([Google's README guide](https://google.github.io/styleguide/docguide/READMEs.html),
+[GitHub](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-readmes),
+[Standard Readme](https://github.com/RichardLitt/standard-readme/blob/main/spec.md)).
+
+*Check:* template skeletons; review.
 
 ### RDOC-4 MUST
 

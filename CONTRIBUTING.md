@@ -3,6 +3,15 @@
 How this repo is built and how to change it. Using it: [README.md](README.md). The rules it follows are its own,
 [GUIDE.md](GUIDE.md).
 
+## Commands
+
+```bash
+make setup        # uv sync + pre-commit and commit-msg hooks
+make check        # ruff, this repo's own checks, pyright, unit tests, generated files fresh: what CI runs
+make build        # regenerate GUIDE.md, COVERAGE.md and the plugin's skills and subagents from rules/ and agents/
+make test-judges  # the judges on their labelled cases (needs the Claude Code CLI, logged in)
+```
+
 ## Layout
 
 ```text
@@ -17,6 +26,10 @@ src/conventions_hooks/
   findings.py              findings, and the command line and Claude hook of the per-file checks
   comments.py              check-comments
   conventions.py           check-conventions
+  switches.py              its ARC-9 checks: a variant name switched on in more than one place
+  forwarders.py            its ARC-10 check: functions that only forward their arguments
+  package.py               the other modules of a file's package, for the checks that look past one file
+  waivers.py               `# conventions: <RULE>` comments that waive a rule at one line
   protected.py             check-protected
   commit_msg.py            check-commit-msg
   review.py                review-comments, with doc_rules.md (generated) as its rules
@@ -36,6 +49,20 @@ tests/
 ```
 
 `.gitattributes` marks every generated file `protected=generated`, so `check-protected` refuses agent edits to them.
+
+## Change or add a rule
+
+1. Edit the rule in `rules/<area>.md`, keeping its ID and its shape: a `### <ID> <LEVEL>` heading, the body, a
+   `*Why:*` paragraph when there is a reason to give, and a final `*Check:*` paragraph. A new rule takes the next
+   free number of its area; an ID is never reused, and a retired one goes in the `retired` list of `rules/_intro.md`.
+2. When a tool can decide the rule, add the check (`check-conventions` is the usual home) with its tests, and name it
+   in the *Check*; a rule whose every *Check* part starts with "review" stays in [COVERAGE.md](COVERAGE.md), the
+   backlog for new mechanical checks.
+3. Run `make build`, which regenerates GUIDE.md, COVERAGE.md and the plugin's skills and subagents, and `make test`,
+   which fails while any of them is stale.
+4. After changing a judge's prompt (`agents/`, the instructions in `review.py`) or its model, run `make test-judges`
+   (live `claude` calls: minutes, about $3) and add each mistake it makes as a new case (TOOL-6).
+5. Update nuinashco/rnd-template where it implements the rule, commit, and tag a release.
 
 ## How the generator reads a rule
 
@@ -62,9 +89,9 @@ Fakes, not mocks. The judge tests seed projects from `tests/judges/fixtures/` an
 Pull requests are squash-merged with their title as the commit (GIT-3), and their description follows
 `.github/pull_request_template.md` (GIT-6); `make github` sets the GitHub repo up that way once.
 
-Tag `vMAJOR.MINOR.PATCH` on `main` once CI passes. Projects pin the tag in `[tool.uv.sources]`; the plugin's skills,
-subagents and hook wiring follow the default branch, so a hook command's name and flags never change without a
-major version.
+Tag `vMAJOR.MINOR.PATCH` on `main` once CI passes. Projects pin the tag in `[tool.uv.sources]` and take new checks
+by moving it and running `uv lock`. The plugin's skills, subagents and hook wiring follow the default branch, so a
+hook command's name and flags never change without a major version.
 
 ## Deviations
 

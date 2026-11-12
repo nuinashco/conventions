@@ -25,14 +25,15 @@ flagged line or alone on the line above it:
 from __future__ import annotations
 
 import ast
+import functools
 import re
 import sys
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path, PurePath
 
 from attrs import frozen
 
-from conventions_hooks import forwarders, package, switches
+from conventions_hooks import forwarders, package, switches, waivers
 from conventions_hooks.findings import Finding, check_edit, check_paths
 from conventions_hooks.settings import project_root
 
@@ -48,7 +49,6 @@ LOGGERS = frozenset({"log", "logger"})
 EVENT = re.compile(r"[a-z][a-z0-9]*(_[a-z0-9]+)*")
 EXCEPTION_SUFFIXES = ("Error", "Exception", "Warning")
 PLAIN_BASES = frozenset({"Protocol", "ABC", "Enum", "StrEnum", "IntEnum", "NamedTuple"})
-ALLOW = re.compile(r"#\s*conventions:\s*([A-Z]+-\d+)")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -66,14 +66,13 @@ def check_file(path: Path) -> list[Finding]:
     """Return the findings for one Python file, judged by its place in its project."""
     root = project_root(path.parent)
     inside = path.absolute().relative_to(root) if root else path
-    top = package.top_package(path)
     return check_source(
         path.read_text(encoding="utf-8"),
         path=str(path),
         relative=str(inside),
         paths_module=bool(root and any(root.glob("src/*/paths.py"))),
-        package_name=top.name if top else "",
-        elsewhere=package.switches_elsewhere(path),
+        top=package.top_package(path),
+        elsewhere=functools.partial(package.switches_elsewhere, path),
     )
 
 
@@ -83,16 +82,17 @@ def check_source(
     path: str = "<string>",
     relative: str | None = None,
     paths_module: bool = True,
-    package_name: str = "",
-    elsewhere: Sequence[switches.Elsewhere] = (),
+    top: Path | None = None,
+    elsewhere: Callable[[], Sequence[switches.Elsewhere]] | None = None,
 ) -> list[Finding]:
     """Return the convention findings for one Python source, reported at `path`.
 
     The file's path from its project's root, `relative` (`path` when not given),
     decides which rules apply: a folder above the project says nothing about it.
     ENV-1 and ENV-3 apply only when `paths_module` says the project has a
-    `src/<pkg>/paths.py`. `package_name` and `elsewhere`, the switches in the other
-    modules of the package, let ARC-9 and ARC-10 look past the file.
+    `src/<pkg>/paths.py`. ARC-9 and ARC-10 look past the file: `elsewhere` returns
+    the switches in the other modules of its package, and `top` is the folder of
+    its top package, given when `path` is the file itself.
     """
     try:
         tree = ast.parse(source)
@@ -106,10 +106,10 @@ def check_source(
         findings += _check_node(node, where, path)
     if not where.test:
         findings += switches.check(tree, path, elsewhere=elsewhere)
-    if where.package and package_name:
-        findings += forwarders.check(tree, path, package_name)
-    allowed = _allowed(source)
-    kept = [f for f in findings if f.rule not in allowed.get(f.line, ())]
+    if where.package and top:
+        findings += forwarders.check(tree, path, top)
+    waived = waivers.waived(source)
+    kept = [f for f in findings if f.rule not in waived.get(f.line, ())]
     return sorted(set(kept), key=lambda f: (f.line, f.rule))
 
 
@@ -124,13 +124,12 @@ class _Where:
 
     @classmethod
     def of(cls, path: str, *, env: bool) -> _Where:
-        parts = PurePath(path).parts
-        name = PurePath(path).name
-        test = "tests" in parts or name.startswith("test_") or name == "conftest.py"
+        pure = PurePath(path)
+        test = package.is_test(pure)
         return cls(
             test=test,
-            package="src" in parts and not test,
-            paths=name == "paths.py",
+            package="src" in pure.parts and not test,
+            paths=pure.name == "paths.py",
             env=env,
         )
 
@@ -399,13 +398,3 @@ def _name(node: ast.expr) -> str:
     if isinstance(node, ast.Subscript):
         return _name(node.value)
     return ""
-
-
-def _allowed(source: str) -> dict[int, set[str]]:
-    allowed: dict[int, set[str]] = {}
-    for number, line in enumerate(source.splitlines(), start=1):
-        rules = set(ALLOW.findall(line))
-        allowed.setdefault(number, set()).update(rules)
-        if rules and line.lstrip().startswith("#"):
-            allowed.setdefault(number + 1, set()).update(rules)
-    return allowed

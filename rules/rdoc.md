@@ -11,12 +11,19 @@ paths:
 
 ### RDOC-1 MUST
 
-README.md is the user's and operator's view: setup, daily workflow, commands, outputs, caveats. CONTRIBUTING.md is the
-contributor's view: architecture, layout, families, configs, deviations, the "Extending" table, tests and commits.
+README.md is the user's and operator's view: setup, daily workflow, commands, outputs, caveats. It opens by saying
+in a sentence or two what the project is and who it is for, then shows how to install it and one command or snippet
+to copy, with its output where that helps. It stays short, about 100 lines, and links to what is longer.
+CONTRIBUTING.md is the contributor's view: architecture, layout, families, configs, deviations, the "Extending"
+table, tests, commits and releases.
 
-*Why:* one document, one purpose ([SWE at Google ch. 10](https://abseil.io/resources/swe-book/html/ch10.html)).
+*Why:* one document, one purpose ([SWE at Google ch. 10](https://abseil.io/resources/swe-book/html/ch10.html)). A
+README is what a first-time reader meets, so it holds what they need to start and points to the rest
+([Google's README guide](https://google.github.io/styleguide/docguide/READMEs.html),
+[GitHub](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-readmes),
+[Standard Readme](https://github.com/RichardLitt/standard-readme/blob/main/spec.md)).
 
-*Check:* template skeletons.
+*Check:* template skeletons; review.
 
 ### RDOC-2 MUST
 

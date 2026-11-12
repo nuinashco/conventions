@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import ast
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 
 from attrs import frozen
 
@@ -46,14 +46,18 @@ class Elsewhere:
 
 
 def check(
-    tree: ast.Module, path: str, *, elsewhere: Sequence[Elsewhere] = ()
+    tree: ast.Module,
+    path: str,
+    *,
+    elsewhere: Callable[[], Sequence[Elsewhere]] | None = None,
 ) -> list[Finding]:
     """Return the ARC-9 findings for one module.
 
-    `elsewhere` holds the switches of the package's other modules: a variant name
-    switched on here and there is reported here, in each module that has it. Across
-    modules one of the two must have two arms or more, since a lone `if suffix ==
-    ".py"` in two modules is a test, not a switch.
+    `elsewhere` returns the switches of the package's other modules, and is called
+    only when this module has a switch they could repeat. A variant name switched on
+    here and there is reported here, in each module that has it. Across modules one
+    of the two must have two arms or more, since a lone `if suffix == ".py"` in two
+    modules is a test, not a switch.
     """
     switches = switches_of(tree)
     return [
@@ -115,12 +119,20 @@ def _repeated(switches: list[Switch], path: str) -> Iterator[Finding]:
 
 
 def _repeated_elsewhere(
-    switches: list[Switch], path: str, elsewhere: Sequence[Elsewhere]
+    switches: list[Switch],
+    path: str,
+    elsewhere: Callable[[], Sequence[Elsewhere]] | None,
 ) -> Iterator[Finding]:
-    others = [other for other in elsewhere if not _factory(other.switch)]
-    for switch in switches:
-        if _factory(switch) or (len(switch.arms) >= MIN_ARMS and not switch.closed):
-            continue
+    mine = [
+        switch
+        for switch in switches
+        # `_chains` reports a long open chain already.
+        if not _factory(switch) and (len(switch.arms) < MIN_ARMS or switch.closed)
+    ]
+    if not mine or elsewhere is None:
+        return
+    others = [other for other in elsewhere() if not _factory(other.switch)]
+    for switch in mine:
         other = next(
             (
                 other
