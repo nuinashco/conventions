@@ -22,7 +22,7 @@ rules/                     the source of every rule
   _sources.md              references
 agents/                    subagent prompts, with {{checklist}} and {{rule:ID}} placeholders
 src/conventions_hooks/
-  settings.py              the [tool.conventions] table: opt-in and ignore
+  settings.py              the [tool.conventions] table: opt-in, ignore and review
   findings.py              findings, and the command line and Claude hook of the per-file checks
   comments.py              check-comments
   conventions.py           check-conventions
@@ -48,7 +48,17 @@ tests/
   judges/                  labelled cases for the LLM judges, and fixture projects they review (`-m judges`)
 ```
 
-`.gitattributes` marks every generated file `protected=generated`, so `check-protected` refuses agent edits to them.
+`.gitattributes` marks every generated file `protected=generated`, so `check-protected` refuses edits Claude makes to
+them with its edit tools (shell commands are not checked).
+
+## How the plugin finds the checks
+
+Each hook runs `scripts/run-check <command>`, which runs the `.venv/bin/<command>` of the folder Claude was started in
+or of the nearest folder above it that has one, as a uv workspace or a git worktree needs; a `.venv` above the project
+counts only when the user owns it. The nearest `pyproject.toml` above a file decides whether the checks apply to it;
+`check-protected` alone looks past one without the `[tool.conventions]` table, so vendored code that brings its own
+stays protected. When a hook says `.venv/bin/<command> cannot start`, the folder was moved after `uv sync`: run
+`rm -rf .venv && uv sync`.
 
 ## Change or add a rule
 
@@ -76,7 +86,7 @@ checklist quotes in full the rules whose *Check* is review only in part.
 
 ## Tests
 
-`make test` runs the unit tests and the freshness check, in under a second. `make test-judges` runs the live
+`make test` runs the unit tests and the freshness check, in a few seconds. `make test-judges` runs the live
 judges, which takes minutes and about $3.
 
 Fakes, not mocks. The judge tests seed projects from `tests/judges/fixtures/` and load the subagents from

@@ -25,8 +25,7 @@ You need [uv](https://docs.astral.sh/uv/), and the repo's `requires-python` must
    then install on 3.12 and later only.
 
 2. Opt the repo in, in its root `pyproject.toml`. The nearest `pyproject.toml` above a file decides, so a
-   workspace member with its own `pyproject.toml` needs its own table. `check-protected` alone looks past one
-   without the table, so vendored code that brings its own stays protected:
+   workspace member with its own `pyproject.toml` needs its own table:
 
    ```toml
    [tool.conventions]
@@ -42,6 +41,9 @@ You need [uv](https://docs.astral.sh/uv/), and the repo's `requires-python` must
    The plugin follows this repo's `main` branch. To have it update itself, turn on auto-update for the `nuinashco`
    marketplace in `/plugin`, or copy `extraKnownMarketplaces` from
    [rnd-template's settings](https://github.com/nuinashco/rnd-template/blob/main/template/.claude/settings.json).
+
+On Python 3.12.3 and earlier 3.12 releases `check-comments` is slow on a `.py` file with a very long line; a later
+3.12 (`uv python install 3.12`, then `rm -rf .venv && uv sync`) or 3.13 avoids it.
 
 ## Use
 
@@ -59,7 +61,7 @@ src/demo/worker.py:7: ERR-3 error messages have no trailing period
 |---|---|
 | `check-comments` | Comments are sentences, there are no section banners, class docstrings are noun phrases. |
 | `check-conventions` | The code rules an AST can decide, such as attrs classes, keyword-only options and one switch per variant. |
-| `check-commit-msg` | A commit message is one line of at most 72 characters: lowercase, no final period, no articles. |
+| `check-commit-msg` | A commit message is one line of at most 72 characters without articles; a `type(scope): subject` one is lowercase with no final period. `conventional-pre-commit` checks that shape. |
 | `check-protected` | Generated, vendored and published files are not edited by hand. |
 | `review-comments` | New comments and docstrings in the staged diff say only what the code cannot. It asks Claude (`claude -p`). |
 
@@ -75,8 +77,9 @@ src/demo/worker.py:7: ERR-3 error messages have no trailing period
   	$(PYTHON_FILES) | xargs -0 uv run check-conventions
   ```
 
-- **In pre-commit.** Add them as local hooks, so they run the version `uv.lock` pins. The first line makes
-  `pre-commit install` add the commit-msg hook as well:
+- **In pre-commit.** Add pre-commit (`uv add --dev pre-commit`) and these hooks, then run `uv run pre-commit install`.
+  The checks are local hooks, so they run the version `uv.lock` pins; the first line makes `pre-commit install` add
+  the commit-msg hook as well:
 
   <details>
   <summary><code>.pre-commit-config.yaml</code></summary>
@@ -84,6 +87,12 @@ src/demo/worker.py:7: ERR-3 error messages have no trailing period
   ```yaml
   default_install_hook_types: [pre-commit, commit-msg]
   repos:
+    - repo: https://github.com/compilerla/conventional-pre-commit
+      rev: v4.4.0
+      hooks:
+        - id: conventional-pre-commit
+          stages: [commit-msg]
+          args: [--verbose, build, chore, ci, docs, feat, fix, perf, refactor, revert, style, test]
     - repo: local
       hooks:
         - id: check-comments
@@ -97,7 +106,7 @@ src/demo/worker.py:7: ERR-3 error messages have no trailing period
           language: system
           types: [python]
         - id: check-commit-msg
-          name: commit message is one line without articles (GUIDE GIT-1, GIT-2)
+          name: commit message is one short conventional line (GUIDE GIT-1, GIT-2)
           entry: uv run check-commit-msg
           language: system
           stages: [commit-msg]
@@ -105,23 +114,31 @@ src/demo/worker.py:7: ERR-3 error messages have no trailing period
 
   </details>
 
-- **While Claude edits.** The plugin does this by itself, with the `.venv/bin/<command>` of the folder Claude
-  was started in or of the nearest folder above it, as a uv workspace or a git worktree needs:
-  `check-protected` before an edit, `check-comments` and `check-conventions` after it, and `review-comments` in the
-  background once Claude hands back. That review is one `claude -p` call on your account, made only after a turn
-  that left new comments; `REVIEW_COMMENTS_MODEL` picks its model, and listing DOC-2 to DOC-7 in `ignore` turns
-  it off. Turn it off where your organization deploys a `managed-mcp.json`: there the CLI refuses to start and
-  the review ends in that error. The plugin does nothing in a repo without the `[tool.conventions]` table. When
-  a hook says `.venv/bin/<command> cannot start`, the folder was moved after `uv sync`: run
-  `rm -rf .venv && uv sync`.
+  In a repo that already ran `pre-commit install`, run it again (`uv run pre-commit install`) so that the commit-msg
+  hook is installed too.
+
+- **While Claude edits.** The plugin does this by itself: `check-protected` before an edit, `check-comments` and
+  `check-conventions` after it, and `review-comments` in the background once Claude hands back.
+  - It does nothing in a repo without the `[tool.conventions]` table, and runs the project's own `.venv/bin/<command>`
+    ([how it finds it](CONTRIBUTING.md#how-the-plugin-finds-the-checks)).
+  - The review is one `claude -p` call on your account, after a turn that left new comments; `REVIEW_COMMENTS_MODEL`
+    picks its model. A file that adds more than 200,000 characters of diff is left out, and named once.
+  - `review = false` in the table turns the review off and leaves the other checks on. Set it where your organization
+    deploys a `managed-mcp.json`: there the CLI refuses to start, and the review ends in that error.
 
 ### Turn a rule off
 
 - For the whole repo, list it in the table: `ignore = ["ENV-1", "ENV-3"]`.
-- For one line, name the rule and the reason in a comment on that line, or alone above the statement:
-  `# conventions: STY-4 - OmegaConf calls this resolver by position.` Above a `def` or a `class` the comment
-  covers the decorators and the signature, not the body. One comment may name several rules
-  (`# conventions: ENV-1, ENV-3 - why.`), and comment lines right below it continue the reason.
+- For one statement, name the rule and the reason in a comment alone above it:
+
+  ```python
+  # conventions: STY-4 - OmegaConf calls this resolver by position.
+  def env_or(name: str, default: str = "") -> str: ...
+  ```
+
+  Above a `def` or a `class` the comment covers the decorators and the signature, not the body. One comment may name
+  several rules (`# conventions: ENV-1, ENV-3 - why.`), and comment lines right below it continue the reason. At the
+  end of a line the comment covers only that line; when ruff format wraps the statement, move it above.
 
 ## Related repos
 

@@ -81,7 +81,8 @@ Every entry point calls `rootutils.setup_root(__file__, indicator=".project-root
 Environment variables are read in YAML (`oc.env`) or in `<pkg>/paths.py`, never through `os.environ` scattered in
 modules.
 
-*Check:* `check-conventions` flags `os.environ` and `os.getenv` outside `paths.py` and tests.
+*Check:* `check-conventions` flags a read through `os.environ` or `os.getenv` outside `paths.py` and tests; setting a
+variable, or handing the environment to a child process, is not flagged.
 
 ### TOOL-3 MUST
 

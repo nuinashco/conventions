@@ -1,5 +1,6 @@
-# Files nobody edits by hand (GUIDE TOOL-5). check-protected refuses agent edits to them and
-# GitHub folds their diffs; the command that owns each one still rewrites it.
+# Files nobody edits by hand (GUIDE TOOL-5). check-protected refuses edits Claude makes to
+# them with its edit tools (shell commands are not checked), and GitHub folds their diffs;
+# the command that owns each one still rewrites it.
 configs/defaults/** linguist-generated protected=generated
 .copier-answers.yml protected=generated
 notebooks/reference/** linguist-vendored protected=published

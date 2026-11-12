@@ -16,18 +16,21 @@ the CLI refuses to start without its MCP servers, and the review ends in that er
 A diff over 200,000 characters is not sent, and the command says so. The labelled
 cases in the conventions repo (`make test-judges`) measure the judge.
 
-A `[tool.conventions]` table whose `ignore` lists DOC-2 to DOC-7 turns the review off,
-and findings under any rule it lists are dropped. On the command line that table is
-the one at the repo root, and the staged diff is sent whole.
+`review = false` in the `[tool.conventions]` table turns the review off, and only the
+review. An `ignore` that lists DOC-2 to DOC-7 turns it off too, along with those rules
+in `check-comments`, and findings under any rule `ignore` lists are dropped. On the
+command line that table is the one at the repo root, and the staged diff is sent whole.
 
 As a Stop hook the plugin runs it with `asyncRewake`: Claude hands back at once and is
 woken, by exit code 2, only when there are findings. The hook reads the working tree's
 diff against HEAD, untracked files included, and reviews a file when the nearest
 `pyproject.toml` above it has the table. `.git/review-comments` holds a digest of each
-line sent that is still in that diff, and the findings handed to Claude for the files
-still in it. Only the hunks that add a line with `#`, a triple quote or `description=`
-that is not listed there are sent, each under the header of its file, so a turn that
-adds no such line sends nothing, and a finding listed there is not handed over again.
+line sent that is still in that diff, and the findings handed to Claude whose quote
+that diff still adds. Only the hunks that add a line with `#`, a triple quote or
+`description=` that is not listed there are sent, each under the header of its file,
+so a turn that adds no such line sends nothing, and a finding listed there is not
+handed over again. The limit applies to each file: one whose new hunks alone are over
+it is named once and left out, and the other files are reviewed.
 """
 
 from __future__ import annotations
@@ -240,8 +243,12 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     diff = _git("diff", "--cached", "--unified=3", "--", "*.py")
     try:
-        ignore = Settings.of(Path(toplevel)).ignore
-        passed, answer = review(diff, comment_rules(), ask=ask_claude, ignore=ignore)
+        settings = Settings.of(Path(toplevel))
+        passed, answer = (
+            review(diff, comment_rules(), ask=ask_claude, ignore=settings.ignore)
+            if settings.review
+            else (True, "")
+        )
     except (SettingsError, ReviewError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
@@ -258,10 +265,22 @@ def claude_hook(payload: str, root: Path, *, ask: Ask) -> int:
     state = Path(_git("rev-parse", "--absolute-git-dir", cwd=root)) / "review-comments"
     seen, told = _read(state)
     diffs = working_diff(root)
-    diff, lines = _new_hunks(diffs, seen)
+    new, lines = _new_hunks(diffs, seen)
+    # The lines of a file left out stay in `lines`, so it is named at one Stop only.
+    too_long = {
+        path: len(text) for path, text in new.items() if len(text) > MAX_DIFF_CHARS
+    }
+    for path, size in too_long.items():
+        print(
+            f"review-comments: {path} adds {size} characters of diff, over the limit "
+            f"of {MAX_DIFF_CHARS}; not reviewed",
+            file=sys.stderr,
+        )
+    diff = "\n".join(text for path, text in new.items() if path not in too_long)
     # Findings Claude chose to leave, for example because the user asked for that text,
-    # would otherwise wake it again whenever their hunk is sent again.
-    handed = {finding for finding in told if finding[0] in diffs}
+    # would otherwise wake it again whenever their hunk is sent again. One whose text
+    # was removed is forgotten, so the text written again is judged afresh.
+    handed = {f for f in told if f[0] in diffs and _quoted(f[2], diffs[f[0]])}
     passed, answer = True, ""
     if diff:
         try:
@@ -282,7 +301,8 @@ def claude_hook(payload: str, root: Path, *, ask: Ask) -> int:
             json.dumps({"lines": sorted(lines), "findings": sorted(handed)})
         )
     if passed:
-        return 0
+        # Claude Code shows the user what a hook that exits 1 wrote on stderr.
+        return 1 if too_long else 0
     print(answer, file=sys.stderr)
     return 2
 
@@ -291,7 +311,7 @@ def working_diff(root: Path) -> dict[str, str]:
     """Return the diff against HEAD of each changed or untracked Python file to review.
 
     A file is reviewed when the nearest `pyproject.toml` above it has a
-    `[tool.conventions]` table that leaves a judged rule on.
+    `[tool.conventions]` table that leaves the review and a judged rule on.
     """
     commands: dict[str, tuple[str, ...]] = {}
     tracked = _git(
@@ -319,13 +339,15 @@ def working_diff(root: Path) -> dict[str, str]:
     }
 
 
-def _new_hunks(diffs: dict[str, str], seen: set[str]) -> tuple[str, set[str]]:
-    """Return the hunks with a candidate line not in `seen`, and all candidate lines.
+def _new_hunks(
+    diffs: dict[str, str], seen: set[str]
+) -> tuple[dict[str, str], set[str]]:
+    """Return each file's hunks with a candidate line not in `seen`, and all candidates.
 
     A hunk stays under the header of its file, so the judge still sees the path and
     the line numbers.
     """
-    parts: list[str] = []
+    parts: dict[str, str] = {}
     lines: set[str] = set()
     for path, diff in diffs.items():
         header, *hunks = re.split(r"\n(?=@@ )", diff)
@@ -336,8 +358,8 @@ def _new_hunks(diffs: dict[str, str], seen: set[str]) -> tuple[str, set[str]]:
             if digests - seen:
                 new.append(hunk)
         if new:
-            parts += [header, *new]
-    return "\n".join(parts), lines
+            parts[path] = "\n".join([header, *new])
+    return parts, lines
 
 
 def _candidates(path: str, hunk: str) -> set[str]:
@@ -354,13 +376,24 @@ def _candidates(path: str, hunk: str) -> set[str]:
     }
 
 
+def _quoted(quote: str, diff: str) -> bool:
+    """Return whether each line of `quote` is still part of a line that `diff` adds."""
+    _, *hunks = re.split(r"\n(?=@@ )", diff)
+    added = [line for hunk in hunks for line in hunk.split("\n") if line[:1] == "+"]
+    parts = (part.strip() for part in quote.split("\n"))
+    return all(any(part in line for line in added) for part in parts if part)
+
+
 def _ignored(root: Path, path: str) -> frozenset[str] | None:
-    """Return the rules the table nearest to `path` turns off; None without a table."""
+    """Return the rules the table nearest to `path` turns off.
+
+    None without a table, or with one that turns the review off.
+    """
     try:
         settings = Settings.of((root / path).parent)
     except SettingsError:
         return None  # The command line reports a broken table; the hook fails open.
-    return settings.ignore if settings.enabled else None
+    return settings.ignore if settings.enabled and settings.review else None
 
 
 def _read(state: Path) -> tuple[set[str], set[tuple[str, str, str]]]:

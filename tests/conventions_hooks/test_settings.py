@@ -19,6 +19,17 @@ def test_a_repo_opts_in_with_the_table_and_ignores_what_it_lists(tmp_path):
     assert (settings.keeps("STY-4"), settings.keeps("STY-5")) == (False, True)
 
 
+def test_review_false_turns_off_only_the_comment_review(tmp_path):
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.conventions]\nignore = ["STY-4"]\nreview = false\n'
+    )
+
+    settings = Settings.of(tmp_path / "module.py")
+
+    assert (settings.enabled, settings.review) == (True, False)
+    assert (settings.keeps("DOC-4"), settings.keeps("STY-4")) == (True, False)
+
+
 def test_a_repo_without_the_table_or_without_pyproject_is_not_opted_in(tmp_path):
     (tmp_path / "with" / "pyproject.toml").parent.mkdir()
     (tmp_path / "with" / "pyproject.toml").write_text('[project]\nname = "x"\n')
@@ -44,8 +55,16 @@ def test_the_nearest_pyproject_decides_even_without_the_table(opted_in):
         ('[tool.conventions]\nignores = ["STY-4"]\n', "unknown key ignores"),
         ("[tool.conventions\n", "cannot read it as TOML"),
         ('[tool]\nconventions = "on"\n', "must be a table"),
+        ('[tool.conventions]\nreview = "off"\n', "review must be true or false"),
     ],
-    ids=["string", "not-an-id", "unknown-key", "broken-toml", "not-a-table"],
+    ids=[
+        "string",
+        "not-an-id",
+        "unknown-key",
+        "broken-toml",
+        "not-a-table",
+        "review-not-a-boolean",
+    ],
 )
 def test_a_malformed_table_is_an_error_naming_the_problem(tmp_path, toml, problem):
     (tmp_path / "pyproject.toml").write_text(toml)

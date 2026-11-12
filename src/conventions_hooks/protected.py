@@ -19,6 +19,9 @@ protected; a file with no such table above it is left alone. The exit code stays
 a broken environment never blocks every edit. A repo whose `ignore` lists TOOL-5
 protects nothing. Commands such as `make configs` or `copier update` still rewrite
 these files.
+
+A file inside a nested git repository (a submodule or another checkout) follows that
+repository's .gitattributes.
 """
 
 from __future__ import annotations

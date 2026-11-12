@@ -68,7 +68,8 @@ class RateLimiter:
 ([attrs](https://www.attrs.org/en/stable/why.html), [Hynek](https://speakerdeck.com/hynek/design-pressure)).
 
 *Check:* `check-conventions` flags dataclasses and a hand-written `__init__`, unless a base of the class is imported
-from outside the project; review for pydantic inside the boundary.
+from outside the project (nuikit's `Configurable` counts as the project's own base); review for pydantic inside the
+boundary.
 
 ### TYP-5 MUST
 

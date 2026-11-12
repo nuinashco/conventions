@@ -18,6 +18,7 @@ from conventions_hooks.review import (
     claude_hook,
     command,
     comment_rules,
+    main,
     review,
 )
 
@@ -300,17 +301,23 @@ def test_only_the_hunk_with_a_new_comment_is_sent_under_its_file_header(repo):
     assert hunk.endswith("\n v17 = 17\n v18 = 18\n v19 = 19\n+# Last.")
 
 
-def test_a_comment_removed_and_written_again_is_sent_again(repo):
+@pytest.mark.parametrize(
+    ("answer", "codes"),
+    [(verdict(), (0, 0, 0)), (verdict(FINDING), (2, 0, 2))],
+    ids=["passed", "flagged"],
+)
+def test_a_comment_removed_and_written_again_is_sent_again(repo, answer, codes):
     calls: list[str] = []
-    ask = answering(verdict(), calls)
+    ask = answering(answer, calls)
     (repo / "new.py").write_text("# Add one.\nx = 1 + 1\n")
-    claude_hook(stop(), repo, ask=ask)
+    first = claude_hook(stop(), repo, ask=ask)
     (repo / "new.py").write_text("x = 1 + 1\n")
-    claude_hook(stop(), repo, ask=ask)
+    second = claude_hook(stop(), repo, ask=ask)
     (repo / "new.py").write_text("# Add one.\nx = 1 + 1\n")
 
-    claude_hook(stop(), repo, ask=ask)
+    third = claude_hook(stop(), repo, ask=ask)
 
+    assert (first, second, third) == codes
     assert ["+# Add one." in sent(call) for call in calls] == [True, True]
 
 
@@ -376,8 +383,9 @@ def test_a_file_that_is_not_utf8_is_reviewed_with_its_odd_bytes_replaced(repo):
         '[project]\nname = "member"\n',
         f"[tool.conventions]\nignore = {json.dumps(sorted(JUDGED))}\n",
         "[tool.conventions\n",
+        "[tool.conventions]\nreview = false\n",
     ],
-    ids=["no-table", "every-judged-rule-ignored", "table-does-not-parse"],
+    ids=["no-table", "every-judged-rule-ignored", "table-does-not-parse", "review-off"],
 )
 def test_a_member_is_left_out_unless_its_own_table_asks_for_the_review(repo, pyproject):
     calls: list[str] = []
@@ -439,23 +447,61 @@ def test_a_state_file_in_the_old_format_counts_as_empty(repo):
     assert (codes, len(calls)) == ((0, 0), 1)
 
 
-def test_the_stop_hook_skips_a_diff_over_the_limit_with_one_line(repo, capsys):
+def test_the_stop_hook_names_a_file_over_the_limit_at_one_stop_only(repo, capsys):
     calls: list[str] = []
     ask = answering(verdict(), calls)
-    state = repo / ".git" / "review-comments"
     (repo / "new.py").write_text("# Add one.\nx = 1 + 1\n")
     claude_hook(stop(), repo, ask=ask)
-    before = state.read_text()
     (repo / "table.py").write_text("# Generated table.\n" + "x = 1\n" * 40_000)
 
-    code = claude_hook(stop(), repo, ask=ask)
+    codes = (claude_hook(stop(), repo, ask=ask), claude_hook(stop(), repo, ask=ask))
 
-    assert (code, len(calls), state.read_text()) == (1, 1, before)
+    assert (codes, len(calls)) == ((1, 0), 1)
     assert re.fullmatch(
-        r"review-comments: the new comments span \d+ characters of diff, over the "
-        r"limit of 200000; not reviewed\n",
+        r"review-comments: table.py adds \d+ characters of diff, over the limit of "
+        r"200000; not reviewed\n",
         capsys.readouterr().err,
     )
+
+
+def test_the_other_files_are_reviewed_beside_a_file_over_the_limit(repo, capsys):
+    calls: list[str] = []
+    (repo / "table.py").write_text("# Generated table.\n" + "x = 1\n" * 40_000)
+    (repo / "new.py").write_text("# Add one.\nx = 1 + 1\n")
+
+    code = claude_hook(stop(), repo, ask=answering(verdict(FINDING), calls))
+
+    assert (code, "+++ b/new.py" in sent(calls[0]), "table.py" in sent(calls[0])) == (
+        2,
+        True,
+        False,
+    )
+    over, *findings = capsys.readouterr().err.splitlines()
+    assert over.startswith("review-comments: table.py adds ")
+    assert findings == [
+        "FAIL",
+        "new.py:1: DOC-4 restates the code ('# Add one.'); delete it",
+    ]
+
+
+def test_review_false_turns_the_review_off_on_the_command_line_and_as_a_hook(
+    repo, tmp_path_factory, monkeypatch, capsys
+):
+    calls: list[str] = []
+    bin_dir = tmp_path_factory.mktemp("bin")
+    # A review that still runs reaches this fake instead of the model.
+    (bin_dir / "claude").write_text(f"#!/bin/sh\ntouch {bin_dir}/called\n")
+    (bin_dir / "claude").chmod(0o755)
+    monkeypatch.setenv("PATH", str(bin_dir), prepend=os.pathsep)
+    monkeypatch.chdir(repo)
+    (repo / "pyproject.toml").write_text("[tool.conventions]\nreview = false\n")
+    (repo / "new.py").write_text("# Add one.\nx = 1 + 1\n")
+    git(repo, "add", "new.py")
+
+    codes = (main([]), claude_hook(stop(), repo, ask=answering(verdict(), calls)))
+
+    assert (codes, calls, (bin_dir / "called").exists()) == ((0, 0), [], False)
+    assert capsys.readouterr() == ("", "")
 
 
 def test_the_same_comment_in_another_file_is_new(repo):
