@@ -119,7 +119,9 @@ src/demo/worker.py:7: ERR-3 error messages have no trailing period
 
 - For the whole repo, list it in the table: `ignore = ["ENV-1", "ENV-3"]`.
 - For one line, name the rule and the reason in a comment on that line, or alone above the statement:
-  `# conventions: STY-4 - OmegaConf calls this resolver by position.`
+  `# conventions: STY-4 - OmegaConf calls this resolver by position.` Above a `def` or a `class` the comment
+  covers the decorators and the signature, not the body. One comment may name several rules
+  (`# conventions: ENV-1, ENV-3 - why.`), and comment lines right below it continue the reason.
 
 ## Related repos
 

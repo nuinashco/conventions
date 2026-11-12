@@ -219,8 +219,9 @@ def _runs(block: list[ast.stmt], function: str) -> Iterator[Switch]:
     """Yield the `if`/`elif` chains of one block, and its runs of `if`s on one name.
 
     Consecutive guard clauses (`if fmt == "csv": return ...`) are one switch, as an
-    `elif` chain is. An `if` without an arm does not end the run, and the switch is
-    at the line of the first `if` that has one.
+    `elif` chain is. A guard on the same name whose strings do not read as names
+    (`if fmt == "":`) is no arm and does not end the run; the switch is at the line
+    of the first `if` that has an arm.
     """
     run: list[tuple[str, tuple[Arm, ...], bool, int]] = []
     for statement in [*block, None]:

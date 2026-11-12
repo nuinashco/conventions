@@ -29,7 +29,7 @@ src/conventions_hooks/
   switches.py              its ARC-9 checks: a variant name switched on in more than one place
   forwarders.py            its ARC-10 check: functions that only forward their arguments
   package.py               the other modules of a file's package, for the checks that look past one file
-  waivers.py               `# conventions: <RULE>` comments that waive a rule at one line
+  waivers.py               `# conventions: <RULE>` comments that waive rules at a line or at the statement below
   protected.py             check-protected
   commit_msg.py            check-commit-msg
   review.py                review-comments, with doc_rules.md (generated) as its rules

@@ -110,6 +110,7 @@ def test_an_order_is_named_without_its_punctuation():
         "Run settings: its name and its seed.",
         "Call of one tool by the model.",
         "Return code of a finished child process.",
+        "GET request sent to the endpoint.",
     ],
     ids=[
         "run",
@@ -122,6 +123,7 @@ def test_an_order_is_named_without_its_punctuation():
         "run-settings",
         "call-of",
         "return-code",
+        "acronym",
     ],
 )
 def test_a_class_docstring_that_may_open_with_a_noun_passes(docstring):
@@ -242,15 +244,25 @@ def test_an_opening_line_of_pep_723_without_a_closing_one_skips_nothing():
     assert rules(PEP_723.removesuffix("# ///\n") + "x = 1\n") == [(3, "DOC-5")]
 
 
+def test_an_opening_line_with_more_than_its_type_opens_no_pep_723_block():
+    source = '# /// script here\n# requires-python = ">=3.12"\n# ///\n'
+
+    assert rules(source) == [(3, "DOC-5")]
+
+
+def test_a_pep_723_block_may_follow_an_opening_line_that_code_ended():
+    assert rules("# /// script\nx = 1\n" + PEP_723) == [(1, "DOC-5")]
+
+
 @pytest.mark.parametrize(
     "between",
     ["x = 1\n", "\n", "x = 1  # A pin.\n", "    # A pin.\n"],
     ids=["code", "blank-line", "comment-after-code", "indented-comment"],
 )
 def test_a_line_that_is_no_comment_at_the_margin_ends_a_pep_723_block(between):
-    source = f'# /// script\n# requires-python = ">=3.12"\n{between}# seconds\n# ///\n'
+    source = f'# /// script\n# requires-python = ">=3.12"\n{between}# ///\n'
 
-    assert rules(source) == [(2, "DOC-5"), (4, "DOC-5"), (5, "DOC-5")]
+    assert rules(source) == [(2, "DOC-5"), (4, "DOC-5")]
 
 
 @pytest.mark.parametrize(

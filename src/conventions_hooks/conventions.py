@@ -20,9 +20,9 @@ lowercase error messages (ERR-3), snake_case log events (LOG-2) and test functio
 rather than classes (TST-1). In a project with a `src/<pkg>/paths.py`, the repo root
 is found and environment variables are read there (ENV-1, ENV-3). A justified
 exception is a comment naming the rule with its reason, on the flagged line or alone
-above the statement:
+above the flagged statement:
 `# conventions: STY-4 - OmegaConf calls this resolver by position.`
-A file that Python cannot read or parse gets no findings; ruff reports a syntax error.
+A file that Python cannot decode or parse gets no findings; ruff reports a syntax error.
 """
 
 from __future__ import annotations
@@ -56,8 +56,9 @@ EVENT = re.compile(r"[a-z][a-z0-9]*(_[a-z0-9]+)*")
 NON_ASCII = re.compile(r"[^\x00-\x7f]")
 EXCEPTION_SUFFIXES = ("Error", "Exception", "Warning")
 PLAIN_BASES = frozenset({"Protocol", "Enum", "StrEnum", "IntEnum", "NamedTuple"})
-# Bases that say nothing about who owns a class: the project's family bases have them.
-UNOWNED_BASES = frozenset({"ABC", "Generic", "object"})
+# Bases that say nothing about who owns a class: the project's family bases have them,
+# nuikit's `Configurable` among them.
+UNOWNED_BASES = frozenset({"ABC", "Configurable", "Generic", "object"})
 DATACLASS_MAKERS = frozenset({"dataclass", "field", "make_dataclass"})
 PYTHON_NAMES = frozenset({"None", "True", "False"})
 

@@ -16,6 +16,12 @@ START = (
     "    elif cfg.backend == 'local':\n        run()\n"
 )
 COST = "def cost(cfg):\n    if cfg.backend == 'modal':\n        return bill()\n"
+CLOSED = (
+    "def {name}(fmt):\n    match fmt:\n"
+    "        case 'console':\n            return {name}_console()\n"
+    "        case 'json':\n            return {name}_json()\n"
+    "        case _:\n            assert_never(fmt)\n"
+)
 
 
 def rules(path: Path) -> list[tuple[int, str]]:
@@ -65,8 +71,26 @@ def test_the_other_module_is_written_the_way_the_checked_file_was(
             "    elif cfg.backend == 'local':\n        return Local()\n",
             "b.py": COST,
         },
+        # The factory may build through classmethod constructors.
+        {
+            "a.py": "def build(cfg):\n"
+            "    if cfg.backend == 'modal':\n        return Modal.from_config(cfg)\n"
+            "    elif cfg.backend == 'local':\n        return Local.from_config(cfg)\n",
+            "b.py": COST,
+        },
+        # Each operation over a closed set is one more match ending in `assert_never`.
+        {
+            "a.py": CLOSED.format(name="renderer"),
+            "b.py": CLOSED.format(name="coloured"),
+        },
     ],
-    ids=["one-arm-tests", "one-arm-each", "factory"],
+    ids=[
+        "one-arm-tests",
+        "one-arm-each",
+        "factory",
+        "factory-through-classmethods",
+        "closed-match-in-each",
+    ],
 )
 def test_switches_across_modules_that_are_not_repeats_pass(demo_package, files):
     demo = demo_package(files)

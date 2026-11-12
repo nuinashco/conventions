@@ -321,6 +321,19 @@ def render(rows, *, fmt):
     raise UnknownFormatError(fmt)
 """
 
+# A membership test on strings that are no names keeps the chain going.
+MEMBERSHIP_ON_NON_NAMES_FIRST = """
+def run(mode):
+    if mode in ("", None):
+        default()
+    elif mode == "train":
+        train()
+    elif mode == "eval":
+        evaluate()
+    elif mode == "export":
+        export()
+"""
+
 # The expression on an empty string is no switch: `first` is the one `second` repeats.
 EMPTY_CONDITIONAL_FIRST = """
 def label(mode):
@@ -364,6 +377,7 @@ def second(mode):
         (EMPTY_GUARD_FIRST, [(5, "ARC-9")]),
         (EMPTY_GUARD_BETWEEN, [(3, "ARC-9")]),
         (EMPTY_CONDITIONAL_FIRST, [(11, "ARC-9")]),
+        (MEMBERSHIP_ON_NON_NAMES_FIRST, [(3, "ARC-9")]),
     ],
     ids=[
         "same-variant-in-two-functions",
@@ -391,6 +405,7 @@ def second(mode):
         "empty-string-guard-first",
         "empty-string-guard-between",
         "conditional-expression-on-an-empty-string-first",
+        "membership-on-non-names-first",
     ],
 )
 def test_switches_on_a_variant_name_are_reported(source, expected):

@@ -17,7 +17,7 @@ not an order (DOC-2). Comments that a tool reads are skipped: directives (`# noq
 blocks, and so is any comment on a line that also carries `# noqa`. A justified
 exception is a comment naming the rule with its reason, on the flagged line or alone
 above the flagged statement or comment: `# conventions: DOC-5 - the unit of the column.`
-A file that Python cannot read or parse gets no findings; ruff reports a syntax error.
+A file that Python cannot decode or parse gets no findings; ruff reports a syntax error.
 """
 
 from __future__ import annotations
@@ -262,8 +262,11 @@ def _order(words: list[str]) -> bool:
 
     A verb that is a noun too (`Run directory of one experiment.`) is an order where
     it stands alone, or where a determiner or a `name` follows it; another verb is one
-    whatever follows.
+    whatever follows. A word in capitals (`GET request ...`) is a name.
     """
+    first = _bare(words[0])
+    if len(first) > 1 and first.isupper():
+        return False
     if len(words) == 1:
         return _bare(words[0]).lower() in ORDERS
     verb = words[0].lower()

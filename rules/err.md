@@ -23,7 +23,8 @@ error: no soundness data; run `g4swe-grade controls` first
 error: unknown endpoint kind 'gemni'; registered: gemini, litellm, passthrough
 ```
 
-*Check:* `check-conventions` flags a capitalised first word and a trailing period; review for the remedy.
+*Check:* `check-conventions` flags a capitalised first word and a trailing period in a message of two words or more;
+review for the remedy.
 
 ### ERR-4 MUST
 

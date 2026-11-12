@@ -77,6 +77,7 @@ def test_conforming_code_passes(source):
         ("@define\n@ShapeFactory.register('x')\nclass A: ...\n", [(2, "FAM-2")]),
         ("class A:\n    def __init__(self):\n        pass\n", [(2, "TYP-4")]),
         ("@dataclass\nclass A:\n    x: int\n", [(1, "TYP-4")]),
+        ("@dataclass(frozen=True)\nclass A:\n    x: int\n", [(1, "TYP-4")]),
         ("from dataclasses import dataclass\n", [(1, "TYP-4")]),
         ("def build(config, retries=3): ...\n", [(1, "STY-4")]),
         ("if item.kind == 'api':\n    pass\n", [(1, "ARC-4")]),
@@ -94,6 +95,7 @@ def test_conforming_code_passes(source):
         "register-inside",
         "init",
         "dataclass",
+        "dataclass-called",
         "dataclasses-import",
         "positional-option",
         "kind-equals",
@@ -446,6 +448,11 @@ def test_a_subclass_of_a_class_from_outside_the_project_keeps_its_init(source):
             "from torch import nn\n\n\n@dataclass\nclass A(nn.Module):\n    x: int\n",
             [(4, "TYP-4")],
         ),
+        (
+            "from abc import ABC\n\nfrom nuikit.registry import Configurable\n\n\n"
+            f"class Signal(Configurable[C], ABC):\n{INIT}",
+            [(7, "TYP-4")],
+        ),
     ],
     ids=[
         "abc",
@@ -460,6 +467,7 @@ def test_a_subclass_of_a_class_from_outside_the_project_keeps_its_init(source):
         "bases-in-a-circle",
         "dataclass-under-abc",
         "dataclass-under-an-outside-base",
+        "family-base-of-nuikit",
     ],
 )
 def test_a_class_of_the_project_has_no_hand_written_init(source, expected):
