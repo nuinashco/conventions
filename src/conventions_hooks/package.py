@@ -88,7 +88,7 @@ def _parsed(module: Path, mtime_ns: int, size: int) -> tuple[switches.Switch, ..
     """Parse a module once per version: one run checks many files of one package.
 
     `mtime_ns` and `size` only key the cache. A module that Python cannot read or
-    parse has no switches here; ruff reports it when it is checked itself.
+    parse has no switches here; ruff reports a syntax error in it.
     """
     del mtime_ns, size
     try:

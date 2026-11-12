@@ -183,8 +183,18 @@ def test_a_source_that_python_cannot_parse_has_no_findings(source):
             "class A(B" + "[0]" * 1500 + "):\n    def __init__(self): ...\n",
             [(2, "TYP-4")],
         ),
+        (
+            "class A(Protocol" + "[0]" * 1500 + "):\n    def __init__(self): ...\n",
+            [],
+        ),
     ],
-    ids=["long-sum", "long-call-chain", "long-elif-chain", "long-subscript"],
+    ids=[
+        "long-sum",
+        "long-call-chain",
+        "long-elif-chain",
+        "long-subscript",
+        "long-subscript-of-a-protocol",
+    ],
 )
 def test_code_nested_deeper_than_the_recursion_limit_is_checked(source, expected):
     assert rules(source) == expected

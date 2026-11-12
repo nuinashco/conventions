@@ -103,7 +103,7 @@ def teardown(cfg):
         unpin()
 """
 
-# Walked in the order of the source, `stop` meets "x" first and so repeats `halt`.
+# Walked in the order of the source, `stop` meets "x" first, so `halt` repeats it.
 NESTED_FIRST = """
 def stop(mode, items):
     for item in items:
@@ -113,6 +113,23 @@ def stop(mode, items):
     while items:
         if mode == "y":
             items.pop()
+
+
+def halt(mode):
+    if mode == "x":
+        leave()
+"""
+
+# The same below the first level: the two loops are children of one `for`.
+NESTED_SIBLINGS = """
+def stop(mode, items):
+    for item in items:
+        while item:
+            if mode == "x":
+                drop(item)
+        while items:
+            if mode == "y":
+                items.pop()
 
 
 def halt(mode):
@@ -132,6 +149,7 @@ def halt(mode):
         (CONDITIONALS, [(9, "ARC-9")]),
         (BELOW_A_CONDITIONAL, [(12, "ARC-9")]),
         (NESTED_FIRST, [(13, "ARC-9")]),
+        (NESTED_SIBLINGS, [(13, "ARC-9")]),
     ],
     ids=[
         "same-variant-in-two-functions",
@@ -142,6 +160,7 @@ def halt(mode):
         "two-conditional-expressions",
         "statements-below-a-conditional-expression",
         "nested-switch-met-first",
+        "nested-siblings-in-source-order",
     ],
 )
 def test_switches_on_a_variant_name_are_reported(source, expected):

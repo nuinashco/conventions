@@ -20,7 +20,7 @@ messages (ERR-3), snake_case log events (LOG-2) and test functions rather than c
 through it (ENV-1, ENV-3). A justified exception is a comment naming the rule with its
 reason, on the flagged line or alone on the line above it:
 `# conventions: TYP-4 - the base class from httpx needs __init__.`
-A file that Python cannot read or parse is skipped: ruff reports it.
+A file that Python cannot read or parse gets no findings; ruff reports a syntax error.
 """
 
 from __future__ import annotations
@@ -71,7 +71,7 @@ def check_file(path: Path) -> list[Finding]:
         with tokenize.open(path) as file:
             source = file.read()
     except UNREADABLE:
-        return []  # Ruff reports a file that cannot be read as text.
+        return []  # Python cannot read it as text.
     root = project_root(path.parent)
     inside = path.absolute().relative_to(root) if root else path
     return check_source(

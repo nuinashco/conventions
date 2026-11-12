@@ -17,7 +17,7 @@ not an order (DOC-2). Comments that a tool reads are skipped: directives (`# noq
 blocks, and so is any comment on a line that also carries `# noqa`. A justified
 exception is a comment naming the rule with its reason, on the flagged line or alone
 on the line above it: `# conventions: DOC-5 - the unit of the column.`
-A file that Python cannot read or parse is skipped: ruff reports it.
+A file that Python cannot read or parse gets no findings; ruff reports a syntax error.
 """
 
 from __future__ import annotations
@@ -117,7 +117,7 @@ def check_file(path: Path) -> list[Finding]:
         with tokenize.open(path) as file:
             source = file.read()
     except UNREADABLE:
-        return []  # Ruff reports a file that cannot be read as text.
+        return []  # Python cannot read it as text.
     return check_source(source, path=str(path))
 
 
@@ -158,12 +158,15 @@ def _blocks(comments: Sequence[tokenize.TokenInfo]) -> Iterator[Block]:
 def _metadata_rows(comments: Sequence[tokenize.TokenInfo]) -> set[int]:
     """Return the rows of PEP 723 blocks: `# /// script` to the next `# ///`.
 
-    An opening line that no closing line follows starts no block.
+    A block is comment lines at the margin, one after another: an opening line starts
+    none when another kind of line, or the end of the file, comes before a closing one.
     """
     rows: set[int] = set()
     block: list[int] = []
     for token in comments:
         line = token.line.rstrip("\r\n")
+        if block and token.start != (block[-1] + 1, 0):
+            block = []
         if block:
             block.append(token.start[0])
             if line == PEP_723_CLOSING:

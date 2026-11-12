@@ -144,7 +144,7 @@ def test_a_sentence_that_holds_rule_characters_is_no_banner(source):
     [
         "# %%",
         "# %% [markdown]",
-        "# In[3]:",
+        "# In[3]",
         "#: Seconds before a request times out",
         "# nosec B404",
         "# pylint: disable=invalid-name",
@@ -203,6 +203,17 @@ def test_a_pep_723_block_is_skipped_and_the_comments_around_it_are_not():
 
 def test_an_opening_line_of_pep_723_without_a_closing_one_skips_nothing():
     assert rules(PEP_723.removesuffix("# ///\n") + "x = 1\n") == [(3, "DOC-5")]
+
+
+@pytest.mark.parametrize(
+    "between",
+    ["x = 1\n", "\n", "x = 1  # A pin.\n", "    # A pin.\n"],
+    ids=["code", "blank-line", "comment-after-code", "indented-comment"],
+)
+def test_a_line_that_is_no_comment_at_the_margin_ends_a_pep_723_block(between):
+    source = f'# /// script\n# requires-python = ">=3.12"\n{between}# seconds\n# ///\n'
+
+    assert rules(source) == [(2, "DOC-5"), (4, "DOC-5"), (5, "DOC-5")]
 
 
 @pytest.mark.parametrize(
