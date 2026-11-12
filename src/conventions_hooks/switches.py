@@ -68,13 +68,18 @@ def check(
 
 
 def switches_of(tree: ast.Module) -> list[Switch]:
-    """Return the switches on a variant name in the functions of one module."""
-    return [
-        switch
-        for function in _functions(tree)
-        for switch in _switches(function)
-        if switch.key not in SKIPPED
-    ]
+    """Return the switches on a variant name in the functions of one module.
+
+    The conditional expressions come last: a repeat is looked for in the first switch
+    on a name, and an expression further up must not take that place from a statement.
+    """
+    statements: list[Switch] = []
+    conditionals: list[Switch] = []
+    for function in _functions(tree):
+        nodes = (function, *_own_nodes(function))
+        statements += _switches(nodes, function.name)
+        conditionals += _conditionals(nodes, function.name)
+    return [s for s in statements + conditionals if s.key not in SKIPPED]
 
 
 def _chains(switches: list[Switch], path: str) -> Iterator[Finding]:
@@ -162,23 +167,26 @@ def _functions(
             yield node
 
 
-def _switches(function: ast.FunctionDef | ast.AsyncFunctionDef) -> Iterator[Switch]:
-    for node in (function, *_own_nodes(function)):
+def _switches(nodes: Sequence[ast.AST], function: str) -> Iterator[Switch]:
+    for node in nodes:
         for field in ("body", "orelse", "finalbody"):
             block = getattr(node, field, None)
             if isinstance(block, list) and not _elif_tail(node, field):
-                yield from _runs(block, function.name)
+                yield from _runs(block, function)
         if isinstance(node, ast.Match):
-            yield from _match(node, function.name)
+            yield from _match(node, function)
 
 
 def _own_nodes(function: ast.AST) -> Iterator[ast.AST]:
     """Yield the nodes of a function, leaving out the functions nested in it."""
-    for child in ast.iter_child_nodes(function):
-        if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda):
-            continue
-        yield child
-        yield from _own_nodes(child)
+    # A stack, not recursion: a long sum or chain of calls nests thousands deep.
+    # Children go on it last first, so they come off in the order of the source.
+    stack = [*ast.iter_child_nodes(function)][::-1]
+    while stack:
+        node = stack.pop()
+        if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda):
+            yield node
+            stack += [*ast.iter_child_nodes(node)][::-1]
 
 
 def _elif_tail(node: ast.AST, field: str) -> bool:
@@ -242,6 +250,18 @@ def _match(node: ast.Match, function: str) -> Iterator[Switch]:
     )
     if key and arms:
         yield Switch(key, function, node.lineno, tuple(arms), closed=closed)
+
+
+def _conditionals(nodes: Sequence[ast.AST], function: str) -> Iterator[Switch]:
+    """Yield each `a if x == "v" else b` as a switch of one arm, at its test's line.
+
+    The arm returns `a`, so an expression that picks between new objects is the
+    factory, as the `if` statement that says the same would be.
+    """
+    for node in nodes:
+        if isinstance(node, ast.IfExp) and (test := _test(node.test)):
+            arm = Arm(test[1], (ast.Return(value=node.body),))
+            yield Switch(test[0], function, node.test.lineno, (arm,), closed=False)
 
 
 def _test(test: ast.expr) -> tuple[str, frozenset[str]] | None:

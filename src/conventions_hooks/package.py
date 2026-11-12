@@ -5,10 +5,12 @@ from __future__ import annotations
 import ast
 import functools
 import os
+import tokenize
 from collections.abc import Iterator
 from pathlib import Path, PurePath
 
 from conventions_hooks import switches, waivers
+from conventions_hooks.findings import UNREADABLE
 
 
 def top_package(path: Path) -> Path | None:
@@ -85,14 +87,16 @@ def _switches(module: Path) -> tuple[switches.Switch, ...]:
 def _parsed(module: Path, mtime_ns: int, size: int) -> tuple[switches.Switch, ...]:
     """Parse a module once per version: one run checks many files of one package.
 
-    `mtime_ns` and `size` only key the cache. A module that does not parse has no
-    switches here; ruff reports it when it is checked itself.
+    `mtime_ns` and `size` only key the cache. A module that Python cannot read or
+    parse has no switches here; ruff reports it when it is checked itself.
     """
     del mtime_ns, size
     try:
-        source = module.read_text(encoding="utf-8")
-        found = switches.switches_of(ast.parse(source))
-    except (OSError, ValueError, SyntaxError, RecursionError):
+        with tokenize.open(module) as file:
+            source = file.read()
+        tree = ast.parse(source)
+    except (OSError, *UNREADABLE):
         return ()
     waived = waivers.waived(source)
+    found = switches.switches_of(tree)
     return tuple(s for s in found if "ARC-9" not in waived.get(s.line, ()))

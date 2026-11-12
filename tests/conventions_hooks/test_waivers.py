@@ -21,5 +21,13 @@ def test_a_waiver_alone_on_its_line_covers_the_line_below():
     assert (found[2], found.get(3, set())) == ({"ARC-9"}, set())
 
 
+def test_lines_are_counted_as_python_counts_them_past_a_form_feed():
+    source = "x = 1\n\x0c\ny = os.environ  # conventions: ENV-3 - no paths.py here.\n"
+
+    assert {line: rules for line, rules in waived(source).items() if rules} == {
+        3: {"ENV-3"}
+    }
+
+
 def test_a_comment_that_names_no_rule_waives_nothing():
     assert not any(waived("x = 1  # conventions are fine.\n").values())

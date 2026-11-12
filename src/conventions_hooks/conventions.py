@@ -14,12 +14,13 @@ Each check stands in for a rule whose *Check* used to be review alone: no grab-b
 modules (LAY-2), heavy imports kept lazy (ARC-8), no branching on `kind` (ARC-4), a
 variant name switched on in one place of the package (ARC-9), no functions that only
 forward (ARC-10), registration outermost (FAM-2), attrs instead of `__init__` and
-dataclasses (TYP-4), options keyword-only (STY-4), lowercase error messages (ERR-3),
-snake_case log events (LOG-2) and test functions rather than classes (TST-1). In a
-project with a `src/<pkg>/paths.py`, repo paths and environment go through it (ENV-1,
-ENV-3). A justified exception is a comment naming the rule with its reason, on the
-flagged line or alone on the line above it:
+dataclasses (TYP-4), options keyword-only (STY-4), ASCII only (STY-8), lowercase error
+messages (ERR-3), snake_case log events (LOG-2) and test functions rather than classes
+(TST-1). In a project with a `src/<pkg>/paths.py`, repo paths and environment go
+through it (ENV-1, ENV-3). A justified exception is a comment naming the rule with its
+reason, on the flagged line or alone on the line above it:
 `# conventions: TYP-4 - the base class from httpx needs __init__.`
+A file that Python cannot read or parse is skipped: ruff reports it.
 """
 
 from __future__ import annotations
@@ -28,13 +29,14 @@ import ast
 import functools
 import re
 import sys
+import tokenize
 from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path, PurePath
 
 from attrs import frozen
 
 from conventions_hooks import forwarders, package, switches, waivers
-from conventions_hooks.findings import Finding, check_edit, check_paths
+from conventions_hooks.findings import UNREADABLE, Finding, check_edit, check_paths
 from conventions_hooks.settings import project_root
 
 GRAB_BAGS = frozenset({"utils", "util", "common", "core", "helpers", "misc"})
@@ -47,6 +49,7 @@ LOG_METHODS = frozenset(
 )
 LOGGERS = frozenset({"log", "logger"})
 EVENT = re.compile(r"[a-z][a-z0-9]*(_[a-z0-9]+)*")
+NON_ASCII = re.compile(r"[^\x00-\x7f]")
 EXCEPTION_SUFFIXES = ("Error", "Exception", "Warning")
 PLAIN_BASES = frozenset({"Protocol", "ABC", "Enum", "StrEnum", "IntEnum", "NamedTuple"})
 
@@ -64,10 +67,15 @@ def claude_hook(payload: str) -> int:
 
 def check_file(path: Path) -> list[Finding]:
     """Return the findings for one Python file, judged by its place in its project."""
+    try:
+        with tokenize.open(path) as file:
+            source = file.read()
+    except UNREADABLE:
+        return []  # Ruff reports a file that cannot be read as text.
     root = project_root(path.parent)
     inside = path.absolute().relative_to(root) if root else path
     return check_source(
-        path.read_text(encoding="utf-8"),
+        source,
         path=str(path),
         relative=str(inside),
         paths_module=bool(root and any(root.glob("src/*/paths.py"))),
@@ -96,10 +104,11 @@ def check_source(
     """
     try:
         tree = ast.parse(source)
-    except SyntaxError:
+    except UNREADABLE:
         return []  # Ruff reports the syntax error itself.
     where = _Where.of(relative or path, env=paths_module)
     findings = list(_module_name(where, relative or path, report=path))
+    findings += _non_ascii(source, path)
     if where.package:
         findings += _heavy_imports(tree, path)
     for node in ast.walk(tree):
@@ -169,6 +178,18 @@ def _module_name(where: _Where, relative: str, *, report: str) -> Iterator[Findi
                 f"`{name}` is a grab-bag module; name it after its one responsibility",
             )
             return
+
+
+def _non_ascii(source: str, path: str) -> Iterator[Finding]:
+    for number, line in enumerate(source.split("\n"), start=1):
+        if match := NON_ASCII.search(line):
+            yield Finding(
+                path,
+                number,
+                "STY-8",
+                f"non-ASCII character U+{ord(match[0]):04X}; "
+                "write it in ASCII or as an escape",
+            )
 
 
 def _heavy_imports(tree: ast.Module, path: str) -> Iterator[Finding]:
@@ -366,7 +387,7 @@ def _error_message(node: ast.Raise, path: str) -> Iterator[Finding]:
     ):
         return
     message = _literal_text(call.args[0])
-    if not message:
+    if not message.strip():
         return
     first = message.split(maxsplit=1)[0]
     if first.isalpha() and first[0].isupper() and first[1:].islower():
@@ -391,12 +412,11 @@ def _literal_text(node: ast.expr) -> str:
 
 
 def _name(node: ast.expr) -> str:
-    if isinstance(node, ast.Call):
-        return _name(node.func)
+    # A loop, not recursion: `table[0][1]...` nests as deep as it is long.
+    while isinstance(node, ast.Call | ast.Subscript):
+        node = node.func if isinstance(node, ast.Call) else node.value
     if isinstance(node, ast.Attribute):
         return node.attr
     if isinstance(node, ast.Name):
         return node.id
-    if isinstance(node, ast.Subscript):
-        return _name(node.value)
     return ""

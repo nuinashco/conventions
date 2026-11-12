@@ -61,6 +61,65 @@ def fraction(split):
             return 0.1
 """
 
+# The "Bad" example of ARC-9 in the guide.
+CONDITIONAL = """
+def start(cfg: RunConfig) -> None:
+    if cfg.backend == "modal":
+        ...
+    elif cfg.backend == "local":
+        ...
+
+
+def cost_usd(cfg: RunConfig) -> float:
+    return 0.3 if cfg.backend == "modal" else 0.0
+"""
+
+CONDITIONALS = """
+def label(mode):
+    return "T" if mode == "train" else "E"
+
+
+def steps(mode):
+    return (
+        100
+        if mode in ("train", "tune")
+        else 10
+    )
+"""
+
+# The first switch on `device` stays the one of `setup`, which `teardown` repeats.
+BELOW_A_CONDITIONAL = """
+def label(cfg):
+    return "GPU" if cfg.device == "cuda" else "CPU"
+
+
+def setup(cfg):
+    if cfg.device == "cpu":
+        pin()
+
+
+def teardown(cfg):
+    if cfg.device == "cpu":
+        unpin()
+"""
+
+# Walked in the order of the source, `stop` meets "x" first and so repeats `halt`.
+NESTED_FIRST = """
+def stop(mode, items):
+    for item in items:
+        for part in item:
+            if mode == "x":
+                drop(part)
+    while items:
+        if mode == "y":
+            items.pop()
+
+
+def halt(mode):
+    if mode == "x":
+        leave()
+"""
+
 
 @pytest.mark.parametrize(
     ("source", "expected"),
@@ -69,12 +128,20 @@ def fraction(split):
         (LONG_CHAIN, [(3, "ARC-9")]),
         (GUARDS, [(3, "ARC-9")]),
         (CONSTANTS, [(3, "ARC-9")]),
+        (CONDITIONAL, [(10, "ARC-9")]),
+        (CONDITIONALS, [(9, "ARC-9")]),
+        (BELOW_A_CONDITIONAL, [(12, "ARC-9")]),
+        (NESTED_FIRST, [(13, "ARC-9")]),
     ],
     ids=[
         "same-variant-in-two-functions",
         "three-arms-run-code",
         "three-guard-clauses",
         "three-arms-map-constants",
+        "conditional-expression-repeats-a-chain",
+        "two-conditional-expressions",
+        "statements-below-a-conditional-expression",
+        "nested-switch-met-first",
     ],
 )
 def test_switches_on_a_variant_name_are_reported(source, expected):
@@ -99,8 +166,21 @@ def test_switches_on_a_variant_name_are_reported(source, expected):
         "def a(x):\n    if x.mode == 'fast':\n        go()\n\n\n"
         "def b(x):\n    if x.split == 'fast':\n        go()\n",
         "if __name__ == '__main__':\n    main()\n",
+        # The factory written as a conditional expression.
+        "def build(cfg):\n"
+        "    return Modal() if cfg.backend == 'modal' else Local()\n\n\n"
+        "def cost(cfg):\n    if cfg.backend == 'modal':\n        return bill()\n",
+        # Deeper than the recursion limit.
+        "def total(a):\n    return " + " + ".join(["a"] * 3000) + "\n",
     ],
-    ids=["factory", "closed-match", "different-names", "main-guard"],
+    ids=[
+        "factory",
+        "closed-match",
+        "different-names",
+        "main-guard",
+        "factory-as-conditional-expression",
+        "long-sum",
+    ],
 )
 def test_one_switch_in_one_place_passes(source):
     assert found(source) == []
@@ -112,15 +192,19 @@ START = (
     "    elif cfg.backend == 'local':\n        run()\n"
 )
 COST = "def cost(cfg):\n    if cfg.backend == 'modal':\n        return bill()\n"
+COST_IN_ONE_LINE = "def cost(cfg):\n    return 0.3 if cfg.backend == 'modal' else 0.0\n"
 
 
-def test_a_switch_repeated_in_another_module_is_reported_with_its_place():
+@pytest.mark.parametrize(
+    "source", [COST, COST_IN_ONE_LINE], ids=["statement", "conditional-expression"]
+)
+def test_a_switch_repeated_in_another_module_is_reported_with_its_place(source):
     other = switches.Elsewhere(
         "src/demo/start.py", switches.switches_of(ast.parse(START))[0]
     )
 
     findings = switches.check(
-        ast.parse(COST), "src/demo/cost.py", elsewhere=lambda: [other]
+        ast.parse(source), "src/demo/cost.py", elsewhere=lambda: [other]
     )
 
     assert [(f.line, f.rule) for f in findings] == [(2, "ARC-9")]

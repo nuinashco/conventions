@@ -105,6 +105,25 @@ def test_a_module_that_cannot_be_read_is_skipped(demo_package):
     assert rules(demo / "cost.py") == [(2, "ARC-9")]
 
 
+@pytest.mark.parametrize(
+    "data",
+    [b"# coding: hex\nx = 1\n", b"x = " + b"-" * 20_000 + b"1\n"],
+    ids=["codec-that-is-no-text-encoding", "too-deep-to-parse"],
+)
+def test_a_module_python_cannot_read_does_not_stop_the_check(demo_package, data):
+    demo = demo_package({"start.py": START, "cost.py": COST})
+    (demo / "odd.py").write_bytes(data)
+
+    assert rules(demo / "cost.py") == [(2, "ARC-9")]
+
+
+def test_the_other_modules_are_read_the_way_python_reads_them(demo_package):
+    demo = demo_package({"cost.py": COST})
+    (demo / "start.py").write_bytes(b"\xef\xbb\xbf" + START.encode())
+
+    assert rules(demo / "cost.py") == [(2, "ARC-9")]
+
+
 def test_a_waived_switch_does_not_count_against_the_other_modules(demo_package):
     waiver = "    # conventions: ARC-9 - the launcher alone knows every backend.\n"
     waived = START.replace("    if cfg", waiver + "    if cfg", 1)

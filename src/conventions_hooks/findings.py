@@ -4,12 +4,27 @@ from __future__ import annotations
 
 import json
 import sys
+import tokenize
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from attrs import frozen
 
 from conventions_hooks.settings import Settings, SettingsError
+
+# What Python raises for a file it cannot read or parse; the checks skip such a file.
+# Besides a syntax error: bytes outside the declared encoding or a lone surrogate
+# (`ValueError`), a coding cookie that names no text encoding (`LookupError`), and
+# nesting too deep for the compiler (`RecursionError`) or the parser (`MemoryError`).
+# Catch it around the read and the parse alone: a bug in a check raises the same.
+UNREADABLE = (
+    SyntaxError,
+    tokenize.TokenError,
+    ValueError,
+    LookupError,
+    RecursionError,
+    MemoryError,
+)
 
 
 @frozen

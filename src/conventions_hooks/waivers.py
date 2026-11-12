@@ -13,7 +13,8 @@ def waived(source: str) -> dict[int, set[str]]:
     A waiver covers its own line, and the line below when it stands alone on its own.
     """
     lines: dict[int, set[str]] = {}
-    for number, line in enumerate(source.splitlines(), start=1):
+    # Python counts a new line at "\n" alone; `splitlines` also breaks at a form feed.
+    for number, line in enumerate(source.split("\n"), start=1):
         rules = set(WAIVER.findall(line))
         lines.setdefault(number, set()).update(rules)
         if rules and line.lstrip().startswith("#"):
