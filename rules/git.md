@@ -43,7 +43,8 @@ deleted. GitHub appends ` (#N)` to the title, so PR titles stay within 65 charac
 
 ### GIT-5 MUST
 
-Secrets, data, run outputs and notebook outputs are never committed.
+Secrets, data, run outputs and notebook outputs are never committed. A third-party notebook kept as published
+(TOOL-5) is the exception: it keeps its outputs.
 
 *Check:* gitleaks, nbstripout, `.gitignore`.
 

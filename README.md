@@ -25,7 +25,8 @@ You need [uv](https://docs.astral.sh/uv/), and the repo's `requires-python` must
    then install on 3.12 and later only.
 
 2. Opt the repo in, in its root `pyproject.toml`. The nearest `pyproject.toml` above a file decides, so a
-   workspace member with its own `pyproject.toml` needs its own table:
+   workspace member with its own `pyproject.toml` needs its own table. `check-protected` alone looks past one
+   without the table, so vendored code that brings its own stays protected:
 
    ```toml
    [tool.conventions]
@@ -104,11 +105,13 @@ src/demo/worker.py:7: ERR-3 error messages have no trailing period
 
   </details>
 
-- **While Claude edits.** The plugin does this by itself, with the repo's own `.venv/bin/<command>`:
+- **While Claude edits.** The plugin does this by itself, with the `.venv/bin/<command>` of the folder Claude
+  was started in or of the nearest folder above it, as a uv workspace or a git worktree needs:
   `check-protected` before an edit, `check-comments` and `check-conventions` after it, and `review-comments` in the
   background once Claude hands back. That review is one `claude -p` call on your account, made only after a turn
   that left new comments; `REVIEW_COMMENTS_MODEL` picks its model, and listing DOC-2 to DOC-7 in `ignore` turns
-  it off. The plugin does nothing in a repo without the `[tool.conventions]` table.
+  it off. The plugin does nothing in a repo without the `[tool.conventions]` table. When a hook says
+  `.venv/bin/<command> cannot start`, the folder was moved after `uv sync`: run `rm -rf .venv && uv sync`.
 
 ### Turn a rule off
 
