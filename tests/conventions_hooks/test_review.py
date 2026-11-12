@@ -283,6 +283,27 @@ def test_a_finding_is_not_repeated_when_its_hunk_is_sent_again(repo, capsys):
     assert (first, second, len(calls), capsys.readouterr().err) == (2, 0, 2, "")
 
 
+def test_a_finding_that_quotes_unchanged_lines_too_is_not_repeated_with_its_hunk(
+    repo,
+):
+    calls: list[str] = []
+    docstring = ['    """Return one.', "", "    Calls the helper.", '    """']
+    (repo / "module.py").write_text("\n".join(["def f():", *docstring, "    1"]) + "\n")
+    commit(repo)
+    docstring[0] = '    """Return the value.'
+    quote = "\n".join(docstring).strip()
+    ask = answering(verdict({**FINDING, "path": "module.py", "quote": quote}), calls)
+    (repo / "module.py").write_text("\n".join(["def f():", *docstring, "    1"]) + "\n")
+    first = claude_hook(stop(), repo, ask=ask)
+    (repo / "module.py").write_text(
+        "\n".join(["def f():", *docstring, "    # Why not two.", "    1"]) + "\n"
+    )
+
+    second = claude_hook(stop(), repo, ask=ask)
+
+    assert (first, second, len(calls)) == (2, 0, 2)
+
+
 def test_only_the_hunk_with_a_new_comment_is_sent_under_its_file_header(repo):
     calls: list[str] = []
     ask = answering(verdict(), calls)
@@ -482,6 +503,58 @@ def test_the_other_files_are_reviewed_beside_a_file_over_the_limit(repo, capsys)
         "FAIL",
         "new.py:1: DOC-4 restates the code ('# Add one.'); delete it",
     ]
+
+
+def test_the_largest_file_is_left_out_when_files_under_the_limit_are_over_it_together(
+    repo, capsys
+):
+    calls: list[str] = []
+    ask = answering(verdict(), calls)
+    (repo / "table.py").write_text("# Generated table.\n" + "x = 1\n" * 18_000)
+    (repo / "other.py").write_text("# Generated list.\n" + "y = 2\n" * 16_000)
+    (repo / "new.py").write_text("# Add one.\nx = 1 + 1\n")
+
+    codes = (claude_hook(stop(), repo, ask=ask), claude_hook(stop(), repo, ask=ask))
+
+    assert (codes, len(calls)) == ((1, 0), 1)
+    assert [name in sent(calls[0]) for name in ("new.py", "other.py", "table.py")] == [
+        True,
+        True,
+        False,
+    ]
+    assert re.fullmatch(
+        r"review-comments: table.py adds \d+ characters of diff, which takes the "
+        r"review over the limit of 200000; not reviewed\n",
+        capsys.readouterr().err,
+    )
+
+
+def test_a_file_over_the_limit_is_named_once_when_the_review_of_the_rest_fails(
+    repo, capsys
+):
+    calls: list[str] = []
+
+    def failing(args: list[str], stdin: str) -> str:
+        calls.append(stdin)
+        raise ReviewError("claude failed: no MCP servers")
+
+    (repo / "table.py").write_text("# Generated table.\n" + "x = 1\n" * 40_000)
+    (repo / "new.py").write_text("# Add one.\nx = 1 + 1\n")
+    first = claude_hook(stop(), repo, ask=failing)
+    over, error = capsys.readouterr().err.splitlines()
+
+    second = claude_hook(stop(), repo, ask=failing)
+
+    assert (first, second, ["+++ b/new.py" in sent(call) for call in calls]) == (
+        1,
+        1,
+        [True, True],
+    )
+    assert over.startswith("review-comments: table.py adds ")
+    assert (error, capsys.readouterr().err) == (
+        "review-comments: claude failed: no MCP servers",
+        "review-comments: claude failed: no MCP servers\n",
+    )
 
 
 def test_review_false_turns_the_review_off_on_the_command_line_and_as_a_hook(

@@ -25,12 +25,13 @@ As a Stop hook the plugin runs it with `asyncRewake`: Claude hands back at once 
 woken, by exit code 2, only when there are findings. The hook reads the working tree's
 diff against HEAD, untracked files included, and reviews a file when the nearest
 `pyproject.toml` above it has the table. `.git/review-comments` holds a digest of each
-line sent that is still in that diff, and the findings handed to Claude whose quote
-that diff still adds. Only the hunks that add a line with `#`, a triple quote or
-`description=` that is not listed there are sent, each under the header of its file,
-so a turn that adds no such line sends nothing, and a finding listed there is not
-handed over again. The limit applies to each file: one whose new hunks alone are over
-it is named once and left out, and the other files are reviewed.
+line sent, or left out for its size, that is still in that diff, and the findings
+handed to Claude whose quote that diff still adds, in part at least. Only the hunks
+that add a line with `#`, a triple quote or `description=` that is not listed there
+are sent, each under the header of its file, so a turn that adds no such line sends
+nothing, and a finding listed there is not handed over again. Files are left out, each
+named once, until the rest is within the limit: first a file whose new hunks alone are
+over it, then the largest of the others. The rest is reviewed.
 """
 
 from __future__ import annotations
@@ -267,16 +268,14 @@ def claude_hook(payload: str, root: Path, *, ask: Ask) -> int:
     diffs = working_diff(root)
     new, lines = _new_hunks(diffs, seen)
     # The lines of a file left out stay in `lines`, so it is named at one Stop only.
-    too_long = {
-        path: len(text) for path, text in new.items() if len(text) > MAX_DIFF_CHARS
-    }
-    for path, size in too_long.items():
+    left_out = _left_out(new)
+    for path, why in left_out.items():
         print(
-            f"review-comments: {path} adds {size} characters of diff, over the limit "
+            f"review-comments: {path} adds {len(new[path])} characters of diff, {why} "
             f"of {MAX_DIFF_CHARS}; not reviewed",
             file=sys.stderr,
         )
-    diff = "\n".join(text for path, text in new.items() if path not in too_long)
+    diff = "\n".join(text for path, text in new.items() if path not in left_out)
     # Findings Claude chose to leave, for example because the user asked for that text,
     # would otherwise wake it again whenever their hunk is sent again. One whose text
     # was removed is forgotten, so the text written again is judged afresh.
@@ -287,6 +286,11 @@ def claude_hook(payload: str, root: Path, *, ask: Ask) -> int:
             verdict = _judge(diff, comment_rules(), ask=ask)
         except ReviewError as e:
             print(f"review-comments: {e}", file=sys.stderr)
+            if left_out:
+                # The rest is sent again at the next Stop; the files left out are not
+                # named again.
+                skipped = _new_hunks({path: diffs[path] for path in left_out}, set())[1]
+                _write(state, seen | skipped, told)
             return 1
         fresh = [
             f
@@ -297,12 +301,10 @@ def claude_hook(payload: str, root: Path, *, ask: Ask) -> int:
         passed, answer = _report(verdict, fresh)
         handed |= {_key(f) for f in fresh if f["path"] in diffs}
     if (lines, handed) != (seen, told):
-        state.write_text(
-            json.dumps({"lines": sorted(lines), "findings": sorted(handed)})
-        )
+        _write(state, lines, handed)
     if passed:
         # Claude Code shows the user what a hook that exits 1 wrote on stderr.
-        return 1 if too_long else 0
+        return 1 if left_out else 0
     print(answer, file=sys.stderr)
     return 2
 
@@ -362,6 +364,27 @@ def _new_hunks(
     return parts, lines
 
 
+def _left_out(new: dict[str, str]) -> dict[str, str]:
+    """Return the files to leave out so that the rest fits in one review, with why.
+
+    A file whose new hunks alone are over the limit goes first, then the largest of the
+    others until the rest is within it.
+    """
+    out = {
+        path: "over the limit"
+        for path, text in new.items()
+        if len(text) > MAX_DIFF_CHARS
+    }
+    rest = sorted((path for path in new if path not in out), key=lambda p: len(new[p]))
+    # The rest is sent joined by newlines.
+    size = sum(len(new[path]) + 1 for path in rest) - 1
+    while size > MAX_DIFF_CHARS:
+        path = rest.pop()
+        out[path] = "which takes the review over the limit"
+        size -= len(new[path]) + 1
+    return out
+
+
 def _candidates(path: str, hunk: str) -> set[str]:
     """Return a digest of each line `hunk` adds that may hold a comment.
 
@@ -377,11 +400,21 @@ def _candidates(path: str, hunk: str) -> set[str]:
 
 
 def _quoted(quote: str, diff: str) -> bool:
-    """Return whether each line of `quote` is still part of a line that `diff` adds."""
+    """Return whether a line of `quote` is still part of a line that `diff` adds.
+
+    One line is enough, since a quote may run on into lines the diff only shows as
+    context. A line without a letter or a digit, such as a bare triple quote, does not
+    count.
+    """
     _, *hunks = re.split(r"\n(?=@@ )", diff)
     added = [line for hunk in hunks for line in hunk.split("\n") if line[:1] == "+"]
     parts = (part.strip() for part in quote.split("\n"))
-    return all(any(part in line for line in added) for part in parts if part)
+    return any(
+        part in line
+        for part in parts
+        if any(char.isalnum() for char in part)
+        for line in added
+    )
 
 
 def _ignored(root: Path, path: str) -> frozenset[str] | None:
@@ -408,6 +441,10 @@ def _read(state: Path) -> tuple[set[str], set[tuple[str, str, str]]]:
         return set(data["lines"]), findings
     except (OSError, ValueError, TypeError, KeyError):
         return set(), set()
+
+
+def _write(state: Path, lines: set[str], findings: set[tuple[str, str, str]]) -> None:
+    state.write_text(json.dumps({"lines": sorted(lines), "findings": sorted(findings)}))
 
 
 def _key(finding: dict[str, Any]) -> tuple[str, str, str]:

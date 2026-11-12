@@ -61,7 +61,7 @@ src/demo/worker.py:7: ERR-3 error messages have no trailing period
 |---|---|
 | `check-comments` | Comments are sentences, there are no section banners, class docstrings are noun phrases. |
 | `check-conventions` | The code rules an AST can decide, such as attrs classes, keyword-only options and one switch per variant. |
-| `check-commit-msg` | A commit message is one line of at most 72 characters without articles; a `type(scope): subject` one is lowercase with no final period. `conventional-pre-commit` checks that shape. |
+| `check-commit-msg` | A commit message is one line of at most 72 characters without articles; a `type(scope): subject` one has a lowercase type, starts its subject in lowercase and ends without a period. `conventional-pre-commit` checks that shape. |
 | `check-protected` | Generated, vendored and published files are not edited by hand. |
 | `review-comments` | New comments and docstrings in the staged diff say only what the code cannot. It asks Claude (`claude -p`). |
 
@@ -122,7 +122,7 @@ src/demo/worker.py:7: ERR-3 error messages have no trailing period
   - It does nothing in a repo without the `[tool.conventions]` table, and runs the project's own `.venv/bin/<command>`
     ([how it finds it](CONTRIBUTING.md#how-the-plugin-finds-the-checks)).
   - The review is one `claude -p` call on your account, after a turn that left new comments; `REVIEW_COMMENTS_MODEL`
-    picks its model. A file that adds more than 200,000 characters of diff is left out, and named once.
+    picks its model. It sends at most 200,000 characters of diff: a file that does not fit is left out, and named once.
   - `review = false` in the table turns the review off and leaves the other checks on. Set it where your organization
     deploys a `managed-mcp.json`: there the CLI refuses to start, and the review ends in that error.
 
