@@ -58,7 +58,7 @@ repos:
         files: ^(rules/|agents/|src/conventions_hooks/rules\.py$|GUIDE\.md$|COVERAGE\.md$|plugins/conventions/(skills|agents)/|src/conventions_hooks/doc_rules\.md$)
         pass_filenames: false
       - id: check-commit-msg
-        name: commit message is one line without articles (GUIDE GIT-1, GIT-2)
+        name: commit message is one short conventional line (GUIDE GIT-1, GIT-2)
         entry: uv run check-commit-msg
         language: system
         stages: [commit-msg]

@@ -482,9 +482,9 @@ def _dataclasses(tree: ast.Module, path: str) -> Iterator[Finding]:
                     )
         elif (
             isinstance(node, ast.Call)
-            and node not in inside
             and isinstance(node.func, ast.Attribute)
             and node.func.attr in DATACLASS_CALLS
+            and not (node in inside and node.func.attr == "field")
             and isinstance(node.func.value, ast.Name)
             and node.func.value.id in modules
         ):

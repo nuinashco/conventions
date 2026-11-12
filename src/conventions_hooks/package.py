@@ -104,5 +104,5 @@ def _parsed(module: Path, mtime_ns: int, size: int) -> tuple[switches.Switch, ..
     except (OSError, *UNREADABLE):
         return ()
     waived = waivers.waived(source, tree)
-    found = switches.switches_of(tree)
-    return tuple(s for s in found if "ARC-9" not in waived.get(s.line, ()))
+    lines = {line for line, rules in waived.items() if "ARC-9" in rules}
+    return tuple(s for s in switches.switches_of(tree) if not s.waived(lines))

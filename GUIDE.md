@@ -313,12 +313,13 @@ and research code mostly gains variants. Coding agents grow conditional chains r
 *Check:* `check-conventions` flags a variant name switched on with the same values in two functions of a package, and a
 chain of three arms on one name. It does not report the factory itself, whose every arm builds an object, but a second
 function that branches on one of its values is reported. It leaves alone a `match` that ends in `assert_never`, a value
-that does not read as a name (a file suffix, an empty string), and only these names that Python or a library owns: a
-dunder such as `__name__`, `os.name`, `sys.platform`, `sys.implementation.name`, a call such as `platform.system()`,
-`device.type` and a `dtype`; any other `name`, even a `Path.name`, counts as the project's. A waiver above any `if` of
-a run of guard clauses waives the run, and a waived switch does not count against the others. Across modules it reads
-the package's folders that have an `__init__.py`, tests aside, and one of the two switches is the factory or has two
-arms or more; review for switches on `StrEnum` members, on `isinstance`, and through dicts of functions.
+that does not read as a name (a file suffix, an empty string), any call (`platform.system()`, `cfg.backend.lower()`),
+and only these names that Python or a library owns: a dunder such as `__name__`, `os.name`, `sys.platform`,
+`sys.implementation.name`, `device.type` and a `dtype`; any other `name`, even a `Path.name`, counts as the project's. A
+waiver above any `if` of a run of guard clauses waives the run, and a waived switch does not count against the others.
+Across modules it reads the package's folders that have an `__init__.py`, tests aside, and one of the two switches is
+the factory or has two arms or more; review for switches on `StrEnum` members, on `isinstance`, and through dicts of
+functions.
 
 ### ARC-10 SHOULD
 
@@ -589,8 +590,8 @@ the code doesn't (the plugin's `Stop` hook, and `uv run review-comments` for the
 ### DOC-5 MUST
 
 Comments are sentences: capitalised and ending with a period. A sentence that opens with a lowercase name puts it in
-backticks (`` `git` is not installed. ``). A comment a tool reads is not one: `# noqa`, `# type:`, a `# %%` cell
-marker, a PEP 723 block.
+backticks (`` `git` is not installed. ``). A comment a tool reads is not one: `# noqa`, `# type:`, an `SPDX-` line, a
+`# %%` cell marker and the text of a jupytext markdown cell, a PEP 723 block.
 
 *Check:* `check-comments`, in pre-commit and as a Claude Code `PostToolUse` hook on every edited `.py` file.
 
@@ -814,7 +815,8 @@ Example: `fix(proxy): retry on 429 from upstream`, not `fix(proxy): add a retry 
 ([Beams](https://cbea.ms/git-commit/)).
 
 *Check:* the `conventional-pre-commit` and `check-commit-msg` commit-msg hooks, for the type, the lowercase start, the
-period, the length and the articles; review for the imperative and for filler.
+period, the length and the articles, except in a subject that git writes (`Merge `, `fixup! `, `amend! `, `squash! `);
+review for the imperative and for filler.
 
 ### GIT-2 MUST
 
@@ -949,6 +951,7 @@ holds. The choices behind the shared library (families, the config bridge, confi
 | commits | standard types, imperative, one line, no articles | custom `doc`/`ref`; behaviour-as-fact subjects; bodies with the why | default tooling accepts them; git convention; terse history you can scan |
 | merging | squash | rebase-merge; commit to main | messy branch history is fine; `main` stays one commit per change |
 | Python | latest stable | 3.12 floor | newest language features; pin lower per project when forced |
+| this repo's README length | about 150 lines, the pre-commit snippet folded in it | about 100 lines (RDOC-1), the snippet in a linked file | a reader adding the conventions to an existing repo copies the hooks from the page they are reading; folded, the page shows about 120 lines |
 
 ## Sources
 

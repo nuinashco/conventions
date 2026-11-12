@@ -173,12 +173,13 @@ and research code mostly gains variants. Coding agents grow conditional chains r
 *Check:* `check-conventions` flags a variant name switched on with the same values in two functions of a package, and a
 chain of three arms on one name. It does not report the factory itself, whose every arm builds an object, but a second
 function that branches on one of its values is reported. It leaves alone a `match` that ends in `assert_never`, a value
-that does not read as a name (a file suffix, an empty string), and only these names that Python or a library owns: a
-dunder such as `__name__`, `os.name`, `sys.platform`, `sys.implementation.name`, a call such as `platform.system()`,
-`device.type` and a `dtype`; any other `name`, even a `Path.name`, counts as the project's. A waiver above any `if` of
-a run of guard clauses waives the run, and a waived switch does not count against the others. Across modules it reads
-the package's folders that have an `__init__.py`, tests aside, and one of the two switches is the factory or has two
-arms or more; review for switches on `StrEnum` members, on `isinstance`, and through dicts of functions.
+that does not read as a name (a file suffix, an empty string), any call (`platform.system()`, `cfg.backend.lower()`),
+and only these names that Python or a library owns: a dunder such as `__name__`, `os.name`, `sys.platform`,
+`sys.implementation.name`, `device.type` and a `dtype`; any other `name`, even a `Path.name`, counts as the project's. A
+waiver above any `if` of a run of guard clauses waives the run, and a waived switch does not count against the others.
+Across modules it reads the package's folders that have an `__init__.py`, tests aside, and one of the two switches is
+the factory or has two arms or more; review for switches on `StrEnum` members, on `isinstance`, and through dicts of
+functions.
 
 ### ARC-10 SHOULD
 
@@ -359,7 +360,8 @@ Example: `fix(proxy): retry on 429 from upstream`, not `fix(proxy): add a retry 
 ([Beams](https://cbea.ms/git-commit/)).
 
 *Check:* the `conventional-pre-commit` and `check-commit-msg` commit-msg hooks, for the type, the lowercase start, the
-period, the length and the articles; review for the imperative and for filler.
+period, the length and the articles, except in a subject that git writes (`Merge `, `fixup! `, `amend! `, `squash! `);
+review for the imperative and for filler.
 
 ### GIT-3 MUST
 

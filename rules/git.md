@@ -22,7 +22,8 @@ Example: `fix(proxy): retry on 429 from upstream`, not `fix(proxy): add a retry 
 ([Beams](https://cbea.ms/git-commit/)).
 
 *Check:* the `conventional-pre-commit` and `check-commit-msg` commit-msg hooks, for the type, the lowercase start, the
-period, the length and the articles; review for the imperative and for filler.
+period, the length and the articles, except in a subject that git writes (`Merge `, `fixup! `, `amend! `, `squash! `);
+review for the imperative and for filler.
 
 ### GIT-2 MUST
 

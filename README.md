@@ -51,10 +51,9 @@ Run a check on any files. Each finding names its rule, which [GUIDE.md](GUIDE.md
 
 ```console
 $ uv run check-conventions src/demo/worker.py
-src/demo/worker.py:4: STY-4 optional parameter `retries` goes after `*`, keyword-only
+src/demo/worker.py:4: STY-4 optional parameter `retries` goes after `*`, keyword-only, unless a caller outside the project fixes the signature: then waive it
 src/demo/worker.py:6: ARC-4 branch on a declared capability (`ClassVar[bool]`), not on `kind`
-src/demo/worker.py:7: ERR-3 error messages start lowercase
-src/demo/worker.py:7: ERR-3 error messages have no trailing period
+src/demo/worker.py:7: ERR-3 error messages start lowercase; error messages have no trailing period
 ```
 
 | command | checks |

@@ -156,6 +156,21 @@ def test_a_waived_switch_does_not_count_against_the_other_modules(demo_package):
     assert (rules(demo / "start.py"), rules(demo / "cost.py")) == ([], [])
 
 
+def test_a_run_waived_above_any_of_its_ifs_does_not_count_elsewhere(demo_package):
+    render = (
+        "def render(rows, *, fmt):\n"
+        "    # conventions: ARC-9 - the formats share nothing worth a class.\n"
+        "    if fmt == '':\n        return to_text(rows)\n"
+        "    if fmt == 'csv':\n        return to_csv(rows)\n"
+        "    if fmt == 'json':\n        return to_json(rows)\n"
+        "    if fmt == 'md':\n        return to_markdown(rows)\n"
+    )
+    header = "def header(fmt):\n    if fmt == 'csv':\n        return 'a,b'\n"
+    demo = demo_package({"render.py": render, "header.py": header})
+
+    assert (rules(demo / "render.py"), rules(demo / "header.py")) == ([], [])
+
+
 def test_a_module_changed_since_the_last_check_is_read_again(demo_package):
     demo = demo_package({"start.py": START, "cost.py": COST})
 

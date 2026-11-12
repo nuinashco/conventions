@@ -70,8 +70,8 @@ the code doesn't (the plugin's `Stop` hook, and `uv run review-comments` for the
 ### DOC-5 MUST
 
 Comments are sentences: capitalised and ending with a period. A sentence that opens with a lowercase name puts it in
-backticks (`` `git` is not installed. ``). A comment a tool reads is not one: `# noqa`, `# type:`, a `# %%` cell
-marker, a PEP 723 block.
+backticks (`` `git` is not installed. ``). A comment a tool reads is not one: `# noqa`, `# type:`, an `SPDX-` line, a
+`# %%` cell marker and the text of a jupytext markdown cell, a PEP 723 block.
 
 *Check:* `check-comments`, in pre-commit and as a Claude Code `PostToolUse` hook on every edited `.py` file.
 

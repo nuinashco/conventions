@@ -277,8 +277,9 @@ def claude_hook(payload: str, root: Path, *, ask: Ask) -> int:
         )
     diff = "\n".join(text for path, text in new.items() if path not in left_out)
     # Findings Claude chose to leave, for example because the user asked for that text,
-    # would otherwise wake it again whenever their hunk is sent again. One whose text
-    # was removed is forgotten, so the text written again is judged afresh.
+    # would otherwise wake it again whenever their hunk is sent again. One whose quote
+    # no longer appears among the added lines, even in part, is forgotten, so the text
+    # written again is judged afresh.
     handed = {f for f in told if f[0] in diffs and _quoted(f[2], diffs[f[0]])}
     passed, answer = True, ""
     if diff:

@@ -11,7 +11,7 @@
   language: python
   types: [python]
 - id: check-commit-msg
-  name: commit message is one line without articles (GUIDE GIT-1, GIT-2)
+  name: commit message is one short conventional line (GUIDE GIT-1, GIT-2)
   entry: check-commit-msg
   language: python
   stages: [commit-msg]
