@@ -89,7 +89,7 @@ def steps(mode):
     )
 """
 
-# The first switch on `device` stays the one of `setup`, which `teardown` repeats.
+# A conditional expression above does not hide that `teardown` repeats `setup`.
 BELOW_A_CONDITIONAL = """
 def label(cfg):
     return "GPU" if cfg.device == "cuda" else "CPU"
@@ -348,6 +348,104 @@ def second(mode):
     return 2 if mode == "train" else 0
 """
 
+# The factory is never reported, but a function on one of its values is, wherever it is.
+FACTORY_THEN_COST = """
+def build(cfg):
+    if cfg.backend == "modal":
+        return Modal()
+    elif cfg.backend == "local":
+        return Local()
+
+
+def cost(cfg):
+    if cfg.backend == "modal":
+        return bill()
+    return 0.0
+"""
+
+COST_THEN_FACTORY = """
+def cost(cfg):
+    if cfg.backend == "modal":
+        return bill()
+    return 0.0
+
+
+def build(cfg):
+    if cfg.backend == "modal":
+        return Modal()
+    elif cfg.backend == "local":
+        return Local()
+"""
+
+FACTORY_AS_CONDITIONAL = """
+def build(cfg):
+    return Modal() if cfg.backend == "modal" else Local()
+
+
+def cost(cfg):
+    if cfg.backend == "modal":
+        return bill()
+"""
+
+# A short switch is compared with a long chain below it, as with one above it.
+ABOVE_A_CHAIN = """
+def label(cfg):
+    if cfg.backend == "modal":
+        return "cloud"
+    return "home"
+
+
+def start(cfg):
+    if cfg.backend == "modal":
+        launch_modal()
+    elif cfg.backend == "local":
+        launch_local()
+    elif cfg.backend == "slurm":
+        launch_slurm()
+"""
+
+# `cost` repeats `start`, though `submit` came first on `backend`.
+THIRD_FIRST = """
+def submit(cfg):
+    if cfg.backend == "slurm":
+        queue()
+
+
+def start(cfg):
+    if cfg.backend == "modal":
+        launch()
+
+
+def cost(cfg):
+    if cfg.backend == "modal":
+        return bill()
+    return 0.0
+"""
+
+# A leading underscore marks a function as private, not as a class.
+PRIVATE_FUNCTIONS = """
+def build(backend):
+    if backend == "modal":
+        return _modal()
+    if backend == "local":
+        return _local()
+    if backend == "slurm":
+        return _slurm()
+    raise UnknownBackendError(backend)
+"""
+
+# The name of a model in a config is the project's own variant name.
+MODEL_NAME = """
+def load(cfg):
+    if cfg.model.name == "llama":
+        return load_llama(cfg)
+    if cfg.model.name == "qwen":
+        return load_qwen(cfg)
+    if cfg.model.name == "gemma":
+        return load_gemma(cfg)
+    raise UnknownModelError(cfg.model.name)
+"""
+
 
 @pytest.mark.parametrize(
     ("source", "expected"),
@@ -378,6 +476,13 @@ def second(mode):
         (EMPTY_GUARD_BETWEEN, [(3, "ARC-9")]),
         (EMPTY_CONDITIONAL_FIRST, [(11, "ARC-9")]),
         (MEMBERSHIP_ON_NON_NAMES_FIRST, [(3, "ARC-9")]),
+        (FACTORY_THEN_COST, [(10, "ARC-9")]),
+        (COST_THEN_FACTORY, [(3, "ARC-9")]),
+        (FACTORY_AS_CONDITIONAL, [(7, "ARC-9")]),
+        (ABOVE_A_CHAIN, [(9, "ARC-9"), (3, "ARC-9")]),
+        (THIRD_FIRST, [(13, "ARC-9")]),
+        (PRIVATE_FUNCTIONS, [(3, "ARC-9")]),
+        (MODEL_NAME, [(3, "ARC-9")]),
     ],
     ids=[
         "same-variant-in-two-functions",
@@ -406,6 +511,13 @@ def second(mode):
         "empty-string-guard-between",
         "conditional-expression-on-an-empty-string-first",
         "membership-on-non-names-first",
+        "function-below-the-factory",
+        "function-above-the-factory",
+        "factory-as-conditional-expression",
+        "short-switch-above-a-long-chain",
+        "repeat-after-a-third-function",
+        "arms-call-private-functions",
+        "name-of-a-model",
     ],
 )
 def test_switches_on_a_variant_name_are_reported(source, expected):
@@ -472,6 +584,12 @@ def coloured(fmt):
         "    elif backend == 'slurm':\n        runner = SlurmRunner.of(cfg)\n"
         "    else:\n        raise UnknownBackendError(backend)\n"
         "    return runner\n",
+        # The classes of the factory may be private to its module (STY-5).
+        "def clock(kind_of_clock):\n"
+        "    if kind_of_clock == 'wall':\n        return _Wall()\n"
+        "    if kind_of_clock == 'cuda':\n        return _Cuda.from_env()\n"
+        "    if kind_of_clock == 'fake':\n        return clocks._Fake()\n"
+        "    raise UnknownClockError(kind_of_clock)\n",
         # A closed set that gains operations stays a match ending in `assert_never`.
         "def describe(shape):\n    match shape.form:\n"
         "        case 'circle':\n            draw()\n"
@@ -542,9 +660,7 @@ def coloured(fmt):
         "def b(x):\n    if x.split == 'fast':\n        go()\n",
         "if __name__ == '__main__':\n    main()\n",
         # The factory written as a conditional expression.
-        "def build(cfg):\n"
-        "    return Modal() if cfg.backend == 'modal' else Local()\n\n\n"
-        "def cost(cfg):\n    if cfg.backend == 'modal':\n        return bill()\n",
+        "def build(cfg):\n    return Modal() if cfg.backend == 'modal' else Local()\n",
         # Deeper than the recursion limit.
         "def total(a):\n    return " + " + ".join(["a"] * 3000) + "\n",
     ],
@@ -554,6 +670,7 @@ def coloured(fmt):
         "factory-through-classmethods",
         "factory-with-lazy-imports",
         "factory-that-assigns",
+        "factory-of-private-classes",
         "closed-match",
         "closed-match-in-two-functions",
         "empty-string-in-two-functions",
@@ -574,10 +691,10 @@ def test_one_switch_in_one_place_passes(source):
     assert found(source) == []
 
 
-def asked_twice(value: str) -> str:
+def asked_twice(value: str, *, subject: str = "request.field") -> str:
     return (
-        f"def first(request):\n    if request.field == {value!r}:\n        go()\n\n\n"
-        f"def second(request):\n    if request.field == {value!r}:\n        stop()\n"
+        f"def first(request):\n    if {subject} == {value!r}:\n        go()\n\n\n"
+        f"def second(request):\n    if {subject} == {value!r}:\n        stop()\n"
     )
 
 
@@ -613,6 +730,39 @@ def test_a_string_that_reads_as_a_name_is_a_variant_value(value):
 )
 def test_a_string_that_does_not_read_as_a_name_is_not_a_variant_value(value):
     assert found(asked_twice(value)) == []
+
+
+@pytest.mark.parametrize(
+    "subject",
+    ["name", "cfg.model.name", "self.name", "platform", "cfg.platform", "os", "cfg.os"],
+)
+def test_a_name_of_the_project_is_a_variant_name_whatever_it_is(subject):
+    assert found(asked_twice("modal", subject=subject)) == [(7, "ARC-9")]
+
+
+@pytest.mark.parametrize(
+    ("subject", "value"),
+    [
+        ("os.name", "posix"),
+        ("sys.platform", "darwin"),
+        ("platform.system()", "Linux"),
+        ("platform.machine()", "arm64"),
+        ("__name__", "demo"),
+        ("type(request).__name__", "Request"),
+        ("request.dtype", "object"),
+    ],
+    ids=[
+        "os-name",
+        "sys-platform",
+        "platform-system",
+        "platform-machine",
+        "module-name",
+        "class-name",
+        "dtype",
+    ],
+)
+def test_a_name_that_python_or_a_library_owns_is_no_variant_name(subject, value):
+    assert found(asked_twice(value, subject=subject)) == []
 
 
 def test_a_test_on_mixed_values_keeps_the_ones_that_read_as_names():
@@ -652,6 +802,33 @@ def test_the_switch_below_a_waived_one_is_the_first_that_the_others_repeat():
 
     assert finding.line == 16
     assert "`cost` (line 10)" in finding.message
+
+
+# A fourth function on a value of `EMPTY_GUARD_FIRST`.
+HEADER = "\n\ndef header(fmt):\n    if fmt == 'csv':\n        return 'a,b'\n"
+
+
+@pytest.mark.parametrize(
+    "line", [3, 5, 9], ids=["guard-with-no-arm", "first-arm", "last-arm"]
+)
+def test_a_waiver_above_any_if_of_a_run_of_guards_waives_the_run(line):
+    assert found(EMPTY_GUARD_FIRST + HEADER) == [(5, "ARC-9"), (15, "ARC-9")]
+    assert found(EMPTY_GUARD_FIRST + HEADER, waived=frozenset({line})) == []
+
+
+@pytest.mark.parametrize(
+    ("source", "line", "named"),
+    [
+        (THIRD_FIRST, 13, "`start` (line 8)"),
+        (COST_THEN_FACTORY, 3, "`build` (line 9)"),
+    ],
+    ids=["repeat-after-a-third-function", "function-above-the-factory"],
+)
+def test_a_repeat_names_the_switch_it_shares_a_value_with(source, line, named):
+    [finding] = switches.check(ast.parse(source), "src/demo/runner.py")
+
+    assert finding.line == line
+    assert named in finding.message
 
 
 def test_a_match_that_ends_in_assert_never_is_no_switch_for_another_module():
@@ -706,7 +883,7 @@ FACTORY_IDS = ["factory", "factory-through-classmethods", "factory-that-assigns"
 
 
 @pytest.mark.parametrize("source", FACTORIES, ids=FACTORY_IDS)
-def test_a_factory_in_another_module_does_not_count(source):
+def test_a_switch_on_a_value_of_a_factory_in_another_module_is_reported(source):
     other = switches.Elsewhere(
         "src/demo/build.py", switches.switches_of(ast.parse(source))[0]
     )
@@ -715,7 +892,8 @@ def test_a_factory_in_another_module_does_not_count(source):
         ast.parse(COST), "src/demo/cost.py", elsewhere=lambda: [other]
     )
 
-    assert findings == []
+    assert [(f.line, f.rule) for f in findings] == [(2, "ARC-9")]
+    assert "`build` (src/demo/build.py:2)" in findings[0].message
 
 
 @pytest.mark.parametrize(

@@ -64,7 +64,7 @@ def test_the_other_module_is_written_the_way_the_checked_file_was(
             "a.py": "def a(p):\n    if p.backend == 'modal':\n        go()\n",
             "b.py": COST,
         },
-        # The factory may switch on what the rest of the package uses.
+        # The factory itself is not reported for a value the rest of the package uses.
         {
             "a.py": "def build(cfg):\n"
             "    if cfg.backend == 'modal':\n        return Modal()\n"

@@ -14,9 +14,11 @@ MIN_ARMS = 3
 # A string names a variant when it reads as a name: `modal`, `linear-warmup`, `gpt-4.1`.
 # An empty string, a file suffix, a media type or one letter is tested, not switched on.
 VALUE = re.compile(r"[A-Za-z][A-Za-z0-9_.-]+")
-# Python and other libraries own these names: a dunder, `sys.platform`, `os.name` and
-# the `dtype` of an array or a column are not variants of the project.
-SKIPPED = frozenset({"__name__", "platform", "name", "os", "dtype"})
+# Python and other libraries own these names: `__name__` and the `dtype` of an array
+# or a column are not variants of the project.
+SKIPPED = frozenset({"__name__", "dtype"})
+# Python owns these attributes of its modules, by the module they are on.
+MODULE_NAMES = frozenset({("os", "name"), ("sys", "platform")})
 
 
 @frozen
@@ -29,16 +31,25 @@ class Arm:
 
 @frozen
 class Switch:
-    """A chain of branches on one variant name, inside one function."""
+    """A chain of branches on one variant name, inside one function.
+
+    It is reported at `line`, and `lines` are where a waiver of it may stand: the
+    line of each `if` in a run of guard clauses.
+    """
 
     key: str
     function: str
     line: int
     arms: tuple[Arm, ...]
+    lines: tuple[int, ...]
 
     @property
     def values(self) -> frozenset[str]:
         return frozenset().union(*(arm.values for arm in self.arms))
+
+    def waived(self, waived: Container[int]) -> bool:
+        """Return whether a waiver covers the line of any `if` of the switch."""
+        return any(line in waived for line in self.lines)
 
 
 @frozen
@@ -60,9 +71,9 @@ def check(
 
     A chain of three arms is reported, and so is a variant name that two functions
     switch on with a value in common. The factory, whose every arm builds an object,
-    is neither reported nor counted against another switch. `waived` holds the lines
-    where a comment waives ARC-9: a switch at one of them does not count against the
-    others of this module.
+    is not reported, but a second function that branches on its values is. `waived`
+    holds the lines where a comment waives ARC-9: a switch with an `if` at one of
+    them is not reported and does not count against the others of this module.
 
     `elsewhere` returns the switches of the package's other modules, and is called
     only when this module has a switch they could repeat. A variant name switched on
@@ -70,10 +81,10 @@ def check(
     of the two must have two arms or more: a lone `if cfg.backend == "modal"` in each
     of two modules is not reported, though in two functions of one module it is.
     """
-    switches = switches_of(tree)
+    switches = [s for s in switches_of(tree) if not s.waived(waived)]
     return [
         *_chains(switches, path),
-        *_repeated(switches, path, waived),
+        *_repeated(switches, path),
         *_repeated_elsewhere(switches, path, elsewhere),
     ]
 
@@ -82,19 +93,16 @@ def switches_of(tree: ast.Module) -> list[Switch]:
     """Return the switches on a variant name in the functions of one module.
 
     A switch tests one name against strings that read as names. A `match` that ends
-    in `assert_never`, a name in `SKIPPED`, a `kind` attribute and the `type` of a
-    `device` give none, so nothing is reported for them or counted against them.
-
-    The conditional expressions come last: a repeat is looked for in the first switch
-    on a name, and an expression further up must not take that place from a statement.
+    in `assert_never`, a name in `SKIPPED` or `MODULE_NAMES`, a `kind` attribute and
+    the `type` of a `device` give none, so nothing is reported for them or counted
+    against them.
     """
-    statements: list[Switch] = []
-    conditionals: list[Switch] = []
+    found: list[Switch] = []
     for function in _functions(tree):
         nodes = (function, *_own_nodes(function))
-        statements += _switches(nodes, function.name)
-        conditionals += _conditionals(nodes, function.name)
-    return [s for s in statements + conditionals if s.key not in SKIPPED]
+        found += _switches(nodes, function.name)
+        found += _conditionals(nodes, function.name)
+    return [s for s in found if s.key not in SKIPPED]
 
 
 def _chains(switches: list[Switch], path: str) -> Iterator[Finding]:
@@ -120,17 +128,24 @@ def _chains(switches: list[Switch], path: str) -> Iterator[Finding]:
             )
 
 
-def _repeated(
-    switches: list[Switch], path: str, waived: Container[int]
-) -> Iterator[Finding]:
-    first: dict[str, Switch] = {}
-    for switch in switches:
-        if _factory(switch) or switch.line in waived:
-            continue
-        seen = first.setdefault(switch.key, switch)
-        if len(switch.arms) >= MIN_ARMS:
-            continue  # `_chains` reports it.
-        if seen.function != switch.function and seen.values & switch.values:
+def _repeated(switches: list[Switch], path: str) -> Iterator[Finding]:
+    """Yield each short switch that repeats an earlier one of another function.
+
+    The factories and the long chains, which this never reports, come first, so a
+    short switch is compared with them wherever it stands.
+    """
+    earlier: dict[str, list[Switch]] = {}
+    for switch in sorted(switches, key=_short):
+        seen = next(
+            (
+                other
+                for other in earlier.get(switch.key, ())
+                if other.function != switch.function and other.values & switch.values
+            ),
+            None,
+        )
+        earlier.setdefault(switch.key, []).append(switch)
+        if seen and _short(switch):
             yield Finding(
                 path,
                 switch.line,
@@ -145,15 +160,10 @@ def _repeated_elsewhere(
     path: str,
     elsewhere: Callable[[], Sequence[Elsewhere]] | None,
 ) -> Iterator[Finding]:
-    mine = [
-        switch
-        for switch in switches
-        # `_chains` reports a long chain already.
-        if not _factory(switch) and len(switch.arms) < MIN_ARMS
-    ]
+    mine = [switch for switch in switches if _short(switch)]
     if not mine or elsewhere is None:
         return
-    others = [other for other in elsewhere() if not _factory(other.switch)]
+    others = elsewhere()
     for switch in mine:
         other = next(
             (
@@ -232,7 +242,8 @@ def _runs(block: list[ast.stmt], function: str) -> Iterator[Switch]:
         arms = tuple(arm for _, chain_arms, _, _ in run for arm in chain_arms)
         if arms:
             line = next(line for _, chain_arms, _, line in run if chain_arms)
-            yield Switch(run[0][0], function, line, arms)
+            lines = tuple(line for _, _, _, line in run)
+            yield Switch(run[0][0], function, line, arms, lines)
         run = [chain] if chain else []
 
 
@@ -279,7 +290,7 @@ def _match(node: ast.Match, function: str) -> Iterator[Switch]:
         for call in ast.walk(ast.Module(body=case.body, type_ignores=[]))
     )
     if key and arms and not closed:
-        yield Switch(key, function, node.lineno, tuple(arms))
+        yield Switch(key, function, node.lineno, tuple(arms), (node.lineno,))
 
 
 def _conditionals(nodes: Sequence[ast.AST], function: str) -> Iterator[Switch]:
@@ -291,7 +302,8 @@ def _conditionals(nodes: Sequence[ast.AST], function: str) -> Iterator[Switch]:
     for node in nodes:
         if isinstance(node, ast.IfExp) and (test := _test(node.test)) and test[1]:
             arm = Arm(test[1], (ast.Return(value=node.body),))
-            yield Switch(test[0], function, node.test.lineno, (arm,))
+            line = node.test.lineno
+            yield Switch(test[0], function, line, (arm,), (line,))
 
 
 def _test(test: ast.expr) -> tuple[str, frozenset[str]] | None:
@@ -344,10 +356,16 @@ def _subject(node: ast.expr) -> str:
     """Return the variant name that a test or a `match` is on, or "" for none.
 
     A `kind` attribute is left to ARC-4, which reports each branch on one, and the
-    `type` of a `device` is a name of torch.
+    `type` of a `device` is a name of torch. A call, as `platform.system()` is, gives
+    none.
     """
     if isinstance(node, ast.Attribute) and (
-        node.attr == "kind" or (node.attr == "type" and _key(node.value) == "device")
+        node.attr == "kind"
+        or (node.attr == "type" and _key(node.value) == "device")
+        or (
+            isinstance(node.value, ast.Name)
+            and (node.value.id, node.attr) in MODULE_NAMES
+        )
     ):
         return ""
     return _key(node)
@@ -359,6 +377,14 @@ def _key(node: ast.expr) -> str:
     if isinstance(node, ast.Name):
         return node.id
     return ""
+
+
+def _short(switch: Switch) -> bool:
+    """Return whether a switch is reported only where it repeats another one.
+
+    The factory never is, and `_chains` reports a chain of three arms already.
+    """
+    return len(switch.arms) < MIN_ARMS and not _factory(switch)
 
 
 def _factory(switch: Switch) -> bool:
@@ -390,10 +416,17 @@ def _built(body: tuple[ast.stmt, ...]) -> str | None:
 
 
 def _constructor(func: ast.expr) -> bool:
-    """Return whether a call to `func` builds an object, going by its capital letter."""
-    if _key(func)[:1].isupper():
+    """Return whether a call to `func` builds an object, going by its capital letter.
+
+    The letter comes after any leading underscores: `_Wall()` builds a private class.
+    """
+    if _capital(_key(func)):
         return True
-    return isinstance(func, ast.Attribute) and _key(func.value)[:1].isupper()
+    return isinstance(func, ast.Attribute) and _capital(_key(func.value))
+
+
+def _capital(name: str) -> bool:
+    return name.lstrip("_")[:1].isupper()
 
 
 def _constant(body: tuple[ast.stmt, ...]) -> bool:
