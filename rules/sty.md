@@ -40,9 +40,11 @@ Imports are absolute.
 ### STY-4 MUST
 
 Every optional parameter and every boolean parameter is keyword-only (after `*`). Only the one or two obvious subjects
-of a call are positional.
+of a call are positional. A signature that a base class fixes is marked `@override` and keeps its shape; one that a
+caller outside the project fixes (a resolver, a signal handler) waives the rule with its reason.
 
-*Check:* ruff FBT for booleans; `check-conventions` flags a positional parameter with a default; review for the rest.
+*Check:* ruff FBT for booleans; `check-conventions` flags a positional parameter with a default, except in an
+`@override` method and before `/`; review for the rest.
 
 ### STY-5 MUST
 

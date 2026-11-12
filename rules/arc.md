@@ -61,7 +61,8 @@ that returns `None` when a feature is absent; never `if item.kind == "api"` or `
 
 *Why:* adding an item never edits its callers.
 
-*Check:* `check-conventions` flags comparisons with a `kind` attribute; review for `isinstance`.
+*Check:* `check-conventions` flags a `kind` attribute compared with a string, by `==`, `!=`, `in` or a `match` case;
+review for `isinstance`.
 
 ### ARC-5 SHOULD
 
@@ -97,12 +98,14 @@ from branching ([Hynek](https://hynek.me/articles/python-subclassing-redux/)).
 ### ARC-8 MUST
 
 Heavy or optional third-party modules (torch, vllm, litellm, cloud SDKs, wandb) are imported inside the function that
-needs them. Annotations that name them use `if TYPE_CHECKING:` imports.
+needs them. Annotations that name them use `if TYPE_CHECKING:` imports. A module whose classes need one at import time,
+as a model does for its `nn.Module` base, imports it at the top, and the code that uses that module imports it inside a
+function in turn.
 
 *Why:* CLI start-up time, test runtime, and optional extras.
 
-*Check:* `check-conventions` flags a module-level import of a known heavy module under `src/`; review for the others;
-ruff PLC0415 is off on purpose.
+*Check:* `check-conventions` flags a module-level import of a known heavy module under `src/`, unless a class base or a
+decorator in the module uses it; review for the others; ruff PLC0415 is off on purpose.
 
 ### ARC-9 MUST
 

@@ -16,7 +16,7 @@ TST-5, the invariant tests every rnd project carries, is a rule of nuinashco/rnd
 Tests are pytest functions (no test classes) named as sentences stating a behaviour:
 `test_sound_selection_never_falls_back_to_every_task`.
 
-*Check:* `check-conventions` flags test classes; review for the names.
+*Check:* `check-conventions` flags a class with test methods or a `TestCase` base in a test file; review for the names.
 
 ### TST-2 MUST
 

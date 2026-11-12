@@ -118,8 +118,8 @@ src/demo/worker.py:7: ERR-3 error messages have no trailing period
 ### Turn a rule off
 
 - For the whole repo, list it in the table: `ignore = ["ENV-1", "ENV-3"]`.
-- For one line, name the rule and the reason in a comment on that line or the one above:
-  `# conventions: TYP-4 - the base class from httpx needs __init__.`
+- For one line, name the rule and the reason in a comment on that line, or alone above the statement:
+  `# conventions: STY-4 - OmegaConf calls this resolver by position.`
 
 ## Related repos
 

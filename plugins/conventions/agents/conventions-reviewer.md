@@ -106,7 +106,8 @@ that returns `None` when a feature is absent; never `if item.kind == "api"` or `
 
 *Why:* adding an item never edits its callers.
 
-*Check:* `check-conventions` flags comparisons with a `kind` attribute; review for `isinstance`.
+*Check:* `check-conventions` flags a `kind` attribute compared with a string, by `==`, `!=`, `in` or a `match` case;
+review for `isinstance`.
 
 ### ARC-6 SHOULD
 
@@ -121,12 +122,14 @@ callers, or split it per variant.
 ### ARC-8 MUST
 
 Heavy or optional third-party modules (torch, vllm, litellm, cloud SDKs, wandb) are imported inside the function that
-needs them. Annotations that name them use `if TYPE_CHECKING:` imports.
+needs them. Annotations that name them use `if TYPE_CHECKING:` imports. A module whose classes need one at import time,
+as a model does for its `nn.Module` base, imports it at the top, and the code that uses that module imports it inside a
+function in turn.
 
 *Why:* CLI start-up time, test runtime, and optional extras.
 
-*Check:* `check-conventions` flags a module-level import of a known heavy module under `src/`; review for the others;
-ruff PLC0415 is off on purpose.
+*Check:* `check-conventions` flags a module-level import of a known heavy module under `src/`, unless a class base or a
+decorator in the module uses it; review for the others; ruff PLC0415 is off on purpose.
 
 ### ARC-9 MUST
 
@@ -188,8 +191,9 @@ one-implementation interfaces and mirrored layers.
 
 pydantic is only for data parsed from outside: configs, HTTP bodies, files. Every other class is an attrs class:
 `@frozen` for values, `@define` for stateful objects, family bases and items included. Exceptions, factories (classes
-that are never instantiated) and subclasses of third-party classes stay plain classes. Classes have no hand-written
-`__init__`. Construction logic goes into a classmethod constructor, or into `__attrs_post_init__` when it only derives
+that are never instantiated) and subclasses of classes from outside the project (an `nn.Module`, a `logging.Handler`)
+stay plain classes, and such a subclass keeps the `__init__` its base needs. No other class has a hand-written
+`__init__`: construction logic goes into a classmethod constructor, or into `__attrs_post_init__` when it only derives
 private state.
 
 ```python
@@ -216,7 +220,8 @@ class RateLimiter:
 *Why:* validation libraries belong at the boundary; inside, a class should only hold already-valid data
 ([attrs](https://www.attrs.org/en/stable/why.html), [Hynek](https://speakerdeck.com/hynek/design-pressure)).
 
-*Check:* `check-conventions` flags a hand-written `__init__` and dataclasses; review for pydantic inside the boundary.
+*Check:* `check-conventions` flags dataclasses and a hand-written `__init__`, unless a base of the class is imported
+from outside the project; review for pydantic inside the boundary.
 
 ### STY-2 MUST
 
@@ -233,9 +238,11 @@ set changes only by changing this guide. A `# noqa` names the rule and gives a r
 ### STY-4 MUST
 
 Every optional parameter and every boolean parameter is keyword-only (after `*`). Only the one or two obvious subjects
-of a call are positional.
+of a call are positional. A signature that a base class fixes is marked `@override` and keeps its shape; one that a
+caller outside the project fixes (a resolver, a signal handler) waives the rule with its reason.
 
-*Check:* ruff FBT for booleans; `check-conventions` flags a positional parameter with a default; review for the rest.
+*Check:* ruff FBT for booleans; `check-conventions` flags a positional parameter with a default, except in an
+`@override` method and before `/`; review for the rest.
 
 ### STY-5 MUST
 
@@ -284,7 +291,7 @@ error: unknown endpoint kind 'gemni'; registered: gemini, litellm, passthrough
 Tests are pytest functions (no test classes) named as sentences stating a behaviour:
 `test_sound_selection_never_falls_back_to_every_task`.
 
-*Check:* `check-conventions` flags test classes; review for the names.
+*Check:* `check-conventions` flags a class with test methods or a `TestCase` base in a test file; review for the names.
 
 ### TST-4 MUST
 

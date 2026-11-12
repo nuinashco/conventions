@@ -43,8 +43,8 @@ def edit(path: Path) -> str:
         "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    import torch\n",
         "def load():\n    import torch\n",
         "ROOT = rootutils.find_root(search_from=__file__)\n",
-        "x = os.environ  # conventions: ENV-3 - the hook has no paths.py.\n",
-        "# conventions: ENV-3 - the hook has no paths.py.\nx = os.environ\n",
+        "x = os.environ['T']  # conventions: ENV-3 - the hook has no paths.py.\n",
+        "# conventions: ENV-3 - the hook has no paths.py.\nx = os.environ['T']\n",
     ],
     ids=[
         "register-outermost",
@@ -88,7 +88,7 @@ def test_conforming_code_passes(source):
         ("ROOT = Path(__file__).resolve().parents[2]\n", [(1, "ENV-1")]),
         ("ROOT = Path(__file__).parent.parent\n", [(1, "ENV-1")]),
         ("token = os.environ['TOKEN']\n", [(1, "ENV-3")]),
-        ("x = os.environ  # conventions: TYP-4 - wrong rule.\n", [(1, "ENV-3")]),
+        ("x = os.environ['T']  # conventions: TYP-4 - wrong rule.\n", [(1, "ENV-3")]),
     ],
     ids=[
         "register-inside",
@@ -283,7 +283,7 @@ def test_tests_may_use_kinds_environ_and_positional_defaults():
 
 
 def test_test_classes_are_reported_only_in_tests():
-    source = "class TestRunner:\n    x = 1\n"
+    source = "class TestRunner:\n    def test_it_runs(self): ...\n"
 
     assert rules(source, "tests/test_runner.py") == [(1, "TST-1")]
     assert rules(source) == []
@@ -305,7 +305,9 @@ def test_folders_above_the_project_do_not_change_which_rules_apply(tmp_path):
     (project / "scripts").mkdir()
     (project / "pyproject.toml").write_text("[tool.conventions]\n")
     module = project / "src" / "demo" / "mod.py"
-    module.write_text("import torch\n\n\nclass TestThing:\n    x = 1\n")
+    module.write_text(
+        "import torch\n\n\nclass TestThing:\n    def test_it(self): ...\n"
+    )
     script = project / "scripts" / "once.py"
     script.write_text("import torch\n")
 
@@ -360,3 +362,623 @@ def test_a_waived_switch_does_not_count_against_the_rest_of_its_module():
     assert rules(source) == []
     assert rules(source.replace("conventions: ARC-9", "note")) == [(10, "ARC-9")]
     assert rules(source.replace("ARC-9", "STY-4")) == [(10, "ARC-9")]
+
+
+def rules_in_demo(source: str) -> list[tuple[int, str]]:
+    """Return the findings for a module of a project whose own package is `demo`."""
+    found = check_source(source, path=PACKAGE, own_packages={"demo"})
+    return [(f.line, f.rule) for f in found]
+
+
+INIT = "    def __init__(self): ...\n"
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        f"from torch import nn\n\n\nclass Perceptron(nn.Module):\n{INIT}",
+        f"import logging\n\n\nclass ListHandler(logging.Handler):\n{INIT}",
+        f"from threading import Thread\n\n\nclass Worker(Thread):\n{INIT}",
+        f"import argparse as cli\n\n\nclass Append(cli.Action):\n{INIT}",
+        f"import enum\n\n\nclass Permission(enum.Flag):\n{INIT}",
+        f"from lib.rows import Rows\n\n\nclass Ints(Rows[int]):\n{INIT}",
+        f"import lib.rows\n\n\nclass Ints(lib.rows.Rows[int]):\n{INIT}",
+        f"from abc import ABC\nfrom lib import Row\n\n\nclass Step(Row, ABC):\n{INIT}",
+        (
+            "from torch import nn\n\n\nclass Block(nn.Module): ...\n\n\n"
+            f"class Decoder(Block):\n{INIT}"
+        ),
+        (
+            f"from torch import nn\n\n\nclass Decoder(Block):\n{INIT}\n\n"
+            "class Block(nn.Module): ...\n"
+        ),
+        (
+            "def build():\n    from torch import nn\n\n"
+            "    class Head(nn.Module):\n        def __init__(self): ...\n\n"
+            "    return Head()\n"
+        ),
+    ],
+    ids=[
+        "torch-module",
+        "logging-handler",
+        "imported-class",
+        "module-under-another-name",
+        "enum-flag",
+        "subscripted-base",
+        "dotted-module",
+        "outside-base-beside-abc",
+        "base-in-this-module-from-outside",
+        "base-in-this-module-defined-below",
+        "import-inside-a-function",
+    ],
+)
+def test_a_subclass_of_a_class_from_outside_the_project_keeps_its_init(source):
+    assert rules_in_demo(source) == []
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        (f"from abc import ABC\n\n\nclass Endpoint(ABC):\n{INIT}", [(5, "TYP-4")]),
+        (f"import abc\n\n\nclass Endpoint(abc.ABC):\n{INIT}", [(5, "TYP-4")]),
+        (
+            f"from typing import Generic\n\n\nclass Box(Generic[T]):\n{INIT}",
+            [(5, "TYP-4")],
+        ),
+        (f"class Plain(object):\n{INIT}", [(2, "TYP-4")]),
+        (
+            f"from demo.endpoints.base import Endpoint\n\n\nclass A(Endpoint):\n{INIT}",
+            [(5, "TYP-4")],
+        ),
+        (
+            f"import demo.base\n\n\nclass Api(demo.base.Endpoint):\n{INIT}",
+            [(5, "TYP-4")],
+        ),
+        (
+            f"from .base import Endpoint\n\n\nclass Api(Endpoint):\n{INIT}",
+            [(5, "TYP-4")],
+        ),
+        (f"class Base: ...\n\n\nclass Item(Base):\n{INIT}", [(5, "TYP-4")]),
+        (f"Base = make_base()\n\n\nclass Item(Base):\n{INIT}", [(5, "TYP-4")]),
+        (f"class A(B):\n{INIT}\n\nclass B(A): ...\n", [(2, "TYP-4")]),
+        ("@dataclass\nclass A(ABC):\n    x: int\n", [(1, "TYP-4")]),
+        (
+            "from torch import nn\n\n\n@dataclass\nclass A(nn.Module):\n    x: int\n",
+            [(4, "TYP-4")],
+        ),
+    ],
+    ids=[
+        "abc",
+        "dotted-abc",
+        "generic",
+        "object",
+        "base-from-own-package",
+        "own-package-imported-whole",
+        "relative-import",
+        "base-in-this-module",
+        "base-assigned-in-this-module",
+        "bases-in-a-circle",
+        "dataclass-under-abc",
+        "dataclass-under-an-outside-base",
+    ],
+)
+def test_a_class_of_the_project_has_no_hand_written_init(source, expected):
+    assert rules_in_demo(source) == expected
+
+
+def test_a_long_line_of_classes_passes_on_that_it_comes_from_outside():
+    line = "".join(f"class C{i}(C{i - 1}): ...\n" for i in range(1, 1500))
+    source = f"import logging\nclass C0(logging.Handler): ...\n{line}"
+
+    assert rules_in_demo(f"{source}class Last(C1499):\n{INIT}") == []
+    assert rules_in_demo(f"{source}class Last(C1500):\n{INIT}") == [(1503, "TYP-4")]
+
+
+def test_the_packages_under_src_are_the_projects_own(opted_in):
+    for name in ("demo", "tools"):
+        (opted_in / "src" / name).mkdir(parents=True)
+        (opted_in / "src" / name / "__init__.py").touch()
+    (opted_in / "tests").mkdir()
+    module = opted_in / "src" / "demo" / "runner.py"
+    module.write_text(
+        "import logging\n\nfrom demo.base import Endpoint\n"
+        "from tools.base import Tool\n"
+        f"\n\nclass Api(Endpoint):\n{INIT}"
+        f"\n\nclass Hammer(Tool):\n{INIT}"
+        f"\n\nclass Quiet(logging.Handler):\n{INIT}"
+    )
+    fake = opted_in / "tests" / "fakes.py"
+    fake.write_text(
+        "import httpx\n\nfrom demo.base import Endpoint\n"
+        f"\n\nclass Scripted(Endpoint):\n{INIT}"
+        f"\n\nclass Replay(httpx.BaseTransport):\n{INIT}"
+    )
+
+    assert rules_of(module) == [(8, "TYP-4"), (12, "TYP-4")]
+    assert rules_of(fake) == [(7, "TYP-4")]
+
+
+def test_the_top_package_of_a_file_is_the_projects_own_without_a_src_folder(tmp_path):
+    (tmp_path / "demo").mkdir()
+    (tmp_path / "demo" / "__init__.py").touch()
+    module = tmp_path / "demo" / "runner.py"
+    module.write_text(
+        "import logging\n\nfrom demo.base import Endpoint\n"
+        f"\n\nclass Api(Endpoint):\n{INIT}"
+        f"\n\nclass Quiet(logging.Handler):\n{INIT}"
+    )
+
+    assert rules_of(module) == [(7, "TYP-4")]
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("import dataclasses\n\nrow = dataclasses.asdict(arguments)\n", []),
+        ("from dataclasses import asdict, fields, is_dataclass, replace\n", []),
+        ("from dataclasses import field\n", [(1, "TYP-4")]),
+        ("from dataclasses import asdict, make_dataclass\n", [(1, "TYP-4")]),
+        (
+            "import dataclasses\n\n\n@dataclasses.dataclass\nclass A:\n    x: int\n",
+            [(4, "TYP-4")],
+        ),
+    ],
+    ids=[
+        "module-read-for-asdict",
+        "readers-of-a-dataclass",
+        "field",
+        "make-dataclass-among-readers",
+        "dotted-decorator",
+    ],
+)
+def test_only_what_defines_a_dataclass_is_reported(source, expected):
+    assert rules(source) == expected
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        (
+            "from torch import Tensor, nn\n\n\nclass Perceptron(nn.Module):\n"
+            "    def forward(self, x: Tensor) -> Tensor: ...\n"
+        ),
+        "import torch\n\n\n@torch.no_grad()\ndef evaluate(model): ...\n",
+        "from torch.utils.data import Dataset\n\n\nclass Rows(Dataset[int]): ...\n",
+        (
+            "import torch\n\n\nclass Scorer:\n    @torch.no_grad()\n"
+            "    def score(self): ...\n"
+        ),
+        "import torch.nn as nn\n\nif FAST:\n\n    class Head(nn.Module): ...\n",
+        (
+            "try:\n    import torch\nexcept ImportError:\n    torch = None\n\n\n"
+            "@torch.jit.script\nclass Pair: ...\n"
+        ),
+    ],
+    ids=[
+        "class-base",
+        "function-decorator",
+        "subscripted-base",
+        "method-decorator",
+        "class-under-if",
+        "import-under-try",
+    ],
+)
+def test_a_heavy_import_stays_at_the_top_when_the_module_needs_it_at_import(source):
+    assert rules(source) == []
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("import torch\n\nSEED = torch.manual_seed(0)\n", [(1, "ARC-8")]),
+        (
+            "import torch\n\n\ndef zeros(n, *, device=torch.device('cpu')): ...\n",
+            [(1, "ARC-8")],
+        ),
+        (
+            "import wandb\nfrom torch import nn\n\n\nclass Head(nn.Module): ...\n\n\n"
+            "def track():\n    wandb.init()\n",
+            [(1, "ARC-8")],
+        ),
+        (
+            "import torch\n\n\ndef build():\n    class Head(torch.nn.Module): ...\n\n"
+            "    return Head()\n",
+            [(1, "ARC-8")],
+        ),
+        (
+            "import torch\n\n\ndef build():\n    @torch.no_grad()\n"
+            "    def inner(): ...\n\n    return inner\n",
+            [(1, "ARC-8")],
+        ),
+    ],
+    ids=[
+        "constant",
+        "default-value",
+        "another-heavy-module",
+        "base-of-a-class-inside-a-function",
+        "decorator-inside-a-function",
+    ],
+)
+def test_a_heavy_import_used_only_when_code_runs_is_reported(source, expected):
+    assert rules(source) == expected
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        (
+            "try:\n    import wandb\nexcept ImportError:\n    wandb = None\n",
+            [(2, "ARC-8")],
+        ),
+        (
+            "try:\n    import fast\nexcept ImportError:\n    import torch\n",
+            [(4, "ARC-8")],
+        ),
+        (
+            "try:\n    import fast\nexcept ImportError:\n    fast = None\n"
+            "else:\n    import jax\nfinally:\n    import wandb\n",
+            [(6, "ARC-8"), (8, "ARC-8")],
+        ),
+        ("if importlib.util.find_spec('jax'):\n    import jax\n", [(2, "ARC-8")]),
+        ("if FAST:\n    import fast\nelif SLOW:\n    import torch\n", [(4, "ARC-8")]),
+        ("with suppress(ImportError):\n    import wandb\n", [(2, "ARC-8")]),
+        (
+            "try:\n    if FAST:\n        with suppress(ImportError):\n"
+            "            import torch\nexcept OSError:\n    pass\n",
+            [(4, "ARC-8")],
+        ),
+        (
+            "if TYPE_CHECKING:\n    from torch import nn\nelse:\n    import torch\n",
+            [(4, "ARC-8")],
+        ),
+        (
+            "if not TYPE_CHECKING:\n    import jax\nelse:\n    from torch import nn\n",
+            [(2, "ARC-8")],
+        ),
+    ],
+    ids=[
+        "try",
+        "except",
+        "else-and-finally",
+        "if",
+        "elif",
+        "with",
+        "nested-blocks",
+        "else-of-type-checking",
+        "not-type-checking",
+    ],
+)
+def test_a_heavy_import_in_a_block_of_the_module_is_reported(source, expected):
+    assert rules(source) == expected
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "import typing\n\nif typing.TYPE_CHECKING:\n    import torch\n",
+        "if TYPE_CHECKING:\n    try:\n        import torch\n    except ImportError:\n"
+        "        pass\n",
+        "def load():\n    try:\n        import wandb\n    except ImportError:\n"
+        "        return None\n    return wandb\n",
+        "class Lazy:\n    try:\n        import wandb\n    except ImportError:\n"
+        "        wandb = None\n",
+    ],
+    ids=[
+        "dotted-type-checking",
+        "try-under-type-checking",
+        "try-inside-a-function",
+        "try-inside-a-class",
+    ],
+)
+def test_a_heavy_import_outside_the_blocks_of_the_module_passes(source):
+    assert rules(source) == []
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        (
+            "class UTC(logging.Formatter):\n    @override\n"
+            "    def formatTime(self, record, datefmt=None): ...\n"
+        ),
+        "class A(B):\n    @typing.override\n    def fit(self, x, y=None): ...\n",
+        (
+            "class A(B):\n    @typing_extensions.override\n"
+            "    async def fit(self, x, y=None): ...\n"
+        ),
+        "class Zeros(io.RawIOBase):\n    def read(self, size=-1, /): ...\n",
+    ],
+    ids=[
+        "override",
+        "typing-override",
+        "typing-extensions-override",
+        "positional-only",
+    ],
+)
+def test_a_signature_fixed_elsewhere_keeps_its_positional_defaults(source):
+    assert rules(source) == []
+
+
+@pytest.mark.parametrize(
+    ("source", "named"),
+    [
+        ("def f(a=1, /, b=2): ...\n", ["b"]),
+        ("def f(a, b=1, /, c=2, d=3, *, e=4): ...\n", ["c", "d"]),
+        ("@cache\ndef f(a, b=1): ...\n", ["b"]),
+        ("@overrides\ndef f(a, b=1): ...\n", ["b"]),
+    ],
+    ids=[
+        "after-the-slash",
+        "between-slash-and-star",
+        "another-decorator",
+        "decorator-of-another-name",
+    ],
+)
+def test_a_positional_default_is_reported_where_the_caller_may_name_it(source, named):
+    found = check_source(source, path=PACKAGE)
+
+    assert [(f.rule, f.message.split("`")[1]) for f in found] == [
+        ("STY-4", name) for name in named
+    ]
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "names = [p.name for p in ps if p.kind == inspect.Parameter.KEYWORD_ONLY]\n",
+        "if values.dtype.kind != 'f':\n    pass\n",
+        "if values.dtype.kind in ('f', 'c'):\n    pass\n",
+        "same = a.kind == b.kind\n",
+        "if item.kind in KINDS:\n    pass\n",
+        "if item.kind == f'{prefix}-api':\n    pass\n",
+        "if item.kind is None or item.kind > 'api':\n    pass\n",
+        "match values.dtype.kind:\n    case 'f' | 'c':\n        pass\n",
+        "match item.kind:\n    case Kind.API | 'f':\n        pass\n",
+        "match item:\n    case 'api':\n        pass\n",
+    ],
+    ids=[
+        "inspect-parameter-kind",
+        "dtype-kind",
+        "dtype-kind-in-letters",
+        "kind-with-kind",
+        "kind-in-a-named-collection",
+        "kind-with-an-f-string",
+        "kind-ordered-or-none",
+        "match-on-dtype-kind",
+        "match-on-enum-members",
+        "match-on-another-subject",
+    ],
+)
+def test_a_kind_that_is_no_family_kind_may_be_compared(source):
+    assert rules(source) == []
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "if item.kind != 'api':\n    pass\n",
+        "if 'api' == item.kind:\n    pass\n",
+        "if item.kind in ('api', 'batch'):\n    pass\n",
+        "if item.kind not in ['api']:\n    pass\n",
+        "if item.kind in {'f', 'batch'}:\n    pass\n",
+        "if 0 < item.cost and item.kind == 'api' != other:\n    pass\n",
+        "match item.kind:\n    case 'api':\n        pass\n    case _:\n        pass\n",
+        "match self.config.kind:\n    case 'api' | 'batch':\n        pass\n",
+        "match item.kind:\n    case 'api' | 'batch' as remote:\n        pass\n",
+    ],
+    ids=[
+        "not-equal",
+        "string-first",
+        "in-a-tuple",
+        "not-in-a-list",
+        "in-a-set-with-a-letter",
+        "inside-a-chain",
+        "match",
+        "match-or-pattern",
+        "match-capture",
+    ],
+)
+def test_a_kind_attribute_set_against_a_string_is_reported_once(source):
+    assert rules(source) == [(1, "ARC-4")]
+    assert rules(source, "tests/demo/test_runner.py") == []
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "os.environ['TOKENIZERS_PARALLELISM'] = 'false'\n",
+        "os.environ['PATH'] += ':/opt/bin'\n",
+        "del os.environ['TOKEN']\n",
+        "os.environ.setdefault('SEED', '0')\n",
+        "os.environ.update(SEED='0')\n",
+        "os.environ.pop('TOKEN', None)\n",
+        "os.environ.clear()\n",
+        "env = os.environ.copy()\n",
+        "env = {**os.environ, 'CUDA_VISIBLE_DEVICES': str(gpu)}\n",
+        "env = dict(os.environ)\n",
+        "subprocess.run(command, env=os.environ, check=True)\n",
+    ],
+    ids=[
+        "assign",
+        "append",
+        "delete",
+        "setdefault",
+        "update",
+        "pop",
+        "clear",
+        "copy",
+        "unpacked-into-a-dict",
+        "dict-of-it",
+        "handed-to-a-child",
+    ],
+)
+def test_setting_a_variable_or_handing_the_environment_on_is_no_read(source):
+    assert rules(source) == []
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("token = os.getenv('TOKEN')\n", [(1, "ENV-3")]),
+        ("token = os.environ.get('TOKEN', '')\n", [(1, "ENV-3")]),
+        ("if 'TOKEN' in os.environ:\n    pass\n", [(1, "ENV-3")]),
+        ("if 'TOKEN' not in os.environ:\n    pass\n", [(1, "ENV-3")]),
+        ("os.environ['COPY'] = os.environ['TOKEN']\n", [(1, "ENV-3")]),
+        ("found = (\n    'TOKEN'\n    in os.environ\n)\n", [(3, "ENV-3")]),
+    ],
+    ids=[
+        "getenv",
+        "get",
+        "in",
+        "not-in",
+        "read-into-another-variable",
+        "reported-at-the-line-of-os-environ",
+    ],
+)
+def test_reading_a_variable_is_reported(source, expected):
+    assert rules(source) == expected
+    assert rules(source, "src/demo/paths.py") == []
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "raise FileNotFoundError('Makefile')\n",
+        "raise KeyError('Missing.')\n",
+        "raise ValueError('None is not a seed')\n",
+        "raise ValueError('True: expected a count')\n",
+        "raise ValueError('HTTP status 500')\n",
+        "raise ConfigError('OmegaConf cannot resolve it')\n",
+        "raise ValueError('X and y differ in length')\n",
+        "raise ValueError('`Trainer` needs a seed')\n",
+        "raise ValueError(\"'Makefile' has no target\")\n",
+        "raise ValueError('Trainer.fit was not called')\n",
+        "raise TimeoutError('still waiting...')\n",
+    ],
+    ids=[
+        "one-word-is-a-name",
+        "one-word-with-a-period",
+        "none",
+        "true-with-a-colon",
+        "acronym",
+        "mixed-case",
+        "one-letter-name",
+        "name-in-backticks",
+        "name-in-quotes",
+        "dotted-name",
+        "ellipsis",
+    ],
+)
+def test_a_message_that_opens_with_a_name_or_trails_off_passes(source):
+    assert rules(source) == []
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "raise ValueError('A table needs at least one row')\n",
+        'raise ValueError("Can\'t read a negative number of rows")\n',
+        "raise ValueError('Rows: expected fewer than ten')\n",
+        "raise UserError(f'Missing, {name}')\n",
+        "raise ValueError('wait a second.')\n",
+    ],
+    ids=["article", "apostrophe", "colon", "comma", "period"],
+)
+def test_a_capitalised_first_word_or_a_period_is_reported(source):
+    assert rules(source) == [(1, "ERR-3")]
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "_log.info(f'started on {port}')\n",
+        "LOG.info('started on {}'.format(port))\n",
+        "_logger.warning('Proxy started')\n",
+        "LOGGER.info('Proxy started on %s', port)\n",
+        "self._log.error('Proxy failed')\n",
+        "logging.info('Proxy started on %s' % port)\n",
+        "logging.warning(f'started on {port}')\n",
+    ],
+    ids=[
+        "private-log",
+        "upper-log",
+        "private-logger",
+        "upper-logger",
+        "private-attribute",
+        "logging-function",
+        "logging-function-f-string",
+    ],
+)
+def test_an_event_is_checked_on_a_logger_under_its_usual_names(source):
+    assert rules(source) == [(1, "LOG-2")]
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "_log.info('proxy_started', port=8000)\n",
+        "logging.info('proxy_started')\n",
+        "catalog.info('Proxy started')\n",
+        "logging.getLogger('Proxy started')\n",
+    ],
+    ids=["private-log", "logging-function", "another-receiver", "another-function"],
+)
+def test_a_snake_case_event_or_a_call_that_logs_nothing_passes(source):
+    assert rules(source) == []
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        (
+            "class SummaryTests(unittest.TestCase):\n    def test_empty(self): ...\n",
+            [(1, "TST-1")],
+        ),
+        ("class Summary(IsolatedAsyncioTestCase):\n    x = 1\n", [(1, "TST-1")]),
+        ("class Summary:\n    async def test_empty(self): ...\n", [(1, "TST-1")]),
+        ("@define\nclass TestClock:\n    now_s: float = 0.0\n", []),
+        ("class Scripted:\n    def reply(self): ...\n", []),
+    ],
+    ids=[
+        "testcase-under-another-name",
+        "testcase-base-alone",
+        "test-method-alone",
+        "fake-named-test",
+        "fake-with-methods",
+    ],
+)
+def test_a_class_is_a_test_class_by_what_it_holds(source, expected):
+    assert rules(source, "tests/conftest.py") == expected
+
+
+@pytest.mark.parametrize(
+    ("path", "quoted"),
+    [
+        ("src/demo/_utils.py", "_utils"),
+        ("src/demo/__helpers.py", "__helpers"),
+        ("src/demo/string_utils.py", "string_utils"),
+        ("src/demo/text_util.py", "text_util"),
+        ("src/demo/io_helpers/text.py", "io_helpers"),
+        ("src/demo/data_common.py", "data_common"),
+    ],
+)
+def test_a_grab_bag_is_reported_under_its_private_and_suffixed_names(path, quoted):
+    found = check_source("x = 1\n", path=path)
+
+    assert [(f.line, f.rule) for f in found] == [(1, "LAY-2")]
+    assert found[0].message.startswith(f"`{quoted}` is a grab-bag module")
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "src/demo/utilities.py",
+        "src/demo/shared.py",
+        "src/demo/futils.py",
+        "src/demo/core_ops.py",
+        "src/demo/_rows.py",
+        "scripts/_utils.py",
+    ],
+)
+def test_a_module_named_after_one_thing_is_no_grab_bag(path):
+    assert rules("x = 1\n", path) == []

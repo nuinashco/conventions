@@ -19,7 +19,8 @@ with an f-string or `%`.
 
 *Why:* events stay queryable in JSON logs and in BigQuery.
 
-*Check:* `check-conventions` flags formatted events and events that are not snake_case.
+*Check:* `check-conventions` flags formatted events and events that are not snake_case, on a logger named `log` or
+`logger` in any case and on the functions of `logging`.
 
 ### LOG-4 MUST
 

@@ -16,7 +16,7 @@ Version 0.1.0 · last reviewed 2026-11-12 · owner: nuinashco
   [RFC 8174](https://www.rfc-editor.org/rfc/rfc8174): they carry their meaning only in capitals.
   - **MUST**: checked by a tool or test where possible. A justified exception gets a comment at the site naming the
     rule (`# noqa: BLE001 - a failing callback must not stop training`, or
-    `# conventions: TYP-4 - the base class from httpx needs __init__.` for `check-comments` and `check-conventions`).
+    `# conventions: STY-4 - OmegaConf calls this resolver by position.` for `check-comments` and `check-conventions`).
   - **SHOULD**: the default. Deviate when you can say why.
   - **MAY**: a matter of taste, written down so it is consistent.
 - Every rule has an ID (`STY-4`) for reviews and PR descriptions, a *Why* where the reason needs saying, and a

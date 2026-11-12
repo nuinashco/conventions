@@ -38,8 +38,9 @@ is never used: [PEP 649](https://peps.python.org/pep-0649/) makes annotations la
 
 pydantic is only for data parsed from outside: configs, HTTP bodies, files. Every other class is an attrs class:
 `@frozen` for values, `@define` for stateful objects, family bases and items included. Exceptions, factories (classes
-that are never instantiated) and subclasses of third-party classes stay plain classes. Classes have no hand-written
-`__init__`. Construction logic goes into a classmethod constructor, or into `__attrs_post_init__` when it only derives
+that are never instantiated) and subclasses of classes from outside the project (an `nn.Module`, a `logging.Handler`)
+stay plain classes, and such a subclass keeps the `__init__` its base needs. No other class has a hand-written
+`__init__`: construction logic goes into a classmethod constructor, or into `__attrs_post_init__` when it only derives
 private state.
 
 ```python
@@ -66,7 +67,8 @@ class RateLimiter:
 *Why:* validation libraries belong at the boundary; inside, a class should only hold already-valid data
 ([attrs](https://www.attrs.org/en/stable/why.html), [Hynek](https://speakerdeck.com/hynek/design-pressure)).
 
-*Check:* `check-conventions` flags a hand-written `__init__` and dataclasses; review for pydantic inside the boundary.
+*Check:* `check-conventions` flags dataclasses and a hand-written `__init__`, unless a base of the class is imported
+from outside the project; review for pydantic inside the boundary.
 
 ### TYP-5 MUST
 

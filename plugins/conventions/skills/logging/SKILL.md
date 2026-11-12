@@ -27,5 +27,5 @@ Bind run context once with `structlog.contextvars.bind_contextvars(run=...)` ins
 
 Linters, hooks and the template report these; follow them as you write.
 
-- **LOG-2** MUST: Events are stable snake_case ids with key-value context: `log.info("proxy_started", port=8000)`. Never build an event with an f-string or `%`. *Check:* `check-conventions` flags formatted events and events that are not snake_case.
+- **LOG-2** MUST: Events are stable snake_case ids with key-value context: `log.info("proxy_started", port=8000)`. Never build an event with an f-string or `%`. *Check:* `check-conventions` flags formatted events and events that are not snake_case, on a logger named `log` or `logger` in any case and on the functions of `logging`.
 - **LOG-4** MUST: Logs record events. Output meant for the user (tables, results) goes to stdout through `click.echo` or rich, never through the logger. *Check:* ruff T201, allowed only in `cli/` and `scripts/`.

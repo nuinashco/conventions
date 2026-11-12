@@ -35,7 +35,8 @@ only when a second repo depends on it.
 structure"](https://docs.astral.sh/uv/concepts/build-backend/) because generic names like `common` collide in
 site-packages; a distinctive name avoids that.
 
-*Check:* `module-name = "<pkg>"` in the template; `check-conventions` flags grab-bag module names under `src/`.
+*Check:* `module-name = "<pkg>"` in the template; `check-conventions` flags grab-bag module names under `src/`, also
+when private (`_utils.py`) or suffixed (`string_utils.py`).
 
 ### LAY-3 MUST
 
