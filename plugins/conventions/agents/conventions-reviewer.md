@@ -51,10 +51,10 @@ finding (compare with `git log`).
 
    A finding of `check-conventions` or `check-comments` also gets a VIOLATES row in the table, under its rule ID.
 2. Judge, on the files in scope, the rules of the checklist below and the repo's own rules. Judge DOC-4 and DOC-7 too,
-   quoted after the checklist, on every comment, docstring, `Field` description and YAML comment in scope: their judges
-   (`review-comments`, the `descriptions-judge` subagent) run only when someone asks. When the caller says
-   `descriptions-judge` is running, leave DOC-7 to it: mark DOC-7 N/A and say so. Process rules apply on a branch
-   only: GIT-1 and GIT-2 on `git log <default>..HEAD`, and RDOC-5 (docs change with the code).
+   quoted after the checklist: DOC-7 on every `Field` description and YAML comment in scope, DOC-4 on every other
+   comment and docstring. Their judges (`review-comments`, the `descriptions-judge` subagent) run only when someone
+   asks. When the caller says `descriptions-judge` is running, leave DOC-7 to it: mark DOC-7 N/A and say so. Process
+   rules apply on a branch only: GIT-1 and GIT-2 on `git log <default>..HEAD`, and RDOC-5 (docs change with the code).
 3. Back every finding with `path:line` and the smallest excerpt that proves it. A finding you cannot cite is not
    a finding: leave it out.
 
