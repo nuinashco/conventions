@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from pathlib import Path, PurePath
 
 import pytest
 
@@ -82,14 +82,7 @@ def test_a_module_outside_a_package_is_checked_alone(tmp_path):
 
 
 def test_tests_and_folders_that_are_not_packages_do_not_count(demo_package):
-    demo = demo_package(
-        {
-            "cost.py": COST,
-            "tests/test_start.py": START,
-            "test_launch.py": START,
-            "conftest.py": START,
-        }
-    )
+    demo = demo_package({"cost.py": COST, "tests/test_start.py": START})
     for stray in ("data/start.py", ".venv/lib/site/start.py"):
         (demo / stray).parent.mkdir(parents=True)
         (demo / stray).write_text(START)
@@ -150,3 +143,77 @@ def test_the_claude_hook_reports_a_switch_repeated_in_another_module(
 
     assert claude_hook(payload) == 2
     assert f"{demo / 'start.py'}:2" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("tests/test_runner.py", True),
+        ("tests/demo/fakes.py", True),
+        ("src/demo/tests/helpers.py", True),
+        ("test_runner.py", True),
+        ("conftest.py", True),
+        ("scripts/test_gpu.py", True),
+        ("src/demo/test_selection.py", False),
+        ("src/demo/conftest.py", False),
+        ("src/demo/selection.py", False),
+        ("scripts/train_once.py", False),
+    ],
+    ids=[
+        "under-tests",
+        "helper-under-tests",
+        "tests-folder-inside-the-package",
+        "pytest-file",
+        "conftest",
+        "pytest-file-in-scripts",
+        "test-name-under-src",
+        "conftest-under-src",
+        "module",
+        "script",
+    ],
+)
+def test_a_file_under_src_is_package_code_whatever_its_name(path, expected):
+    assert package.is_test(PurePath(path)) is expected
+
+
+def test_a_module_named_like_a_test_gets_the_rules_of_its_package(
+    opted_in, demo_package
+):
+    selection = (
+        "import os\n\n\n"
+        "def chosen(task, limit=10):\n"
+        "    if task.kind == 'api':\n        return []\n"
+        "    return os.environ['TESTS'].split(',')[:limit]\n\n\n"
+        "class TestPlan:\n    steps = 3\n"
+    )
+    demo = demo_package({"paths.py": "", "test_selection.py": selection})
+
+    assert rules(demo / "test_selection.py") == [
+        (4, "STY-4"),
+        (5, "ARC-4"),
+        (7, "ENV-3"),
+    ]
+
+
+@pytest.mark.parametrize("name", ["test_launch.py", "conftest.py"])
+def test_the_switches_of_a_module_named_like_a_test_count_under_src(
+    opted_in, demo_package, name
+):
+    demo = demo_package({"cost.py": COST, name: START})
+
+    assert rules(demo / "cost.py") == [(2, "ARC-9")]
+
+
+def test_the_pytest_files_of_a_package_outside_src_do_not_count(opted_in):
+    flat = opted_in / "demo"
+    flat.mkdir()
+    for name, source in {"__init__.py": "", "cost.py": COST, "launch.py": ""}.items():
+        (flat / name).write_text(source)
+    for name in ("test_launch.py", "conftest.py"):
+        (flat / name).write_text(START)
+
+    before = rules(flat / "cost.py")
+    (flat / "launch.py").write_text(START)
+    after = rules(flat / "cost.py")
+
+    assert (before, after) == ([], [(2, "ARC-9")])

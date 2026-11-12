@@ -107,11 +107,48 @@ def test_an_order_is_named_without_its_punctuation():
         "Call arguments recorded by the fake endpoint.",
         "Run: the loop that drives one experiment.",
         "\n    ",
+        "Run settings: its name and its seed.",
+        "Call of one tool by the model.",
+        "Return code of a finished child process.",
     ],
-    ids=["run", "stop", "update", "handle", "call", "label", "only-whitespace"],
+    ids=[
+        "run",
+        "stop",
+        "update",
+        "handle",
+        "call",
+        "label",
+        "only-whitespace",
+        "run-settings",
+        "call-of",
+        "return-code",
+    ],
 )
 def test_a_class_docstring_that_may_open_with_a_noun_passes(docstring):
     assert rules(f'class A:\n    """{docstring}"""\n\n    steps = None\n') == []
+
+
+@pytest.mark.parametrize(
+    "docstring",
+    [
+        "Convert tabs to spaces.",
+        "Manage resource extraction.",
+        "Return the rate limit.",
+        "Build `x` from the settings.",
+        "Load one checkpoint.",
+        "Run.",
+    ],
+    ids=[
+        "convert",
+        "manage",
+        "noun-too-before-a-determiner",
+        "noun-too-before-a-name",
+        "noun-too-before-a-number",
+        "noun-too-alone",
+    ],
+)
+def test_a_class_docstring_that_opens_with_an_order_is_reported(docstring):
+    assert rules(f'class A:\n    """{docstring}"""\n') == [(1, "DOC-2")]
 
 
 @pytest.mark.parametrize(
@@ -235,6 +272,55 @@ def test_a_waiver_that_names_another_rule_drops_nothing():
     source = "x = 1  # seconds  # conventions: DOC-4 - wrong rule.\n"
 
     assert rules(source) == [(1, "DOC-5")]
+
+
+def test_a_waiver_above_the_decorators_of_a_class_covers_its_docstring():
+    decorated = '@frozen\nclass A:\n    """Run the thing."""\n\n    name: str\n'
+    waiver = "# conventions: DOC-2 - a command object.\n"
+
+    assert (rules(decorated), rules(waiver + decorated)) == ([(2, "DOC-2")], [])
+
+
+@pytest.mark.parametrize(
+    ("waiver", "below", "alone"),
+    [
+        (
+            "# conventions: STY-4 - OmegaConf passes arguments by position, and\n",
+            "# a second line finishes the reason.\ndef env_or(name, default=''): ...\n",
+            [(1, "DOC-5")],
+        ),
+        (
+            "# conventions: DOC-5 - a table aligned by hand.\n",
+            "# name     seconds\n# fast     0.1\nX = 1\n",
+            [(1, "DOC-5"), (2, "DOC-5")],
+        ),
+    ],
+    ids=["reason-on-two-lines", "table-aligned-by-hand"],
+)
+def test_comment_lines_right_below_a_waiver_are_not_judged(waiver, below, alone):
+    assert (rules(below), rules(waiver + below)) == (alone, [])
+
+
+def test_a_comment_that_only_quotes_a_waiver_is_judged_with_the_lines_below_it():
+    source = (
+        "# A waiver reads `# conventions: TYP-4 - why` and stands above the\n"
+        "# class that it is for\n"
+        "X = 1\n"
+    )
+
+    assert rules(source) == [(2, "DOC-5")]
+
+
+def test_a_waiver_above_a_statement_covers_neither_its_body_nor_what_follows():
+    source = (
+        "# conventions: DOC-5 - a unit.\n"
+        "def wait():  # seconds\n"
+        "    return 1  # seconds.\n"
+        "# seconds.\n"
+        "LIMIT = 2\n"
+    )
+
+    assert rules(source) == [(3, "DOC-5"), (4, "DOC-5")]
 
 
 def test_line_numbers_follow_the_tokenizer_past_a_form_feed():

@@ -136,7 +136,7 @@ def check_source(
     findings += _hand_written_inits(tree, path, own_packages)
     for node in ast.walk(tree):
         findings += _check_node(node, where, path)
-    waived = waivers.waived(source)
+    waived = waivers.waived(source, tree)
     if not where.test:
         findings += switches.check(
             tree,

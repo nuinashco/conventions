@@ -987,3 +987,74 @@ def test_a_grab_bag_is_reported_under_its_private_and_suffixed_names(path, quote
 )
 def test_a_module_named_after_one_thing_is_no_grab_bag(path):
     assert rules("x = 1\n", path) == []
+
+
+@pytest.mark.parametrize(
+    ("waiver", "statement", "path", "unwaived"),
+    [
+        (
+            "# conventions: STY-4 - OmegaConf passes resolver arguments by position.\n",
+            "def env_or(\n"
+            '    variable: str, default: str = "", separator: str = ","\n'
+            ") -> str:\n"
+            "    return separator.join([variable, default])\n",
+            PACKAGE,
+            [(2, "STY-4"), (2, "STY-4")],
+        ),
+        (
+            "# conventions: TST-1 - pytest-benchmark groups rounds by class.\n",
+            "@pytest.mark.slow\n"
+            "class TestThroughput:\n"
+            "    def test_reads_a_thousand_rows_a_second(self): ...\n",
+            "tests/test_throughput.py",
+            [(2, "TST-1")],
+        ),
+        (
+            "# conventions: STY-4 - OmegaConf passes resolver arguments by position,\n"
+            "# and a second line finishes the reason.\n",
+            'def env_or(variable: str, default: str = "") -> str:\n'
+            "    return variable or default\n",
+            PACKAGE,
+            [(1, "STY-4")],
+        ),
+        (
+            "# conventions: ENV-3 - this module runs before paths.py is imported.\n",
+            "CACHE = Path(\n"
+            "    'downloads',\n"
+            "    os.environ.get('ACME_CACHE', '.cache'),\n"
+            ")\n",
+            PACKAGE,
+            [(3, "ENV-3")],
+        ),
+        (
+            "# conventions: ENV-1, ENV-3 - this module runs before paths.py.\n",
+            "CACHE = Path(os.environ.get('CACHE', Path(__file__).parent.parent))\n",
+            PACKAGE,
+            [(1, "ENV-1"), (1, "ENV-3")],
+        ),
+    ],
+    ids=[
+        "wrapped-signature",
+        "decorated-class",
+        "reason-on-two-lines",
+        "wrapped-assignment",
+        "two-rules",
+    ],
+)
+def test_a_waiver_alone_above_a_statement_covers_it_up_to_its_body(
+    waiver, statement, path, unwaived
+):
+    assert rules(statement, path) == unwaived
+    assert rules(waiver + statement, path) == []
+
+
+def test_a_waiver_above_a_function_does_not_cover_its_body():
+    source = (
+        "# conventions: ENV-3 - the name is all this function knows.\n"
+        "def token(\n"
+        "    name: str,\n"
+        ") -> str:\n"
+        "    return os.environ[name]\n"
+    )
+
+    assert rules(source) == [(5, "ENV-3")]

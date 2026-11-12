@@ -16,7 +16,7 @@ not an order (DOC-2). Comments that a tool reads are skipped: directives (`# noq
 `# type:`, `# pylint:`, ...), `# %%` cell markers, `#:` attribute comments and PEP 723
 blocks, and so is any comment on a line that also carries `# noqa`. A justified
 exception is a comment naming the rule with its reason, on the flagged line or alone
-on the line above it: `# conventions: DOC-5 - the unit of the column.`
+above the flagged statement or comment: `# conventions: DOC-5 - the unit of the column.`
 A file that Python cannot read or parse gets no findings; ruff reports a syntax error.
 """
 
@@ -66,16 +66,22 @@ BANNER = re.compile(r"^(#([ #]|$)|[-=*~_+#]{3,})|[-=*~_+#]{3,}$")
 PEP_723_OPENING = re.compile(r"# /// [A-Za-z0-9-]+")
 PEP_723_CLOSING = "# ///"
 CLOSERS = ")]}\"'`"
-# Base-form verbs that open an order, not a noun phrase; words that are also common
-# nouns (map, set, log, check, package, space) are left out to avoid false alarms.
+# Base-form verbs that open an order, not a noun phrase, whatever follows them.
 _ORDER_VERBS = """
-add apply bind build call collect compute convert create define download emit ensure
-fetch forward generate get handle keep load make manage merge parse provide read
-register remove render represent resolve return run save select send serve start stop
-track update upload use validate wrap write
+add apply bind collect convert create define emit ensure fetch generate get keep make
+manage provide read register remove render represent resolve save select send serve
+validate wrap write
 """
-ORDERS = frozenset(_ORDER_VERBS.split())
-# After one of them an order is the only reading: `Run the job.`, not `Run directory.`
+# Verbs that are common nouns too: one opens an order only where it stands alone, or
+# before a determiner or a `name` (`Run the job.`, not `Run directory.`). Other such
+# words (map, set, log, check, package, space) are in neither list: they would raise
+# false alarms.
+_NOUN_VERBS = """
+build call compute download forward handle load merge parse return run start stop track
+update upload use
+"""
+NOUN_ORDERS = frozenset(_NOUN_VERBS.split())
+ORDERS = frozenset(_ORDER_VERBS.split()) | NOUN_ORDERS
 _DETERMINERS = "a an the this that these those each every all any its their one some no"
 DETERMINERS = frozenset(_DETERMINERS.split())
 
@@ -96,11 +102,13 @@ def check_source(source: str, *, path: str = "<string>") -> list[Finding]:
         comments = _comments(source)
     except UNREADABLE:
         return []  # Ruff reports the syntax error itself.
+    reasons = waivers.continuations(source)
+    judged = [token for token in comments if token.start[0] not in reasons]
     findings = [
-        finding for block in _blocks(comments) for finding in _check_block(block, path)
+        finding for block in _blocks(judged) for finding in _check_block(block, path)
     ]
     findings += _class_docstrings(tree, path)
-    waived = waivers.waived(source)
+    waived = waivers.waived(source, tree)
     kept = [f for f in findings if f.rule not in waived.get(f.line, ())]
     return sorted(kept, key=lambda f: (f.line, f.rule))
 
@@ -252,13 +260,15 @@ def _class_docstrings(tree: ast.Module, path: str) -> Iterator[Finding]:
 def _order(words: list[str]) -> bool:
     """Return whether a docstring's first words can only be read as an order.
 
-    Many of the verbs are nouns too (`Run directory of one experiment.`), so the verb
-    stands alone, or a determiner or a `name` follows it.
+    A verb that is a noun too (`Run directory of one experiment.`) is an order where
+    it stands alone, or where a determiner or a `name` follows it; another verb is one
+    whatever follows.
     """
     if len(words) == 1:
         return _bare(words[0]).lower() in ORDERS
+    verb = words[0].lower()
     follower = _bare(words[1]).lower() in DETERMINERS or words[1].startswith("`")
-    return words[0].lower() in ORDERS and follower
+    return verb in ORDERS and (follower or verb not in NOUN_ORDERS)
 
 
 def _bare(word: str) -> str:

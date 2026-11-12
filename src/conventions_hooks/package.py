@@ -11,6 +11,7 @@ from pathlib import Path, PurePath
 
 from conventions_hooks import switches, waivers
 from conventions_hooks.findings import UNREADABLE
+from conventions_hooks.settings import project_root
 
 
 def top_package(path: Path) -> Path | None:
@@ -24,29 +25,33 @@ def top_package(path: Path) -> Path | None:
 
 
 def is_test(path: PurePath) -> bool:
-    """Return whether `path` names test code: under `tests/`, or a pytest file."""
-    return (
-        "tests" in path.parts
-        or path.name.startswith("test_")
-        or path.name == "conftest.py"
-    )
+    """Return whether `path`, from its project's root, names test code.
+
+    That is a file under a `tests` folder, or a pytest file (`test_*.py`, `conftest.py`)
+    outside `src/`: under `src/` a file is package code whatever its name.
+    """
+    pytest_file = path.name.startswith("test_") or path.name == "conftest.py"
+    return "tests" in path.parts or (pytest_file and "src" not in path.parts)
 
 
 def modules(top: Path) -> Iterator[Path]:
     """Yield the modules of the package at `top`, without its tests.
 
-    Only folders with an `__init__.py` are entered, so a virtualenv or a data folder
-    that sits inside the package is not read.
+    A file is a test by its path from its project's root, as `is_test` reads it, and
+    a `tests` folder is not entered. Only folders with an `__init__.py` are entered,
+    so a virtualenv or a data folder that sits inside the package is not read.
     """
     try:
         entries = sorted(top.iterdir())
     except OSError:
         return
+    root = project_root(top)
+    inside = top.absolute().relative_to(root) if root else top
     for entry in entries:
         if entry.is_dir():
             if entry.name != "tests" and (entry / "__init__.py").is_file():
                 yield from modules(entry)
-        elif entry.suffix == ".py" and not is_test(PurePath(entry.name)):
+        elif entry.suffix == ".py" and not is_test(inside / entry.name):
             yield entry
 
 
@@ -97,6 +102,6 @@ def _parsed(module: Path, mtime_ns: int, size: int) -> tuple[switches.Switch, ..
         tree = ast.parse(source)
     except (OSError, *UNREADABLE):
         return ()
-    waived = waivers.waived(source)
+    waived = waivers.waived(source, tree)
     found = switches.switches_of(tree)
     return tuple(s for s in found if "ARC-9" not in waived.get(s.line, ()))
