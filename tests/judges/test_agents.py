@@ -20,9 +20,10 @@ AGENTS = REPO / "plugins" / "conventions" / "agents"
 LABELS = yaml.safe_load((HERE / "descriptions_labels.yaml").read_text())
 VERDICTS = {"KEEP", "TRIM", "DROP", "ADD", "FIX", "RENAME", "UNSURE"}
 # Planted by reviewer_report. A new module without tests, a CONTRIBUTING entry or an
-# import layer also breaks TST-4, RDOC-5 and ARC-1, rightly.
+# import layer also breaks TST-4, RDOC-5 and ARC-1, rightly, and with ARC-1 the
+# import-contract invariant of TST-5.
 PLANTED = {"ARC-4", "TYP-4", "LOG-2", "ERR-3", "DOC-7"}
-CONSEQUENT = {"TST-4", "RDOC-5", "ARC-1"}
+CONSEQUENT = {"TST-4", "RDOC-5", "ARC-1", "TST-5"}
 # The reviewer fixture enables the nuinashco plugins as every project does; the judges
 # run the subagents of this checkout, offline, rather than those on GitHub.
 SETTINGS = {
