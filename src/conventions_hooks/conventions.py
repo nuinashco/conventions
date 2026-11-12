@@ -142,8 +142,8 @@ def check_source(
     if where.package:
         findings += _heavy_imports(tree, path)
     findings += _hand_written_inits(tree, path, own_packages)
-    # A dataclass and the import that brings it in are one defect, reported where the
-    # dataclass is made; a waiver there is enough.
+    # A dataclass, its fields and the import that brings it in are one defect,
+    # reported where the dataclass is made; a waiver there is enough.
     findings += list(_dataclasses(tree, path)) or _dataclass_imports(tree, path)
     for node in ast.walk(tree):
         findings += _check_node(node, where, path)
@@ -450,13 +450,28 @@ def _is_test_class(node: ast.ClassDef) -> bool:
 
 
 def _dataclasses(tree: ast.Module, path: str) -> Iterator[Finding]:
-    """Yield a finding for each dataclass the module makes, and each field it declares.
+    """Yield a finding for each dataclass the module makes, and each field outside one.
 
     A class decorated `@dataclass` is one, unless it stays a plain class; so is a call
-    of `make_dataclass` or `field` on the module `dataclasses` imported whole.
+    of `make_dataclass` or `field` on the module `dataclasses` imported whole, under
+    its name or an alias. A field of a class decorated `@dataclass` is part of it.
     """
+    modules = {
+        alias.asname or alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+        if alias.name == "dataclasses"
+    }
+    inside: set[ast.AST] = set()
     for node in ast.walk(tree):
-        if isinstance(node, ast.ClassDef) and not _stays_plain(node):
+        if isinstance(node, ast.ClassDef) and any(
+            _name(decorator) == "dataclass" for decorator in node.decorator_list
+        ):
+            # The walk is breadth-first: a class comes before the calls in its body.
+            inside.update(ast.walk(node))
+            if _stays_plain(node):
+                continue
             for decorator in node.decorator_list:
                 if _name(decorator) == "dataclass":
                     yield Finding(
@@ -467,10 +482,11 @@ def _dataclasses(tree: ast.Module, path: str) -> Iterator[Finding]:
                     )
         elif (
             isinstance(node, ast.Call)
+            and node not in inside
             and isinstance(node.func, ast.Attribute)
             and node.func.attr in DATACLASS_CALLS
             and isinstance(node.func.value, ast.Name)
-            and node.func.value.id == "dataclasses"
+            and node.func.value.id in modules
         ):
             yield Finding(
                 path, node.lineno, "TYP-4", "use attrs instead of `dataclasses`"

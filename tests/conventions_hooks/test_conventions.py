@@ -602,6 +602,23 @@ def test_the_top_package_of_a_file_is_the_projects_own_without_a_src_folder(tmp_
             [(6, "TYP-4")],
         ),
         (
+            "import dataclasses as dc\n\n"
+            "Row = dc.make_dataclass('Row', [('name', str)])\n",
+            [(3, "TYP-4")],
+        ),
+        (
+            "import dataclasses\n\n\n@dataclasses.dataclass\nclass A:\n"
+            "    x: list[int] = dataclasses.field(default_factory=list)\n",
+            [(4, "TYP-4")],
+        ),
+        (
+            "import dataclasses\n\n\n"
+            "@dataclasses.dataclass  # conventions: TYP-4 - HfArgumentParser reads "
+            "dataclasses.\nclass A:\n"
+            "    x: list[int] = dataclasses.field(default_factory=list)\n",
+            [],
+        ),
+        (
             "from dataclasses import dataclass, field\n\n\n@dataclass\nclass A:\n"
             "    x: list[int] = field(default_factory=list)\n",
             [(4, "TYP-4")],
@@ -632,6 +649,9 @@ def test_the_top_package_of_a_file_is_the_projects_own_without_a_src_folder(tmp_
         "dotted-decorator-called",
         "make-dataclass-on-the-module",
         "field-on-the-module",
+        "make-dataclass-on-an-alias",
+        "field-of-a-decorated-class",
+        "field-of-a-waived-class",
         "import-of-a-decorated-class",
         "import-of-a-made-class",
         "import-of-a-waived-class",
