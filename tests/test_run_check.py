@@ -16,9 +16,12 @@ RUN_CHECK = PLUGIN / "scripts" / "run-check"
 
 
 def run_check(
-    project: Path, *args: str, stdin: str = ""
+    project: Path, *args: str, stdin: str = "", path: str | None = None
 ) -> subprocess.CompletedProcess[str]:
+    """Run the launcher for `project`; `path` replaces the PATH it finds tools on."""
     env = {**os.environ, "CLAUDE_PROJECT_DIR": str(project)}
+    if path is not None:
+        env["PATH"] = path
     return subprocess.run(
         [str(RUN_CHECK), *args],
         input=stdin,
@@ -42,6 +45,15 @@ def install_check_comments(project: Path) -> None:
     path = project / ".venv" / "bin" / "check-comments"
     path.parent.mkdir(parents=True)
     path.symlink_to(Path(sys.executable).with_name("check-comments"))
+
+
+def path_where_id_names_another_user(folder: Path) -> str:
+    """Return a PATH whose `id` gives the number of a user who owns nothing here."""
+    fakes = folder / "fakes"
+    fakes.mkdir()
+    (fakes / "id").write_text(f"#!/bin/sh\necho {os.getuid() + 1}\n")
+    (fakes / "id").chmod(0o755)
+    return f"{fakes}{os.pathsep}{os.environ['PATH']}"
 
 
 def edit_that_leaves_a_banner(folder: Path) -> str:
@@ -97,6 +109,52 @@ def test_run_check_prefers_the_virtualenv_nearest_to_the_project(tmp_path):
     result = run_check(member, "check-comments")
 
     assert result.stdout == "member\n"
+
+
+def test_run_check_finds_the_workspace_of_a_member_reached_through_a_symlink(tmp_path):
+    workspace = tmp_path / "workspace"
+    install(workspace, "#!/bin/sh\necho workspace\n")
+    (workspace / "member").mkdir()
+    (tmp_path / "link").symlink_to(workspace / "member")
+
+    result = run_check(tmp_path / "link", "check-comments")
+
+    assert result.stdout == "workspace\n"
+
+
+def test_run_check_never_runs_a_virtualenv_above_the_repository(tmp_path):
+    install(tmp_path, "#!/bin/sh\necho planted\n")
+    project = tmp_path / "repo" / "packages" / "member"
+    project.mkdir(parents=True)
+    (tmp_path / "repo" / ".git").mkdir()
+
+    result = run_check(project, "check-comments", "--claude-hook", stdin="{}")
+
+    assert (result.returncode, result.stdout, result.stderr) == (0, "", "")
+
+
+def test_run_check_never_runs_a_virtualenv_above_the_project_that_another_user_owns(
+    tmp_path,
+):
+    install(tmp_path, "#!/bin/sh\necho planted\n")
+    project = tmp_path / "scratch"
+    project.mkdir()
+    path = path_where_id_names_another_user(tmp_path)
+
+    result = run_check(
+        project, "check-comments", "--claude-hook", stdin="{}", path=path
+    )
+
+    assert (result.returncode, result.stdout, result.stderr) == (0, "", "")
+
+
+def test_run_check_runs_the_virtualenv_of_the_project_itself_whoever_owns_it(tmp_path):
+    install(tmp_path, "#!/bin/sh\necho project\n")
+    path = path_where_id_names_another_user(tmp_path)
+
+    result = run_check(tmp_path, "check-comments", path=path)
+
+    assert result.stdout == "project\n"
 
 
 @pytest.mark.parametrize(

@@ -11,11 +11,10 @@ type, and its text starts in lowercase and ends without a period (GIT-1); the
 `conventional-pre-commit` hook reports every other shape.
 
 The message is cleaned first, as git cleans it: the scissors line of `git commit -v`
-and everything below it are dropped, then the comment lines (`#`, or the repo's
-`core.commentString` or `core.commentChar`), the blank lines around the message and the
-whitespace that ends the subject. A subject that starts with `Merge ` is git's own and
-is not judged. Rules listed in `ignore` of the repo's `[tool.conventions]` table are
-not checked.
+and everything below it are dropped, then the comment lines (`#`, or the prefix git is
+configured with), the blank lines around the message and the whitespace that ends the
+subject. A subject that starts with `Merge ` is git's own and is not judged. Rules
+listed in `ignore` of the repo's `[tool.conventions]` table are not checked.
 """
 
 from __future__ import annotations
@@ -81,7 +80,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     except SettingsError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
-    message = Path(args[0]).read_text(encoding="utf-8")
+    # The diff of `git commit -v` holds the bytes of the files, in any encoding.
+    message = Path(args[0]).read_text(encoding="utf-8", errors="replace")
     comment = _comment_prefix()
     found = [p for p in problems(message, comment=comment) if settings.keeps(p.rule)]
     for problem in found:
@@ -129,15 +129,21 @@ def _subject_problems(subject: str) -> Iterator[Problem]:
 
 def _comment_prefix() -> str:
     """Return the prefix of the lines git drops from a message in this repo."""
-    for key in ("core.commentString", "core.commentChar"):
-        try:
-            result = subprocess.run(
-                ["git", "config", key], capture_output=True, text=True, check=False
-            )
-        except OSError:  # `git` is not installed.
-            break
-        value = result.stdout.removesuffix("\n")
-        if result.returncode == 0 and value:
-            # With `auto` git picks a prefix for each message; `#` is its first choice.
-            return DEFAULT_COMMENT if value.lower() == "auto" else value
-    return DEFAULT_COMMENT
+    try:
+        # Git itself marks a line: before 2.45 it reads `core.commentChar` alone, later
+        # the last of that key and `core.commentString`. With `auto` it picks a prefix
+        # for each message and answers here with `#`, its first choice.
+        result = subprocess.run(
+            ["git", "stripspace", "--comment-lines"],
+            input="x\n",
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+    except OSError:  # `git` is not installed.
+        return DEFAULT_COMMENT
+    prefix, marked, _ = result.stdout.partition(" x\n")
+    if result.returncode != 0 or not (prefix and marked):
+        return DEFAULT_COMMENT
+    return prefix

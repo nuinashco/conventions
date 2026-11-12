@@ -90,6 +90,14 @@ def test_protected_file_reached_through_a_symlink_is_protected_too(repo, path):
     assert "vendored" in (reason(repo / path) or "")
 
 
+def test_symlink_in_a_protected_folder_is_protected_wherever_it_points(repo):
+    (repo / "vendor").mkdir()
+    (repo / "plain.py").write_text("x = 1\n")
+    (repo / "vendor" / "link.py").symlink_to("../plain.py")
+
+    assert "vendored" in (reason(repo / "vendor" / "link.py") or "")
+
+
 def test_path_through_a_symlink_loop_is_not_protected(tmp_path):
     (tmp_path / "there").symlink_to("back")
     (tmp_path / "back").symlink_to("there")
@@ -151,11 +159,18 @@ def test_command_line_lists_only_protected_paths(repo, capsys, monkeypatch):
     ]
 
 
+@pytest.mark.parametrize(
+    "path",
+    ["vendor/top.py", "vendor/lib/core.py"],
+    ids=["nearest-pyproject", "below-a-vendored-pyproject"],
+)
 def test_command_line_protects_nothing_in_a_repo_that_ignores_tool_5(
-    repo, capsys, monkeypatch
+    repo, capsys, monkeypatch, path
 ):
     (repo / "pyproject.toml").write_text('[tool.conventions]\nignore = ["TOOL-5"]\n')
+    (repo / "vendor" / "lib").mkdir(parents=True)
+    (repo / "vendor" / "lib" / "pyproject.toml").write_text('[project]\nname = "x"\n')
     monkeypatch.chdir(repo)
 
-    assert main(["vendor/lib/core.py"]) == 0
+    assert main([path]) == 0
     assert capsys.readouterr().out == ""

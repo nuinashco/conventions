@@ -60,7 +60,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     for arg in args:
         path = Path(arg).absolute()
         try:
-            checked = Settings.of(path.parent).keeps(RULE)
+            checked = _settings(path).keeps(RULE)
         except SettingsError as e:
             print(f"error: {e}", file=sys.stderr)
             return 2

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
+from pathlib import Path
 
 import pytest
 
@@ -29,6 +31,11 @@ index 1c3d2a7..8d9f3b2 100644
  # demo
 +note
 """
+SUBJECT = "docs: describe demo usage"
+EDITOR = f"""\
+#!/bin/sh
+{{ echo '{SUBJECT}'; cat "$1"; }} > "$1.new" && mv "$1.new" "$1"
+"""
 
 
 @pytest.fixture
@@ -39,6 +46,43 @@ def git_repo(tmp_path, monkeypatch):
     subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
     monkeypatch.chdir(tmp_path)
     return tmp_path
+
+
+def commit_in_an_editor(repo: Path) -> str:
+    """Commit a file with `check-commit-msg` as the hook; return the subject kept.
+
+    The editor writes the subject above the template that git put in the message.
+    """
+    hook = repo / ".git" / "hooks" / "commit-msg"
+    command = Path(sys.executable).with_name("check-commit-msg")
+    hook.write_text(f'#!/bin/sh\nexec "{command}" "$1"\n')
+    editor = repo / ".git" / "editor"
+    editor.write_text(EDITOR)
+    for script in (hook, editor):
+        script.chmod(0o755)
+    (repo / "notes.txt").write_text("note\n")
+    identity = {
+        f"GIT_{role}_{field}": value
+        for role in ("AUTHOR", "COMMITTER")
+        for field, value in (("NAME", "Tester"), ("EMAIL", "tester@example.com"))
+    }
+    env = {**os.environ, **identity, "GIT_EDITOR": str(editor)}
+    subprocess.run(["git", "add", "notes.txt"], cwd=repo, check=True)
+    subprocess.run(
+        ["git", "commit", "-q", "-v"],
+        cwd=repo,
+        env=env,
+        capture_output=True,
+        check=False,
+    )
+    log = subprocess.run(
+        ["git", "log", "--format=%s"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return log.stdout
 
 
 @pytest.mark.parametrize(
@@ -98,8 +142,9 @@ def test_article_letters_in_a_name_or_a_path_are_not_articles(subject):
     [
         "Merge branch 'fix/the-thing'\n",
         "Merge branch 'fix/the-thing' into a-b\n\n* fix/the-thing:\n  docs: add t\n",
+        "Merge tag 'v1.0' of the origin\n",
     ],
-    ids=["subject", "with-log-of-merge"],
+    ids=["subject", "with-log-of-merge", "tag"],
 )
 def test_merge_subject_that_git_writes_is_not_judged(message):
     assert problems(message) == []
@@ -118,6 +163,7 @@ def test_subject_of_another_shape_is_left_to_conventional_pre_commit():
             "backticks",
         ),
         ("The loader fails\n", "GIT-1 articles in the subject (the)"),
+        ("An apple falls\n", "GIT-1 articles in the subject (an)"),
         ("feat: add hooks\n\nWhy it matters.\n", "GIT-2 more than one line"),
         ("feat: add hooks\n\nCo-Authored-By: X <x@y>\n", "GIT-2 more than one line"),
         (
@@ -136,6 +182,7 @@ def test_subject_of_another_shape_is_left_to_conventional_pre_commit():
     ids=[
         "article",
         "capitalised-article",
+        "capitalised-an",
         "body",
         "trailer",
         "too-long",
@@ -183,10 +230,9 @@ def test_comment_prefix_of_the_repo_replaces_the_hash():
     [
         ([], "#"),
         (["core.commentChar", ";"], ";"),
-        (["core.commentString", "//"], "//"),
         (["core.commentChar", "auto"], "#"),
     ],
-    ids=["not-set", "comment-char", "comment-string", "auto"],
+    ids=["not-set", "comment-char", "auto"],
 )
 def test_comment_lines_start_with_the_prefix_git_is_configured_with(
     git_repo, capsys, config, prefix
@@ -197,6 +243,52 @@ def test_comment_lines_start_with_the_prefix_git_is_configured_with(
     message.write_text(
         f"docs: describe demo usage\n{prefix} Please enter the commit message.\n"
     )
+
+    assert (main([str(message)]), capsys.readouterr().out) == (0, "")
+
+
+@pytest.mark.parametrize(
+    "keys",
+    [
+        [],
+        [("core.commentChar", "#"), ("core.commentString", "//")],
+        [("core.commentString", "//"), ("core.commentChar", ";")],
+    ],
+    ids=["not-set", "char-then-string", "string-then-char"],
+)
+def test_commit_written_in_an_editor_passes_whichever_comment_keys_git_reads(
+    git_repo, keys
+):
+    for key, value in keys:
+        subprocess.run(["git", "config", key, value], cwd=git_repo, check=True)
+
+    assert commit_in_an_editor(git_repo) == f"{SUBJECT}\n"
+
+
+def test_diff_that_is_not_utf_8_below_the_scissors_line_is_dropped_like_any_other(
+    git_repo, capsys
+):
+    message = git_repo / "COMMIT_EDITMSG"
+    message.write_bytes(VERBOSE.encode() + b"+caf\xe9\n")
+
+    assert (main([str(message)]), capsys.readouterr().out) == (0, "")
+
+
+@pytest.mark.parametrize(
+    ("answer", "prefix"),
+    [('echo "// $line"', "//"), ('echo "; $line"; exit 1', "#")],
+    ids=["several-characters-of-a-newer-git", "git-fails"],
+)
+def test_comment_prefix_is_the_one_that_git_marks_a_line_with(
+    tmp_path, monkeypatch, capsys, answer, prefix
+):
+    git = tmp_path / "git"
+    git.write_text(f"#!/bin/sh\nread -r line\n{answer}\n")
+    git.chmod(0o755)
+    message = tmp_path / "COMMIT_EDITMSG"
+    message.write_text(f"docs: describe demo usage\n{prefix} Please enter it.\n")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("PATH", str(tmp_path))
 
     assert (main([str(message)]), capsys.readouterr().out) == (0, "")
 

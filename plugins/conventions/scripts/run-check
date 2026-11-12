@@ -2,19 +2,27 @@
 # Runs one conventions-hooks command from the project's own virtualenv, so each project
 # gets the version its uv.lock pins: run-check <command> [args...]. The virtualenv is the
 # first .venv with the command at or above CLAUDE_PROJECT_DIR, because a uv workspace keeps
-# one at its root. With none it exits 0 without output, and the command itself says nothing
-# in a repo that has not opted in with a [tool.conventions] table, so the plugin fails open
-# everywhere else. A command that cannot start, as after the project folder was moved, gets
-# one line on stderr that says how to repair it, and exit 1.
+# one at its root. The search ends at the folder that holds .git, and a .venv above the
+# project counts only when it belongs to the user, so one that somebody else puts in a
+# shared folder above the repository never runs. With none it exits 0 without output, and
+# the command itself says nothing in a repo that has not opted in with a [tool.conventions]
+# table, so the plugin fails open everywhere else. A command that cannot start, as after the
+# project folder was moved, gets one line on stderr that says how to repair it, and exit 1.
 command=${1:-}
 [ -n "$command" ] || exit 0
 shift
 cd -P "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || exit 0
 dir=$PWD
 until [ -x "$dir/.venv/bin/$command" ]; do
-    [ -n "$dir" ] || exit 0
+    if [ -z "$dir" ] || [ -e "$dir/.git" ]; then
+        exit 0
+    fi
     dir=${dir%/*}
 done
+if [ "$dir" != "$PWD" ]; then
+    owned=$(find "$dir/.venv" -prune -user "$(id -u 2>/dev/null)" 2>/dev/null)
+    [ -n "$owned" ] || exit 0
+fi
 # Claude Code shows only the first line of a failed hook's stderr, and a command that
 # cannot start fills it with the shell's own "not found". So stderr is held back until the
 # exit code is known; the dot keeps the newlines that a command substitution strips.
