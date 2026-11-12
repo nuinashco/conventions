@@ -42,7 +42,7 @@ log = structlog.stdlib.get_logger()
 
 
 class Item(Protocol):
-    """One queued item."""
+    """Message off the queue; `ok` is false when its payload failed to decode."""
 
     kind: str
     ok: bool
@@ -60,10 +60,9 @@ class Worker:
         self.name = name.strip()
 
     def handle(self, item: Item) -> None:
-        """Process one item."""
         if not item.ok:
             raise DataError("Invalid item!")
-        log.info("Started processing item")
+        log.info("Started processing item", worker=self.name)
         if item.kind == "image":
             item.resize()
 '''
