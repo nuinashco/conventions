@@ -110,7 +110,9 @@ def check_source(
         findings += forwarders.check(tree, path, top)
     waived = waivers.waived(source)
     kept = [f for f in findings if f.rule not in waived.get(f.line, ())]
-    return sorted(set(kept), key=lambda f: (f.line, f.rule))
+    # A dict keeps findings in the order they were met; a set shuffles those that
+    # share a line and a rule from one run to the next.
+    return sorted(dict.fromkeys(kept), key=lambda f: (f.line, f.rule))
 
 
 @frozen
