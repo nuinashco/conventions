@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import json
 import os
 import re
@@ -28,6 +29,9 @@ FINDING = {
     "problem": "restates the code",
     "fix": "delete it",
 }
+PLUGIN_HOOKS = (
+    Path(__file__).resolve().parents[2] / "plugins/conventions/hooks/hooks.json"
+)
 
 
 def verdict(*findings: dict[str, object]) -> str:
@@ -137,6 +141,26 @@ def test_a_judge_that_gives_no_answer_in_time_is_an_error_saying_how_long(
 
     with pytest.raises(ReviewError, match=r"claude gave no answer in 0\.2 seconds"):
         ask_claude(["claude", "-p"], "diff", timeout_s=0.2)
+
+
+def test_the_judge_gives_up_before_the_plugin_ends_its_stop_hook():
+    (group,) = json.loads(PLUGIN_HOOKS.read_text())["hooks"]["Stop"]
+    (hook,) = group["hooks"]
+    waits = inspect.signature(ask_claude).parameters["timeout_s"].default
+
+    assert waits < hook["timeout"]
+
+
+def test_a_cli_that_refuses_to_start_is_an_error_saying_why(tmp_path, monkeypatch):
+    refusal = (
+        "You cannot use --strict-mcp-config when an enterprise MCP config is present"
+    )
+    (tmp_path / "claude").write_text(f"#!/bin/sh\necho '{refusal}' >&2\nexit 1\n")
+    (tmp_path / "claude").chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path), prepend=os.pathsep)
+
+    with pytest.raises(ReviewError, match=f"claude failed: {refusal}"):
+        ask_claude(command(), "diff")
 
 
 def git(repo: Path, *args: str) -> None:
@@ -432,3 +456,54 @@ def test_the_stop_hook_skips_a_diff_over_the_limit_with_one_line(repo, capsys):
         r"limit of 200000; not reviewed\n",
         capsys.readouterr().err,
     )
+
+
+def test_the_same_comment_in_another_file_is_new(repo):
+    calls: list[str] = []
+    ask = answering(verdict(), calls)
+    (repo / "new.py").write_text("# Add one.\nx = 1 + 1\n")
+    claude_hook(stop(), repo, ask=ask)
+    (repo / "other.py").write_text("# Add one.\ny = 1 + 1\n")
+
+    claude_hook(stop(), repo, ask=ask)
+
+    assert ("+++ b/other.py" in sent(calls[1]), "new.py" in sent(calls[1])) == (
+        True,
+        False,
+    )
+
+
+@pytest.mark.parametrize(
+    "line",
+    ['"""Return one."""', "'''Return one.'''", 'size = Field(1, description="Size")'],
+    ids=["docstring", "single-quoted-docstring", "description"],
+)
+def test_a_new_docstring_or_description_is_sent_like_a_comment(repo, line):
+    calls: list[str] = []
+    (repo / "module.py").write_text(f"x = 1\n{line}\n")
+
+    claude_hook(stop(), repo, ask=answering(verdict(), calls))
+
+    assert f"+{line}" in sent(calls[0])
+
+
+def test_git_settings_of_the_user_do_not_change_what_is_sent(
+    repo, tmp_path_factory, monkeypatch
+):
+    calls: list[str] = []
+    config = tmp_path_factory.mktemp("home") / "gitconfig"
+    config.write_text(
+        "[color]\n\tui = always\n"
+        "[diff]\n\tnoprefix = true\n\trenames = false\n\texternal = echo\n"
+    )
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(config))
+    (repo / "old.py").write_text("# Add one.\nx = 1 + 1\n")
+    commit(repo)
+    git(repo, "mv", "old.py", "moved.py")
+    (repo / "module.py").write_text("x = 2  # Seconds.\n")
+
+    claude_hook(stop(), repo, ask=answering(verdict(), calls))
+
+    header, hunk = sent(calls[0]).split("\n@@ ")
+    assert header.endswith("\n--- a/module.py\n+++ b/module.py")
+    assert hunk.endswith("\n-x = 1\n+x = 2  # Seconds.")

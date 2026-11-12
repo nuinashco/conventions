@@ -11,9 +11,10 @@ package) to `claude -p`, run without built-in tools, MCP servers or hooks, and f
 with the findings of its structured verdict. Comments, docstrings and `Field`
 descriptions are judged (DOC-2 to DOC-7). Needs the Claude Code CLI, logged in: each
 review is one call on that account, with the CLI's default model unless
-REVIEW_COMMENTS_MODEL names another. A diff over 200,000 characters is not sent, and
-the command says so. The labelled cases in the conventions repo (`make test-judges`)
-measure the judge.
+REVIEW_COMMENTS_MODEL names another. Where an organization deploys `managed-mcp.json`
+the CLI refuses to start without its MCP servers, and the review ends in that error.
+A diff over 200,000 characters is not sent, and the command says so. The labelled
+cases in the conventions repo (`make test-judges`) measure the judge.
 
 A `[tool.conventions]` table whose `ignore` lists DOC-2 to DOC-7 turns the review off,
 and findings under any rule it lists are dropped. On the command line that table is
@@ -52,6 +53,9 @@ JUDGED = frozenset({"DOC-2", "DOC-3", "DOC-4", "DOC-5", "DOC-6", "DOC-7"})
 # Each review is a model call the user pays for, and a diff this long is a generated
 # file more often than new comments.
 MAX_DIFF_CHARS = 200_000
+# Under the timeout of the plugin's Stop hook: Claude Code drops the output of a hook
+# it has to end, and with it the line that says the judge gave no answer.
+TIMEOUT_S = 540
 # What an added line holds when it may be a comment, a docstring or a description.
 MARKERS = ("#", '"""', "'''", "description=")
 # The format the hunks are split in, whatever the user's git settings say: plain text,
@@ -200,7 +204,7 @@ def comment_rules() -> str:
     return rest.strip() if header.startswith("<!--") else text.strip()
 
 
-def ask_claude(args: list[str], stdin: str, *, timeout_s: float = 600) -> str:
+def ask_claude(args: list[str], stdin: str, *, timeout_s: float = TIMEOUT_S) -> str:
     """Run `claude` with `stdin` and return its answer."""
     if shutil.which(args[0]) is None:
         raise ReviewError("the Claude Code CLI (`claude`) is not on PATH; install it")
