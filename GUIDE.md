@@ -142,8 +142,10 @@ Projects use uv with the `uv_build` backend, the src layout and a committed `uv.
 
 A distribution has one top-level import package, `src/<pkg>/`. A standalone part of the project (a proxy, a client) is
 a subpackage such as `<pkg>/proxy/`, isolated by an import contract (ARC-1). There is no `utils/`, `common/`, `core/`
-or `helpers/` grab bag: each module is named after its one responsibility. Extract a part into its own distribution
-only when a second repo depends on it.
+or `helpers/` grab bag: each module is named after its one responsibility. Helpers that sibling modules share go in a
+module named after what they compute, next to those modules: the math a reward's penalty kinds share is
+`reward/shaping.py`, not `reward/utils.py`. Extract a part into its own distribution only when a second repo depends
+on it.
 
 *Why:* uv supports several top-level modules but ["does not recommend this
 structure"](https://docs.astral.sh/uv/concepts/build-backend/) because generic names like `common` collide in
